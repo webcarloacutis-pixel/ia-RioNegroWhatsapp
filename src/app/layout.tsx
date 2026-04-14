@@ -1,0 +1,44 @@
+import type { Metadata } from "next";
+import { Newsreader, Public_Sans } from "next/font/google";
+
+import { ToasterProvider } from "@/components/ui/toaster-provider";
+
+import "./globals.css";
+
+const publicSans = Public_Sans({
+  variable: "--font-public-sans",
+  subsets: ["latin"],
+});
+
+const newsreader = Newsreader({
+  variable: "--font-newsreader",
+  subsets: ["latin"],
+});
+
+export const metadata: Metadata = {
+  title: "WhatsApp Rionegro | Panel Oficial Inteligente",
+  description:
+    "Panel administrativo para comunicados, segmentacion, conocimiento y metricas del canal oficial inteligente del Municipio de Rionegro.",
+};
+
+export default function RootLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
+  return (
+    <html
+      lang="es"
+      suppressHydrationWarning
+      className={`${publicSans.variable} ${newsreader.variable} h-full antialiased`}
+    >
+      <body
+        suppressHydrationWarning
+        className="min-h-full flex flex-col bg-background text-foreground"
+      >
+        {children}
+        <ToasterProvider />
+      </body>
+    </html>
+  );
+}

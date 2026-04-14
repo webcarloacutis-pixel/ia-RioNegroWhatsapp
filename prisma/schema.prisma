@@ -1,0 +1,132 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum AnnouncementType {
+  EVENT
+  NEWS
+  ROAD_CLOSURE
+  PUBLIC_WORK
+  ALERT
+  GENERAL
+}
+
+enum AnnouncementStatus {
+  SCHEDULED
+  SENT
+}
+
+enum DeliveryMode {
+  DEMO
+  MANUAL
+  SCHEDULED
+}
+
+enum DeliveryStatus {
+  SUCCESS
+  FAILED
+}
+
+enum AssistantTopic {
+  GREETING
+  ALERTS
+  EVENTS
+  ROAD_CLOSURES
+  PUBLIC_WORKS
+  NEWS
+  INSTITUTIONAL
+  FAQ
+  DENUNCIAS
+  OVERVIEW
+  OUT_OF_SCOPE
+  UNKNOWN
+}
+
+enum AssistantRoute {
+  RULE_BASED
+  KNOWLEDGE_BASE
+  ANNOUNCEMENTS
+  HYBRID_AI
+  FALLBACK
+}
+
+model Segment {
+  id             String        @id @default(cuid())
+  name           String        @unique
+  description    String?
+  estimatedUsers Int           @default(0)
+  announcements  Announcement[]
+  deliveryLogs   DeliveryLog[]
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+}
+
+model Announcement {
+  id           String             @id @default(cuid())
+  title        String
+  message      String             @db.Text
+  location     String?
+  type         AnnouncementType
+  scheduledAt  DateTime
+  status       AnnouncementStatus @default(SCHEDULED)
+  sentAt       DateTime?
+  segmentId    String?
+  segment      Segment?           @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+  deliveryLogs DeliveryLog[]
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([status, scheduledAt])
+}
+
+model KnowledgeBaseEntry {
+  id        String   @id @default(cuid())
+  question  String
+  answer    String   @db.Text
+  category  String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model DeliveryLog {
+  id             String         @id @default(cuid())
+  announcementId String
+  announcement   Announcement   @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+  segmentId      String?
+  segment        Segment?       @relation(fields: [segmentId], references: [id], onDelete: SetNull)
+  mode           DeliveryMode
+  status         DeliveryStatus @default(SUCCESS)
+  deliveredCount Int
+  details        String?        @db.Text
+  createdAt      DateTime       @default(now())
+
+  @@index([createdAt])
+}
+
+model AssistantQueryLog {
+  id            String         @id @default(cuid())
+  sessionId     String
+  zone          String?
+  userType      String?
+  userMessage   String         @db.Text
+  assistantReply String        @db.Text
+  detectedTopic AssistantTopic
+  route         AssistantRoute
+  usedOpenAI    Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+
+  @@index([createdAt])
+  @@index([detectedTopic, createdAt])
+}

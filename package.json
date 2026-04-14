@@ -1,0 +1,55 @@
+{
+  "name": "rionegro-panel-alcaldia",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently \"npm:dev:frontend\" \"npm:dev:backend\"",
+    "dev:frontend": "next dev -p 3030",
+    "dev:backend": "tsx watch --env-file=.env src/server/scheduler.ts",
+    "build": "next build --webpack",
+    "start": "npm run build && next start -p 3030",
+    "start:frontend": "npm run build && next start -p 3030",
+    "start:backend": "tsx --env-file=.env src/server/scheduler.ts",
+    "render:start": "next start -p $PORT",
+    "render:worker": "tsx src/server/scheduler.ts",
+    "lint": "eslint .",
+    "qa:assistant": "tsx --env-file=.env qa/assistant.qa.ts",
+    "db:start": "docker compose up -d postgres",
+    "db:stop": "docker compose down",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:seed": "prisma db seed",
+    "db:setup": "npm run db:generate && npm run db:push && npm run db:seed",
+    "db:studio": "prisma studio"
+  },
+  "prisma": {
+    "seed": "tsx --env-file=.env prisma/seed.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.9.0",
+    "clsx": "^2.1.1",
+    "date-fns": "^4.1.0",
+    "dotenv": "^17.4.2",
+    "lucide-react": "^1.8.0",
+    "next": "^16.2.3",
+    "openai": "^6.34.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
+    "recharts": "^3.8.1",
+    "sonner": "^2.0.7",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "concurrently": "^9.2.1",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.3",
+    "prisma": "^6.9.0",
+    "tailwindcss": "^4",
+    "tsx": "^4.21.0",
+    "typescript": "^5"
+  }
+}

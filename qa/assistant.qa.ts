@@ -1,0 +1,67 @@
+import assert from "node:assert/strict";
+
+import { getAssistantSession } from "@/server/assistant-session";
+import { chatWithAssistant, resetConversation } from "@/server/rionegro-assistant";
+
+function countOccurrences(text: string, fragment: string) {
+  return text.split(fragment).length - 1;
+}
+
+async function runCase(sessionId: string, input: string) {
+  resetConversation(sessionId);
+  const result = await chatWithAssistant(sessionId, input);
+  const language = getAssistantSession(sessionId).context.conversationLanguage;
+
+  return {
+    reply: result.reply,
+    language,
+  };
+}
+
+async function main() {
+  const historyCase = await runCase("qa-history-es", "cual es la historia de rionegro");
+  assert.equal(historyCase.language, "es");
+  assert.match(historyCase.reply, /Rionegro es uno de los municipios/i);
+  assert.doesNotMatch(historyCase.reply, /\bwhere is\b|\blatest news\b|\bThis is the official information channel\b/i);
+
+  const multiIntentCase = await runCase(
+    "qa-multi-es",
+    "y complex donde queda, se me dano el carro donde lo puedo arreglar que tramites puedo realizar en la alcaldia de rionegro y dime las ultimas noticias de rionegro",
+  );
+  assert.equal(multiIntentCase.language, "es");
+  assert.match(multiIntentCase.reply, /1\.\s+Ubicacion de Complex Llanogrande/i);
+  assert.match(multiIntentCase.reply, /2\./);
+  assert.match(multiIntentCase.reply, /3\./);
+  assert.match(multiIntentCase.reply, /4\./);
+  assert.match(multiIntentCase.reply, /Autolarte Rionegro|Belchite|Quebrada Arriba/i);
+  assert.match(multiIntentCase.reply, /tramites y consultas relacionados/i);
+  assert.match(multiIntentCase.reply, /noticias recientes de Rionegro/i);
+  assert.equal(
+    countOccurrences(
+      multiIntentCase.reply,
+      "Este es el canal oficial de informacion del municipio de Rionegro.",
+    ),
+    1,
+  );
+
+  const englishCase = await runCase(
+    "qa-multi-en",
+    "where is the history museum and what are the latest news from rionegro?",
+  );
+  assert.equal(englishCase.language, "en");
+  assert.match(englishCase.reply, /1\.\s+Location of/i);
+  assert.match(englishCase.reply, /2\.\s+These are some of the latest news items from Rionegro/i);
+  assert.match(englishCase.reply, /This is the official information channel of the municipality of Rionegro\./i);
+
+  const scheduleCase = await runCase(
+    "qa-hours-es",
+    "ademas donde queda movilidad y que horario tiene",
+  );
+  assert.equal(scheduleCase.language, "es");
+  assert.match(scheduleCase.reply, /SOMOS \(Movilidad y Transito\)/i);
+  assert.match(scheduleCase.reply, /Horario de atencion/i);
+
+  console.log("QA assistant: 4/4 pruebas aprobadas.");
+}
+
+void main();
