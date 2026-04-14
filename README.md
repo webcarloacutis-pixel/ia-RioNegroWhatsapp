@@ -107,6 +107,8 @@ Importante:
 - Por eso el envio real sale a un numero fijo configurado en `ULTRAMSG_DEFAULT_TO`
 - Para envio masivo real por segmento, el siguiente paso es crear el modulo de destinatarios
 - Para respuestas automaticas de WhatsApp ya existe el webhook publico en `src/app/api/ultramsg/webhook/route.ts`
+- `ULTRAMSG_DEFAULT_TO` puede llevar varios numeros separados por coma, por ejemplo:
+  `+573108853250,+573162215323,+573234725938`
 
 En otras palabras:
 

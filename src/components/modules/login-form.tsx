@@ -51,6 +51,7 @@ export function LoginForm() {
           <Mail className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted" />
           <Input
             type="email"
+            autoComplete="email"
             value={form.email}
             onChange={(event) =>
               setForm((current) => ({ ...current, email: event.target.value }))
@@ -66,6 +67,7 @@ export function LoginForm() {
           <LockKeyhole className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-muted" />
           <Input
             type="password"
+            autoComplete="current-password"
             value={form.password}
             onChange={(event) =>
               setForm((current) => ({ ...current, password: event.target.value }))

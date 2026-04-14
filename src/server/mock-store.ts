@@ -469,10 +469,6 @@ export async function sendAnnouncementNow(
 ) {
   const announcement = getAnnouncementOrThrow(id);
 
-  if (announcement.status === "SENT") {
-    throw new AppError("Este comunicado ya fue enviado.", 409);
-  }
-
   const audience = await resolveAudience(announcement.segmentId);
   const result = await sendMessage({
     message: announcement.message,

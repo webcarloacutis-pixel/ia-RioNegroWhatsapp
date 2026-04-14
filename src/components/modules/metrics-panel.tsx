@@ -144,8 +144,8 @@ export function MetricsPanel({ data, assistantAnalytics }: MetricsPanelProps) {
             </p>
             <h2 className="mt-2 text-2xl text-foreground">Comportamiento de ejecuciones</h2>
           </div>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-80 min-h-[320px] min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={320}>
               <BarChart data={deliveryTrend} barGap={8}>
                 <CartesianGrid vertical={false} stroke="rgba(22,36,51,0.08)" />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} />
@@ -298,8 +298,8 @@ export function MetricsPanel({ data, assistantAnalytics }: MetricsPanelProps) {
             />
           </section>
 
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-80 min-h-[320px] min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={320}>
               <BarChart data={assistantTrend} barGap={8}>
                 <CartesianGrid vertical={false} stroke="rgba(22,36,51,0.08)" />
                 <XAxis dataKey="label" tickLine={false} axisLine={false} />

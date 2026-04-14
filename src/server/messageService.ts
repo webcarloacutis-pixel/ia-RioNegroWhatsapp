@@ -18,11 +18,26 @@ const ULTRAMSG_TOKEN = process.env.ULTRAMSG_TOKEN?.trim() ?? "";
 const ULTRAMSG_DEFAULT_TO = process.env.ULTRAMSG_DEFAULT_TO?.trim() ?? "";
 
 function isUltraMsgConfigured() {
-  return Boolean(ULTRAMSG_API_URL && ULTRAMSG_TOKEN && ULTRAMSG_DEFAULT_TO);
+  return Boolean(ULTRAMSG_API_URL && ULTRAMSG_TOKEN);
 }
 
-function resolveRecipient(to?: string | null) {
-  return to?.trim() || ULTRAMSG_DEFAULT_TO;
+function normalizeRecipient(value: string) {
+  const digits = value.replace(/\D/g, "");
+
+  if (!digits) {
+    return null;
+  }
+
+  return digits.startsWith("57") ? `+${digits}` : `+57${digits}`;
+}
+
+function resolveRecipients(to?: string | null) {
+  const rawRecipients = (to?.trim() || ULTRAMSG_DEFAULT_TO)
+    .split(/[,\n;]/)
+    .map((value) => normalizeRecipient(value.trim()))
+    .filter((value): value is string => Boolean(value));
+
+  return Array.from(new Set(rawRecipients));
 }
 
 async function sendMessageMock({
@@ -59,53 +74,68 @@ async function sendMessageUltraMsg({
   to,
 }: SendMessageInput) {
   const targetName = segment?.name ?? "Cobertura general";
-  const recipient = resolveRecipient(to);
-  const payload = new URLSearchParams({
-    token: ULTRAMSG_TOKEN,
-    to: recipient,
-    body: message,
-  });
+  const recipients = resolveRecipients(to);
 
-  const response = await fetch(`${ULTRAMSG_API_URL.replace(/\/$/, "")}/messages/chat`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
-    body: payload.toString(),
-  });
-
-  const rawText = await response.text();
-  let parsedBody: unknown = rawText;
-
-  try {
-    parsedBody = JSON.parse(rawText);
-  } catch {
-    // Mantener texto crudo si UltraMsg no devuelve JSON.
+  if (!recipients.length) {
+    throw new Error("No hay destinatarios configurados para UltraMsg.");
   }
 
-  if (!response.ok) {
-    console.error("[messageService] error UltraMsg", {
-      mode,
-      scheduledAt: scheduledAt.toISOString(),
-      segment: targetName,
-      status: response.status,
-      body: parsedBody,
+  const responses: unknown[] = [];
+
+  for (const recipient of recipients) {
+    const payload = new URLSearchParams({
+      token: ULTRAMSG_TOKEN,
+      to: recipient,
+      body: message,
     });
 
-    throw new Error(`UltraMsg devolvio ${response.status}.`);
+    const response = await fetch(`${ULTRAMSG_API_URL.replace(/\/$/, "")}/messages/chat`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: payload.toString(),
+    });
+
+    const rawText = await response.text();
+    let parsedBody: unknown = rawText;
+
+    try {
+      parsedBody = JSON.parse(rawText);
+    } catch {
+      // Mantener texto crudo si UltraMsg no devuelve JSON.
+    }
+
+    if (!response.ok) {
+      console.error("[messageService] error UltraMsg", {
+        mode,
+        scheduledAt: scheduledAt.toISOString(),
+        segment: targetName,
+        to: recipient,
+        status: response.status,
+        body: parsedBody,
+      });
+
+      throw new Error(`UltraMsg devolvio ${response.status} al enviar a ${recipient}.`);
+    }
+
+    responses.push({
+      to: recipient,
+      body: parsedBody,
+    });
   }
 
   console.log("[messageService] envio UltraMsg ejecutado", {
     mode,
     scheduledAt: scheduledAt.toISOString(),
     segment: targetName,
-    to: recipient,
-    body: parsedBody,
+    to: recipients,
+    body: responses,
   });
 
   return {
-    deliveredCount: 1,
-    log: `Enviado por UltraMsg a ${recipient}`,
+    deliveredCount: recipients.length,
+    log: `Enviado por UltraMsg a ${recipients.join(", ")}`,
   };
 }
 

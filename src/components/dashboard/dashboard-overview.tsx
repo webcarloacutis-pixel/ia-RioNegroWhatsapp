@@ -82,8 +82,8 @@ export function DashboardOverview({ data }: DashboardOverviewProps) {
             </p>
             <h2 className="mt-2 text-2xl text-foreground">Actividad de los ultimos 7 dias</h2>
           </div>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-80 min-h-[320px] min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={320}>
               <AreaChart data={data.messageTrend}>
                 <defs>
                   <linearGradient id="dashboardTrend" x1="0" x2="0" y1="0" y2="1">
@@ -112,8 +112,8 @@ export function DashboardOverview({ data }: DashboardOverviewProps) {
             </p>
             <h2 className="mt-2 text-2xl text-foreground">Uso por tipo de comunicado</h2>
           </div>
-          <div className="h-80">
-            <ResponsiveContainer width="100%" height="100%">
+          <div className="h-80 min-h-[320px] min-w-0">
+            <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={320}>
               <PieChart>
                 <Pie
                   data={data.typeBreakdown}

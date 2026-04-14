@@ -321,10 +321,6 @@ async function sendAnnouncementNowDb(
 ) {
   const announcement = await getAnnouncementOrThrow(id);
 
-  if (announcement.status === AnnouncementStatus.SENT) {
-    throw new AppError("Este comunicado ya fue enviado.", 409);
-  }
-
   const audience = await resolveAudience(announcement.segmentId);
   const result = await sendMessage({
     message: announcement.message,
