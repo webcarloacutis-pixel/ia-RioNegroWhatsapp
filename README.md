@@ -119,6 +119,8 @@ En otras palabras:
 Configuracion recomendada en UltraMsg:
 
 - URL del webhook: `https://tu-dominio.com/api/ultramsg/webhook`
+- Tambien queda disponible la ruta corta compatible:
+  `https://tu-dominio.com/api/webhook`
 - Si estas en local, expone tu app con `ngrok` o `cloudflared` y usa esa URL publica
 - Activa solo `Webhook on Received`
 - Deja apagados `Webhook on Create`, `Webhook on ACK`, `Webhook Download Media` y `Webhook On Reaction`
@@ -203,6 +205,8 @@ Despues del deploy:
 1. Entra al servicio web y copia su URL publica, por ejemplo `https://rionegro-panel-web.onrender.com`
 2. Configura en UltraMsg el webhook como:
    `https://TU-SERVICIO.onrender.com/api/ultramsg/webhook`
+   o si prefieres la ruta corta:
+   `https://TU-SERVICIO.onrender.com/api/webhook`
 3. Activa solo `Webhook on Received`
 4. Verifica login, comunicados, base de conocimiento y asistente
 
