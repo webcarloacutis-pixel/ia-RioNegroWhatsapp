@@ -19,6 +19,11 @@ export const metadata: Metadata = {
   title: "WhatsApp Rionegro | Panel Oficial Inteligente",
   description:
     "Panel administrativo para comunicados, segmentacion, conocimiento y metricas del canal oficial inteligente del Municipio de Rionegro.",
+  icons: {
+    icon: "/icon.png",
+    shortcut: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export default function RootLayout({
