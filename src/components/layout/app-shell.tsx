@@ -158,7 +158,6 @@ export function AppShell({ adminEmail, children }: AppShellProps) {
           </div>
 
           <div className="flex items-center gap-3">
-            <Badge tone="info">Preparado para Supabase + Prisma</Badge>
             <Button
               variant="secondary"
               className="gap-2"
