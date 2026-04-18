@@ -21,7 +21,7 @@ async function runCase(sessionId: string, input: string) {
 async function main() {
   const historyCase = await runCase("qa-history-es", "cual es la historia de rionegro");
   assert.equal(historyCase.language, "es");
-  assert.match(historyCase.reply, /Rionegro es uno de los municipios/i);
+  assert.match(historyCase.reply, /Rionegro .*1541|Convenci[oó]n de Rionegro|Cuna de la Constituci[oó]n/i);
   assert.doesNotMatch(historyCase.reply, /\bwhere is\b|\blatest news\b|\bThis is the official information channel\b/i);
 
   const multiIntentCase = await runCase(

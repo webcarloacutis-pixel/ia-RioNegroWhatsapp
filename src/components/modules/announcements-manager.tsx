@@ -61,7 +61,7 @@ export function AnnouncementsManager({
       Array.from(
         new Set([
           ...ANNOUNCEMENT_TYPE_VALUES,
-          ...announcements.map((announcement) => announcement.type),
+          ...announcements.map((announcement) => announcement.displayType),
           form.type,
         ]),
       ).filter(Boolean),
@@ -154,7 +154,7 @@ export function AnnouncementsManager({
       title: announcement.title,
       message: announcement.message,
       location: announcement.location ?? "",
-      type: announcement.type,
+      type: announcement.displayType,
       scheduledAt: toDateTimeLocalValue(announcement.scheduledAt),
       segmentId: announcement.segment?.id ?? "",
     });
@@ -311,7 +311,7 @@ export function AnnouncementsManager({
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-lg font-semibold text-foreground">{announcement.title}</p>
-                      <Badge tone="info">{formatTypeLabel(announcement.type)}</Badge>
+                      <Badge tone="info">{formatTypeLabel(announcement.displayType)}</Badge>
                       <Badge tone={announcement.status === "SENT" ? "success" : "warning"}>
                         {announcement.status === "SENT" ? "Enviado" : "Programado"}
                       </Badge>

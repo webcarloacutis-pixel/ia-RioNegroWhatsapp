@@ -79,7 +79,8 @@ model Announcement {
   title        String
   message      String             @db.Text
   location     String?
-  type         String
+  type         AnnouncementType
+  customTypeLabel String?
   scheduledAt  DateTime
   status       AnnouncementStatus @default(SCHEDULED)
   sentAt       DateTime?

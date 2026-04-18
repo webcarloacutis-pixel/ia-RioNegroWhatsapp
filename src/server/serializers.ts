@@ -65,6 +65,7 @@ export function serializeAnnouncement(
     message: announcement.message,
     location: announcement.location,
     type: announcement.type,
+    displayType: announcement.customTypeLabel ?? announcement.type,
     scheduledAt: announcement.scheduledAt.toISOString(),
     status: announcement.status,
     sentAt: announcement.sentAt?.toISOString() ?? null,

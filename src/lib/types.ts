@@ -29,6 +29,7 @@ export type AnnouncementSummary = {
   message: string;
   location: string | null;
   type: AnnouncementTypeValue;
+  displayType: string;
   scheduledAt: string;
   status: AnnouncementStatusValue;
   sentAt: string | null;

@@ -1,4 +1,9 @@
-import { AnnouncementStatus, DeliveryMode, DeliveryStatus } from "@prisma/client";
+import {
+  AnnouncementStatus,
+  AnnouncementType,
+  DeliveryMode,
+  DeliveryStatus,
+} from "@prisma/client";
 import { subDays } from "date-fns";
 
 import {
@@ -92,25 +97,46 @@ function buildTrendFromLogs(logs: { createdAt: Date }[]) {
 }
 
 function buildTypeBreakdown(
-  typeUsage: Array<{
+  announcementTypes: Array<{
     type: string;
-    _count: {
-      type: number;
-    };
+    customTypeLabel: string | null;
   }>,
 ) {
-  const usageMap = new Map(
-    typeUsage.map((item) => [normalizeAnnouncementType(item.type), item._count.type]),
-  );
+  const usageMap = new Map<string, number>();
+
+  for (const item of announcementTypes) {
+    const label = item.customTypeLabel ?? item.type;
+    const normalized = normalizeAnnouncementType(label);
+    usageMap.set(normalized, (usageMap.get(normalized) ?? 0) + 1);
+  }
 
   const orderedTypes = Array.from(
-    new Set([...DEFAULT_ANNOUNCEMENT_TYPES, ...typeUsage.map((item) => normalizeAnnouncementType(item.type))]),
+    new Set([
+      ...DEFAULT_ANNOUNCEMENT_TYPES,
+      ...announcementTypes.map((item) => normalizeAnnouncementType(item.customTypeLabel ?? item.type)),
+    ]),
   );
 
   return orderedTypes.map((type) => ({
     label: formatAnnouncementTypeLabel(type),
     value: usageMap.get(type) ?? 0,
   }));
+}
+
+function resolveAnnouncementTypeInput(value: string) {
+  const normalized = normalizeAnnouncementType(value);
+
+  if ((DEFAULT_ANNOUNCEMENT_TYPES as readonly string[]).includes(normalized)) {
+    return {
+      type: normalized as AnnouncementType,
+      customTypeLabel: null as string | null,
+    };
+  }
+
+  return {
+    type: AnnouncementType.GENERAL,
+    customTypeLabel: formatAnnouncementTypeLabel(value),
+  };
 }
 
 function isDatabaseUnavailable(error: unknown) {
@@ -246,12 +272,14 @@ async function listAnnouncementsDb(): Promise<AnnouncementSummary[]> {
 }
 
 async function createAnnouncementDb(input: AnnouncementInput) {
+  const resolvedType = resolveAnnouncementTypeInput(input.type);
   const announcement = await prisma.announcement.create({
     data: {
       title: input.title,
       message: input.message,
       location: input.location,
-      type: normalizeAnnouncementType(input.type),
+      type: resolvedType.type,
+      customTypeLabel: resolvedType.customTypeLabel,
       scheduledAt: parseScheduledDate(input.scheduledAt),
       segmentId: input.segmentId,
     },
@@ -271,6 +299,7 @@ async function createAnnouncementDb(input: AnnouncementInput) {
 
 async function updateAnnouncementDb(id: string, input: AnnouncementInput) {
   await getAnnouncementOrThrow(id);
+  const resolvedType = resolveAnnouncementTypeInput(input.type);
 
   const announcement = await prisma.announcement.update({
     where: { id },
@@ -278,7 +307,8 @@ async function updateAnnouncementDb(id: string, input: AnnouncementInput) {
       title: input.title,
       message: input.message,
       location: input.location,
-      type: normalizeAnnouncementType(input.type),
+      type: resolvedType.type,
+      customTypeLabel: resolvedType.customTypeLabel,
       scheduledAt: parseScheduledDate(input.scheduledAt),
       segmentId: input.segmentId,
     },
@@ -621,10 +651,10 @@ async function getDashboardDataDb(): Promise<DashboardData> {
         },
       },
     }),
-    prisma.announcement.groupBy({
-      by: ["type"],
-      _count: {
+    prisma.announcement.findMany({
+      select: {
         type: true,
+        customTypeLabel: true,
       },
     }),
     getRecentLogs(6),
@@ -702,10 +732,10 @@ async function getMetricsDataDb(): Promise<MetricsData> {
         createdAt: "desc",
       },
     }),
-    prisma.announcement.groupBy({
-      by: ["type"],
-      _count: {
+    prisma.announcement.findMany({
+      select: {
         type: true,
+        customTypeLabel: true,
       },
     }),
     prisma.deliveryLog.findMany({
@@ -739,19 +769,18 @@ async function getMetricsDataDb(): Promise<MetricsData> {
     segmentReachMap.set(key, (segmentReachMap.get(key) ?? 0) + log.deliveredCount);
   }
 
-  const typeUsageSorted = [...typeUsage].sort(
-    (left, right) => right._count.type - left._count.type,
-  );
+  const typeBreakdown = buildTypeBreakdown(typeUsage);
+  const typeUsageSorted = [...typeBreakdown].sort((left, right) => right.value - left.value);
 
   return {
     totals: {
       executedMessages: logs.length,
       deliveredUsers: logs.reduce((total, log) => total + log.deliveredCount, 0),
       demoExecutions: logs.filter((log) => log.mode === DeliveryMode.DEMO).length,
-      mostUsedType: formatAnnouncementTypeLabel(typeUsageSorted[0]?.type ?? "GENERAL"),
+      mostUsedType: typeUsageSorted[0]?.label ?? formatAnnouncementTypeLabel("GENERAL"),
     },
     deliveryTrend: buildTrendFromLogs(logs),
-    typeUsage: buildTypeBreakdown(typeUsage),
+    typeUsage: typeBreakdown,
     segmentReach: Array.from(segmentReachMap.entries())
       .map(([label, value]) => ({ label, value }))
       .sort((left, right) => right.value - left.value),

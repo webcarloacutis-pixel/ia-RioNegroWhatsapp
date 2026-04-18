@@ -174,7 +174,7 @@ export function DashboardOverview({ data }: DashboardOverviewProps) {
                       {announcement.message}
                     </p>
                   </div>
-                  <Badge tone="info">{formatTypeLabel(announcement.type)}</Badge>
+                  <Badge tone="info">{formatTypeLabel(announcement.displayType)}</Badge>
                 </div>
                 <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted">
                   <span>{formatDateTime(announcement.scheduledAt)}</span>

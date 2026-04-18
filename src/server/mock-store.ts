@@ -66,6 +66,7 @@ type MockAnnouncement = {
   message: string;
   location: string | null;
   type: string;
+  customTypeLabel: string | null;
   scheduledAt: Date;
   status: AnnouncementStatus;
   sentAt: Date | null;
@@ -154,11 +155,11 @@ function buildTrendFromLogs(logs: { createdAt: Date }[]) {
   }));
 }
 
-function buildTypeBreakdown(typeValues: string[]) {
+function buildTypeBreakdown(typeValues: Array<{ type: string; customTypeLabel: string | null }>) {
   const counts = new Map<string, number>();
 
-  for (const value of typeValues) {
-    const normalized = normalizeAnnouncementType(value);
+  for (const item of typeValues) {
+    const normalized = normalizeAnnouncementType(item.customTypeLabel ?? item.type);
     counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
   }
 
@@ -166,6 +167,22 @@ function buildTypeBreakdown(typeValues: string[]) {
     label: formatAnnouncementTypeLabel(type),
     value: counts.get(type) ?? 0,
   }));
+}
+
+function resolveAnnouncementTypeInput(value: string) {
+  const normalized = normalizeAnnouncementType(value);
+
+  if ((DEFAULT_ANNOUNCEMENT_TYPES as readonly string[]).includes(normalized)) {
+    return {
+      type: normalized,
+      customTypeLabel: null as string | null,
+    };
+  }
+
+  return {
+    type: "GENERAL",
+    customTypeLabel: formatAnnouncementTypeLabel(value),
+  };
 }
 
 function initializeState(): MockState {
@@ -204,6 +221,7 @@ function initializeState(): MockState {
       message: item.message,
       location: item.location,
       type: normalizeAnnouncementType(item.type),
+      customTypeLabel: null,
       scheduledAt,
       status: item.status,
       sentAt: item.status === "SENT" ? scheduledAt : null,
@@ -281,6 +299,7 @@ function serializeAnnouncement(announcement: MockAnnouncement): AnnouncementSumm
     message: announcement.message,
     location: announcement.location,
     type: announcement.type,
+    displayType: announcement.customTypeLabel ?? announcement.type,
     scheduledAt: announcement.scheduledAt.toISOString(),
     status: announcement.status,
     sentAt: announcement.sentAt?.toISOString() ?? null,
@@ -425,12 +444,14 @@ export async function listAnnouncements(): Promise<AnnouncementSummary[]> {
 export async function createAnnouncement(input: AnnouncementInput) {
   const state = getState();
   const now = new Date();
+  const resolvedType = resolveAnnouncementTypeInput(input.type);
   const announcement: MockAnnouncement = {
     id: createId("ann"),
     title: input.title,
     message: input.message,
     location: input.location,
-    type: normalizeAnnouncementType(input.type),
+    type: resolvedType.type,
+    customTypeLabel: resolvedType.customTypeLabel,
     scheduledAt: parseScheduledDate(input.scheduledAt),
     status: "SCHEDULED",
     sentAt: null,
@@ -445,11 +466,13 @@ export async function createAnnouncement(input: AnnouncementInput) {
 
 export async function updateAnnouncement(id: string, input: AnnouncementInput) {
   const announcement = getAnnouncementOrThrow(id);
+  const resolvedType = resolveAnnouncementTypeInput(input.type);
 
   announcement.title = input.title;
   announcement.message = input.message;
   announcement.location = input.location;
-  announcement.type = normalizeAnnouncementType(input.type);
+  announcement.type = resolvedType.type;
+  announcement.customTypeLabel = resolvedType.customTypeLabel;
   announcement.scheduledAt = parseScheduledDate(input.scheduledAt);
   announcement.segmentId = input.segmentId;
   announcement.updatedAt = new Date();
@@ -651,7 +674,12 @@ export async function getDashboardData(): Promise<DashboardData> {
       segments: state.segments.length,
     },
     messageTrend: buildTrendFromLogs(state.deliveryLogs),
-    typeBreakdown: buildTypeBreakdown(state.announcements.map((item) => item.type)),
+    typeBreakdown: buildTypeBreakdown(
+      state.announcements.map((item) => ({
+        type: item.type,
+        customTypeLabel: item.customTypeLabel,
+      })),
+    ),
     upcomingAnnouncements: [...scheduledAnnouncements]
       .sort((left, right) => left.scheduledAt.getTime() - right.scheduledAt.getTime())
       .slice(0, 4)
@@ -681,7 +709,12 @@ export async function getMetricsData(): Promise<MetricsData> {
   );
   const demoExecutions = state.deliveryLogs.filter((log) => log.mode === "DEMO").length;
   const mostUsedType =
-    buildTypeBreakdown(state.announcements.map((item) => item.type)).sort(
+    buildTypeBreakdown(
+      state.announcements.map((item) => ({
+        type: item.type,
+        customTypeLabel: item.customTypeLabel,
+      })),
+    ).sort(
       (left, right) => right.value - left.value,
     )[0]?.label ?? "General";
 
@@ -700,7 +733,12 @@ export async function getMetricsData(): Promise<MetricsData> {
       mostUsedType,
     },
     deliveryTrend: buildTrendFromLogs(state.deliveryLogs),
-    typeUsage: buildTypeBreakdown(state.announcements.map((item) => item.type)),
+    typeUsage: buildTypeBreakdown(
+      state.announcements.map((item) => ({
+        type: item.type,
+        customTypeLabel: item.customTypeLabel,
+      })),
+    ),
     segmentReach: Array.from(segmentReachMap.entries())
       .map(([label, value]) => ({ label, value }))
       .sort((left, right) => right.value - left.value),
