@@ -6,7 +6,6 @@ import {
   Bot,
   CheckCheck,
   CheckCircle2,
-  Cpu,
   FlaskConical,
   MapPin,
   MoreVertical,
@@ -50,8 +49,6 @@ type AssistantPlaygroundProps = {
   mayorName: string;
   contactEmail: string;
   contactPhone: string;
-  openAIEnabled: boolean;
-  openAIModel: string;
 };
 
 function formatTurnTime(value: string) {
@@ -70,8 +67,6 @@ export function AssistantPlayground({
   mayorName,
   contactEmail,
   contactPhone,
-  openAIEnabled,
-  openAIModel,
 }: AssistantPlaygroundProps) {
   const [history, setHistory] = useState<AssistantTurn[]>(initialHistory);
   const [message, setMessage] = useState("");
@@ -186,9 +181,7 @@ export function AssistantPlayground({
         <div className="flex flex-wrap gap-3">
           <Badge tone="info">Asistente oficial</Badge>
           <Badge tone="success">Vista tipo WhatsApp</Badge>
-          <Badge tone={openAIEnabled ? "success" : "warning"}>
-            {openAIEnabled ? `OpenAI activo · ${openAIModel}` : "OpenAI no configurado"}
-          </Badge>
+          <Badge tone="success">Asistente listo</Badge>
         </div>
         <div className="mt-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr] xl:items-end">
           <div>
@@ -214,11 +207,8 @@ export function AssistantPlayground({
               </p>
             </div>
             <div className="rounded-[24px] bg-white/80 px-4 py-4 shadow-sm">
-              <p className="text-sm text-muted">Motor</p>
-              <div className="mt-2 inline-flex items-center gap-2 text-sm font-semibold text-foreground">
-                <Cpu className="size-4 text-primary" />
-                {openAIEnabled ? "Hibrido listo" : "Modo local"}
-              </div>
+              <p className="text-sm text-muted">Estado</p>
+              <div className="mt-2 text-sm font-semibold text-foreground">Atencion activa</div>
             </div>
           </div>
         </div>
@@ -300,9 +290,7 @@ export function AssistantPlayground({
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold">Asistente Rionegro</p>
-                        <p className="truncate text-[11px] text-white/80">
-                          {openAIEnabled ? "En linea · modo hibrido" : "En linea · modo local"}
-                        </p>
+                        <p className="truncate text-[11px] text-white/80">En linea</p>
                       </div>
                       <div className="flex items-center gap-1 text-white/90">
                         <button className="rounded-full p-1.5">
@@ -468,7 +456,7 @@ export function AssistantPlayground({
         <aside className="space-y-6">
           <PanelCard className="space-y-4">
             <p className="text-sm font-semibold uppercase tracking-[0.24em] text-muted">
-              Diagnostico
+              Lectura del turno
             </p>
             <h2 className="text-2xl text-foreground">Ultimo turno del asistente</h2>
             {lastMeta ? (
@@ -481,15 +469,15 @@ export function AssistantPlayground({
                     </p>
                   </div>
                   <div className="rounded-[22px] bg-surface px-4 py-4">
-                    <p className="text-sm text-muted">Ruta usada</p>
+                    <p className="text-sm text-muted">Enfoque aplicado</p>
                     <p className="mt-2 font-semibold text-foreground">
                       {ASSISTANT_ROUTE_LABELS[lastMeta.route]}
                     </p>
                   </div>
                   <div className="rounded-[22px] bg-surface px-4 py-4">
-                    <p className="text-sm text-muted">Motor</p>
+                    <p className="text-sm text-muted">Respuesta</p>
                     <p className="mt-2 font-semibold text-foreground">
-                      {lastMeta.usedOpenAI ? "OpenAI + contexto oficial" : "Respuesta local"}
+                      {lastMeta.usedOpenAI ? "Mas conversacional" : "Directa y guiada"}
                     </p>
                   </div>
                   <div className="rounded-[22px] bg-surface px-4 py-4">
@@ -519,8 +507,8 @@ export function AssistantPlayground({
               </div>
             ) : (
               <div className="rounded-[22px] bg-surface px-4 py-4 text-sm text-muted">
-                Envia una consulta para ver el tema detectado, la ruta elegida y las fuentes
-                utilizadas por el asistente.
+                Envia una consulta para ver el tema detectado, el enfoque aplicado y las fuentes
+                usadas por el asistente.
               </div>
             )}
           </PanelCard>

@@ -29,7 +29,7 @@ async function main() {
     "y complex donde queda, se me dano el carro donde lo puedo arreglar que tramites puedo realizar en la alcaldia de rionegro y dime las ultimas noticias de rionegro",
   );
   assert.equal(multiIntentCase.language, "es");
-  assert.match(multiIntentCase.reply, /1\.\s+Ubicacion de Complex Llanogrande/i);
+  assert.match(multiIntentCase.reply, /1\.\s+Complex Llanogrande queda en/i);
   assert.match(multiIntentCase.reply, /2\./);
   assert.match(multiIntentCase.reply, /3\./);
   assert.match(multiIntentCase.reply, /4\./);
@@ -41,7 +41,7 @@ async function main() {
       multiIntentCase.reply,
       "Este es el canal oficial de informacion del municipio de Rionegro.",
     ),
-    1,
+    0,
   );
 
   const englishCase = await runCase(
@@ -49,9 +49,12 @@ async function main() {
     "where is the history museum and what are the latest news from rionegro?",
   );
   assert.equal(englishCase.language, "en");
-  assert.match(englishCase.reply, /1\.\s+Location of/i);
+  assert.match(englishCase.reply, /1\.\s+Casa de la Convencion|1\.\s+.*is at/i);
   assert.match(englishCase.reply, /2\.\s+These are some of the latest news items from Rionegro/i);
-  assert.match(englishCase.reply, /This is the official information channel of the municipality of Rionegro\./i);
+  assert.doesNotMatch(
+    englishCase.reply,
+    /This is the official information channel of the municipality of Rionegro\./i,
+  );
 
   const scheduleCase = await runCase(
     "qa-hours-es",
@@ -66,8 +69,14 @@ async function main() {
     "que lugares hay de interes en rionegro",
   );
   assert.equal(tourismCase.language, "es");
-  assert.match(tourismCase.reply, /lugares y planes de interes|lugares que puedes visitar/i);
-  assert.match(tourismCase.reply, /Parque Principal|San Antonio de Pereira|Casa de la Convencion/i);
+  assert.match(
+    tourismCase.reply,
+    /lugares y planes de interes|lugares que puedes visitar|buena opcion para caminar|representativo de Rionegro/i,
+  );
+  assert.match(
+    tourismCase.reply,
+    /Parque Principal|San Antonio de Pereira|Casa de la Convencion|Catedral de San Nicolas/i,
+  );
 
   const appointmentCase = await runCase(
     "qa-appointment-es",
@@ -82,10 +91,19 @@ async function main() {
     "que puedo hacer hoy en rionegro",
   );
   assert.equal(plansCase.language, "es");
-  assert.match(plansCase.reply, /lugares y planes de interes|planes oficiales disponibles/i);
+  assert.match(
+    plansCase.reply,
+    /lugares y planes de interes|planes disponibles|buena opcion para caminar|representativo de Rionegro/i,
+  );
   assert.doesNotMatch(plansCase.reply, /I do not have that information/i);
 
-  console.log("QA assistant: 7/7 pruebas aprobadas.");
+  resetConversation("qa-context-es");
+  await chatWithAssistant("qa-context-es", "que puedo hacer en rionegro");
+  const contextCase = await chatWithAssistant("qa-context-es", "que puedo hacer en complex");
+  assert.match(contextCase.reply, /Complex Llanogrande|complex/i);
+  assert.doesNotMatch(contextCase.reply, /Este es el canal oficial de informacion del municipio de Rionegro/i);
+
+  console.log("QA assistant: 8/8 pruebas aprobadas.");
 }
 
 void main();

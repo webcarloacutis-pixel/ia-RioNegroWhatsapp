@@ -51,6 +51,8 @@ type QueryResolution = DraftReplyResult & {
   topic: AssistantTopicValue;
   timeframe: Timeframe;
   sources: AssistantSourceReference[];
+  primaryPlace: string | null;
+  suggestedItems: string[];
 };
 
 type RetrievalBundle = {
@@ -180,15 +182,14 @@ function stripLeadingConversationalPrefix(value: string) {
 function getCopy(language: AssistantLanguage) {
   if (language === "en") {
     return {
-      noData: "I do not have that information right now. Please check with City Hall.",
+      noData: "I do not have the exact detail right now, but I can still guide you.",
       scope: "I can only help with official information about the municipality of Rionegro.",
-      officialChannel: "This is the official information channel of the municipality of Rionegro.",
       greeting:
-        "Hello, I am the official assistant of Rionegro. I can help you with events, news, road closures and locations. How can I help you?",
+        "Hello, I am the official assistant of Rionegro. I can help you with places, events, procedures, news and municipal services. What would you like to know?",
       report:
-        "You can contact the official City Hall channels or the competent authorities to file your report.",
+        "You can report it through the official City Hall channels or the competent authorities. If you want, I can help you find the right office.",
       outOfScope:
-        "I can only help with official information about the municipality of Rionegro. I do not answer questions outside that scope.",
+        "I can help you with official information about Rionegro. If you want, ask me about places, procedures, schedules, news or municipal services.",
       alertsTitle: "Recent alerts in Rionegro:",
       alertsEmpty: "I do not have official alerts registered at the moment.",
       eventsTodayEmpty: "I do not have official events registered for today in Rionegro.",
@@ -218,7 +219,7 @@ function getCopy(language: AssistantLanguage) {
       appointmentReply:
         "I can help you identify the office you need, although this channel does not schedule appointments directly by WhatsApp.",
       appointmentPrompt:
-        "If you tell me which office or procedure you need, I can guide you with the location, opening hours and official contact.",
+        "If you tell me which office or procedure you need, I can guide you with the location, opening hours and the right office.",
       automotiveTitle:
         "If your car broke down, I can suggest these automotive points registered in Rionegro:",
       automotiveFallback:
@@ -232,19 +233,25 @@ function getCopy(language: AssistantLanguage) {
         `The general institutional service hours are Monday to Thursday ${municipalityContact.schedule.mondayThursday}; Friday ${municipalityContact.schedule.friday}.`,
       capabilityReply:
         "I can help you with official information about Rionegro, such as locations, City Hall offices, mobility procedures, recent news, events, alerts and public services.",
+      genericFallback:
+        "I can help you better if you tell me whether you are looking for a place, a procedure, a schedule, news or something to do in Rionegro.",
+      tourismFollowUp:
+        "Would you like ideas for today, a family plan or something around Llanogrande?",
+      placeFollowUp: "Do you want the location, opening hours or what you can do there?",
+      servicesFollowUp: "If you want, tell me which office or procedure you need and I will narrow it down.",
+      newsFollowUp: "If you want, I can also summarize the most relevant one.",
     };
   }
 
   return {
     noData: assistantNoDataMessage,
     scope: assistantScopeMessage,
-    officialChannel: "Este es el canal oficial de informacion del municipio de Rionegro.",
     greeting:
-      "Hola, soy el asistente oficial de Rionegro. Puedo ayudarte con eventos, noticias, cierres viales y ubicaciones. En que puedo ayudarte?",
+      "Hola, soy el asistente oficial de Rionegro. Puedo ayudarte con lugares, eventos, tramites, noticias y servicios del municipio. ¿Que te gustaria saber?",
     report:
-      "Puedes comunicarte con los canales oficiales de la Alcaldia o autoridades competentes para realizar tu denuncia.",
+      "Puedes hacerlo por los canales oficiales de la Alcaldia o con la autoridad competente. Si quieres, te ayudo a ubicar la oficina adecuada.",
     outOfScope:
-      `${assistantScopeMessage} No respondo temas por fuera de la informacion oficial del municipio.`,
+      "Puedo ayudarte con informacion oficial de Rionegro. Si quieres, preguntame por lugares, tramites, horarios, noticias o planes.",
     alertsTitle: "Alertas recientes en Rionegro:",
     alertsEmpty: "No tengo alertas oficiales registradas en este momento.",
     eventsTodayEmpty: "Por ahora no tengo eventos oficiales registrados para hoy en Rionegro.",
@@ -274,7 +281,7 @@ function getCopy(language: AssistantLanguage) {
     appointmentReply:
       "Puedo ayudarte a identificar la dependencia que necesitas, aunque por este canal no se agendan citas directamente por WhatsApp.",
     appointmentPrompt:
-      "Si me dices para que dependencia o tramite necesitas la cita, te indico ubicacion, horario y canal oficial.",
+      "Si me dices para que dependencia o tramite necesitas la cita, te indico ubicacion, horario y la sede adecuada.",
     automotiveTitle:
       "Si tu carro se dano, puedo sugerirte estos puntos automotrices registrados en Rionegro:",
     automotiveFallback:
@@ -288,6 +295,14 @@ function getCopy(language: AssistantLanguage) {
       `El horario institucional general es lunes a jueves ${municipalityContact.schedule.mondayThursday}; viernes ${municipalityContact.schedule.friday}.`,
     capabilityReply:
       "Puedo ayudarte con informacion oficial de Rionegro, como ubicaciones, dependencias de la Alcaldia, tramites de movilidad, noticias recientes, eventos, alertas y servicios institucionales.",
+    genericFallback:
+      "Si quieres, dime si buscas un lugar, un tramite, un horario, noticias o planes para hacer en Rionegro y te guio.",
+    tourismFollowUp:
+      "¿Quieres ideas para hoy, un plan en familia o algo por Llanogrande?",
+    placeFollowUp: "¿Quieres la ubicacion, el horario o ideas de que hacer alli?",
+    servicesFollowUp:
+      "Si quieres, dime que dependencia o tramite necesitas y te lo aterrizo mejor.",
+    newsFollowUp: "Si quieres, tambien te resumo la mas importante.",
   };
 }
 
@@ -449,18 +464,10 @@ function finalizeReply(reply: string, language: AssistantLanguage) {
   const copy = getCopy(language);
 
   if (!trimmed) {
-    return `${copy.noData}\n\n${copy.officialChannel}`;
+    return copy.genericFallback;
   }
 
-  if (
-    normalizeText(trimmed).includes(normalizeText(copy.officialChannel)) ||
-    normalizeText(trimmed).includes("canal oficial de informacion del municipio de rionegro") ||
-    normalizeText(trimmed).includes("official information channel of the municipality of rionegro")
-  ) {
-    return trimmed;
-  }
-
-  return `${trimmed}\n\n${copy.officialChannel}`;
+  return trimmed;
 }
 
 function isGreeting(text: string) {
@@ -523,11 +530,15 @@ function hasLocationIntent(text: string) {
 
 function hasTourismIntent(text: string) {
   return includesAny(text, [
+    "que hay para hacer",
     "que hacer",
     "que puedo hacer",
     "que hacer hoy",
+    "que hacer este fin de semana",
     "planes",
+    "planes en rionegro",
     "plan para hoy",
+    "actividades hoy",
     "que lugares hay",
     "lugares hay de interes",
     "lugares de interes",
@@ -1053,6 +1064,81 @@ function searchTourismPlaces(message: string) {
   return prioritizedPlaces.slice(0, 6);
 }
 
+function shouldUseLastPlaceReference(text: string) {
+  return includesAny(text, [
+    "alli",
+    "ahi",
+    "ese lugar",
+    "ese sitio",
+    "ese punto",
+    "ese centro",
+    "alla",
+    "there",
+    "that place",
+    "that spot",
+  ]);
+}
+
+function describePlaceExperience(place: OfficialPlace, language: AssistantLanguage) {
+  const category = normalizeText(place.category);
+
+  if (language === "en") {
+    if (category === "comercio") {
+      return `At ${place.name} you can usually find restaurants, cafes, shops and a relaxed plan to walk around or spend the afternoon.`;
+    }
+
+    if (category === "turismo") {
+      return `${place.name} is a good option to walk around, get to know the area and enjoy a representative place in Rionegro.`;
+    }
+
+    if (category === "deporte") {
+      return `${place.name} is a good option if you are looking for sports, recreation or outdoor activity.`;
+    }
+
+    return `${place.name} is a useful place to visit depending on the kind of plan you want in Rionegro.`;
+  }
+
+  if (category === "comercio") {
+    return `En ${place.name} normalmente puedes encontrar restaurantes, cafes, tiendas y un plan tranquilo para caminar o pasar la tarde.`;
+  }
+
+  if (category === "turismo") {
+    return `${place.name} es una buena opcion para caminar, conocer la zona y disfrutar un lugar representativo de Rionegro.`;
+  }
+
+  if (category === "deporte") {
+    return `${place.name} es buena opcion si buscas deporte, recreacion o actividad al aire libre.`;
+  }
+
+  return `${place.name} puede ser una buena opcion segun el tipo de plan que quieras hacer en Rionegro.`;
+}
+
+function buildConversationalFallback(
+  intent: ResolvedIntent,
+  retrieval: RetrievalBundle,
+  language: AssistantLanguage,
+) {
+  const copy = getCopy(language);
+
+  if (intent.appointmentIntent) {
+    return `${copy.appointmentReply}\n\n${copy.appointmentPrompt}`;
+  }
+
+  if (intent.tourismIntent) {
+    return `${copy.tourismEmpty}\n\n${copy.tourismFollowUp}`;
+  }
+
+  if (intent.institutionalServicesIntent) {
+    return `${copy.noData}\n\n${copy.servicesFollowUp}`;
+  }
+
+  if (intent.locationIntent && retrieval.placeMatches.length) {
+    return `${buildPlaceReply(retrieval.placeMatches, language)}\n\n${copy.placeFollowUp}`;
+  }
+
+  return copy.genericFallback;
+}
+
 function searchAnnouncements(
   message: string,
   topic: AssistantTopicValue,
@@ -1183,7 +1269,7 @@ function buildPlaceReply(placeMatches: OfficialPlace[], language: AssistantLangu
   const copy = getCopy(language);
 
   if (!placeMatches.length) {
-    return `${copy.noData} ${copy.scope}`;
+    return copy.genericFallback;
   }
 
   const formatPlaceDetails = (place: OfficialPlace) => {
@@ -1199,9 +1285,12 @@ function buildPlaceReply(placeMatches: OfficialPlace[], language: AssistantLangu
   const formatPlace = (place: OfficialPlace) => `${place.name}: ${formatPlaceDetails(place)}`;
 
   if (placeMatches.length === 1) {
-    return language === "en"
-      ? `${copy.placeSinglePrefix} of ${placeMatches[0].name}: ${formatPlaceDetails(placeMatches[0])}`
-      : `${copy.placeSinglePrefix} de ${placeMatches[0].name}: ${formatPlaceDetails(placeMatches[0])}`;
+    return [
+      language === "en"
+        ? `${placeMatches[0].name} is at ${formatPlaceDetails(placeMatches[0])}`
+        : `${placeMatches[0].name} queda en ${formatPlaceDetails(placeMatches[0])}`,
+      copy.placeFollowUp,
+    ].join("\n\n");
   }
 
   return [copy.placeManyTitle, formatBulletList(placeMatches.map(formatPlace))].join("\n\n");
@@ -1243,6 +1332,9 @@ function buildAutomotiveReply(message: string, language: AssistantLanguage) {
         (place) => `${place.name}: ${place.address}${place.area ? ` (${place.area})` : ""}.`,
       ),
     ),
+    language === "en"
+      ? "If you want, tell me what kind of repair you need and I will narrow it down."
+      : "Si quieres, dime que tipo de reparacion necesitas y te lo aterrizo mejor.",
   ].join("\n\n");
 }
 
@@ -1254,22 +1346,30 @@ function buildTourismReply(
 ) {
   const copy = getCopy(language);
   const tourismPlaces = placeMatches.length ? placeMatches : searchTourismPlaces("");
+  const focusedPlace = placeMatches[0] ?? null;
   const events = announcements
     .filter((item) => item.type === "EVENT")
-    .slice(0, timeframe === "today" || timeframe === "tomorrow" ? 3 : 2);
+    .slice(0, timeframe === "today" || timeframe === "tomorrow" ? 2 : 1);
+
+  if (focusedPlace) {
+    return [
+      describePlaceExperience(focusedPlace, language),
+      copy.placeFollowUp,
+    ].join("\n\n");
+  }
 
   const parts = [copy.tourismTitle];
 
   if (events.length) {
     parts.push(
       language === "en"
-        ? `Official plans available ${timeframe === "today" ? "for today" : timeframe === "tomorrow" ? "for tomorrow" : "right now"}:\n${formatBulletList(
+        ? `Plans available ${timeframe === "today" ? "for today" : timeframe === "tomorrow" ? "for tomorrow" : "right now"}:\n${formatBulletList(
             events.map(
               (item) =>
                 `${item.title} | ${formatDate(item.scheduledAt, language)}${item.location ? ` | ${item.location}` : ""}. ${item.message}`,
             ),
           )}`
-        : `Planes oficiales disponibles ${timeframe === "today" ? "para hoy" : timeframe === "tomorrow" ? "para manana" : "en este momento"}:\n${formatBulletList(
+        : `Planes disponibles ${timeframe === "today" ? "para hoy" : timeframe === "tomorrow" ? "para manana" : "en este momento"}:\n${formatBulletList(
             events.map(
               (item) =>
                 `${item.title} | ${formatDate(item.scheduledAt, language)}${item.location ? ` | ${item.location}` : ""}. ${item.message}`,
@@ -1282,10 +1382,10 @@ function buildTourismReply(
     parts.push(
       language === "en"
         ? `Places you can visit:\n${formatBulletList(
-            tourismPlaces.slice(0, 5).map((place) => `${place.name}: ${place.address}${place.area ? ` (${place.area})` : ""}.`),
+            tourismPlaces.slice(0, 3).map((place) => `${place.name}: ${place.address}${place.area ? ` (${place.area})` : ""}.`),
           )}`
         : `Lugares que puedes visitar:\n${formatBulletList(
-            tourismPlaces.slice(0, 5).map((place) => `${place.name}: ${place.address}${place.area ? ` (${place.area})` : ""}.`),
+            tourismPlaces.slice(0, 3).map((place) => `${place.name}: ${place.address}${place.area ? ` (${place.area})` : ""}.`),
           )}`,
     );
   }
@@ -1293,6 +1393,8 @@ function buildTourismReply(
   if (parts.length === 1) {
     parts.push(copy.tourismEmpty);
   }
+
+  parts.push(copy.tourismFollowUp);
 
   return parts.join("\n\n");
 }
@@ -1324,13 +1426,13 @@ function buildInstitutionalServicesReply(message: string, language: AssistantLan
     return language === "en"
       ? [
           "For mobility procedures in Rionegro, you can go to SOMOS (Mobility and Transit), located at Carrera 48 # 47-19.",
-          "There you can receive guidance on driver licenses, traffic tickets, payments and other transit-related procedures.",
-          "If you want, I can also help you with the location and opening hours of the mobility office.",
+          "There you can ask about driver licenses, traffic tickets, payments and related procedures.",
+          "If you want, I can also give you the opening hours.",
         ].join("\n\n")
       : [
           "Para tramites de movilidad en Rionegro puedes dirigirte a SOMOS (Movilidad y Transito), ubicado en Carrera 48 # 47-19.",
-          "Alli puedes recibir orientacion sobre licencia de conduccion, comparendos, pagos y otros tramites relacionados con transito.",
-          "Si quieres, tambien puedo ayudarte con la ubicacion y el horario de la oficina de movilidad.",
+          "Alla puedes consultar licencia de conduccion, comparendos, pagos y tramites relacionados.",
+          "Si quieres, tambien te doy el horario.",
         ].join("\n\n");
   }
 
@@ -1343,7 +1445,7 @@ function buildInstitutionalServicesReply(message: string, language: AssistantLan
           : `${service.titleEs}: ${service.descriptionEs}`,
       ),
     ),
-    copy.servicesFooter,
+    copy.servicesFollowUp,
   ].join("\n\n");
 }
 
@@ -1398,7 +1500,7 @@ function buildAlertsReply(announcements: AnnouncementSummary[], language: Assist
   const copy = getCopy(language);
 
   if (!announcements.length) {
-    return `${copy.alertsEmpty} ${copy.noData}`;
+    return copy.alertsEmpty;
   }
 
   return [
@@ -1421,14 +1523,14 @@ function buildEventsReply(
 
   if (!announcements.length) {
     if (timeframe === "today") {
-      return `${copy.eventsTodayEmpty} ${copy.noData}`;
+      return `${copy.eventsTodayEmpty}\n\n${copy.tourismFollowUp}`;
     }
 
     if (timeframe === "tomorrow") {
-      return `${copy.eventsTomorrowEmpty} ${copy.noData}`;
+      return `${copy.eventsTomorrowEmpty}\n\n${copy.tourismFollowUp}`;
     }
 
-    return `${copy.eventsEmpty} ${copy.noData}`;
+    return `${copy.eventsEmpty}\n\n${copy.tourismFollowUp}`;
   }
 
   const title =
@@ -1441,11 +1543,12 @@ function buildEventsReply(
   return [
     title,
     formatBulletList(
-      announcements.slice(0, 4).map((item) => {
+      announcements.slice(0, 3).map((item) => {
         const place = item.location ? ` | ${item.location}` : "";
         return `${item.title} | ${formatDate(item.scheduledAt, language)}${place}. ${item.message}`;
       }),
     ),
+    copy.tourismFollowUp,
   ].join("\n\n");
 }
 
@@ -1456,16 +1559,17 @@ function buildNewsReply(announcements: AnnouncementSummary[], language: Assistan
   );
 
   if (!latestNews.length) {
-    return `${copy.newsEmpty} ${copy.noData}`;
+    return copy.newsEmpty;
   }
 
   return [
     copy.newsTitle,
     formatBulletList(
-      latestNews.map(
+      latestNews.slice(0, 3).map(
         (item) => `${item.title} | ${formatDate(item.scheduledAt, language)}. ${item.message}`,
       ),
     ),
+    copy.newsFollowUp,
   ].join("\n\n");
 }
 
@@ -1512,16 +1616,17 @@ function buildInstitutionalReply(
   }
 
   if (!knowledgeEntries.length) {
-    return `${copy.noData} ${copy.scope}`;
+    return copy.servicesFollowUp;
   }
 
   if (knowledgeEntries.length === 1) {
-    return knowledgeEntries[0].answer;
+    return `${knowledgeEntries[0].answer}\n\n${copy.servicesFollowUp}`;
   }
 
   return [
     copy.institutionalTitle,
-    formatBulletList(knowledgeEntries.slice(0, 3).map((entry) => `${entry.question}: ${entry.answer}`)),
+    formatBulletList(knowledgeEntries.slice(0, 2).map((entry) => entry.answer)),
+    copy.servicesFollowUp,
   ].join("\n\n");
 }
 
@@ -1550,7 +1655,7 @@ function buildOverviewReply(announcements: AnnouncementSummary[], language: Assi
   }
 
   if (parts.length === 1) {
-    parts.push(`${copy.noData} ${copy.scope}`);
+    parts.push(copy.genericFallback);
   }
 
   return parts.join("\n\n");
@@ -1562,17 +1667,18 @@ async function composeHybridReply(input: {
   profile: AssistantProfile;
   retrieval: RetrievalBundle;
 }) {
-  const copy = getCopy(input.intent.language);
   const aiText = await generateOpenAIText({
     systemPrompt: [
       "Eres el asistente oficial de la Alcaldia de Rionegro.",
       "Responde solo con la informacion contenida en el contexto oficial proporcionado.",
       "No inventes datos, no respondas temas ajenos a Rionegro, no des opiniones politicas y no actues como una IA generalista.",
-      "El tono debe ser institucional, cercano, claro, directo y util.",
+      "El tono debe ser cercano, claro, breve y util.",
+      "Prioriza utilidad inmediata y respuestas cortas por defecto.",
+      "No uses frases tecnicas ni menciones modelos, motores, OpenAI o detalles internos.",
+      "Si falta un dato exacto, ayuda con orientacion parcial o una pregunta aclaratoria corta.",
+      "Mantiene continuidad conversacional cuando el mensaje parezca seguir una idea anterior.",
       `Responde en ${input.intent.language === "en" ? "ingles" : "espanol"}.`,
-      `Si la informacion no alcanza, responde exactamente: "${copy.noData}"`,
       "No mezcles idiomas en la respuesta.",
-      "Refuerza que este es el canal oficial de informacion del municipio de Rionegro.",
     ].join("\n"),
     userPrompt: [
       `Consulta ciudadana: ${input.message}`,
@@ -1614,6 +1720,8 @@ async function composeHybridReply(input: {
         2,
       ),
       "Redacta la mejor respuesta posible solo con ese contexto.",
+      "Si el usuario pide planes, actividades o lugares para visitar, prioriza sugerencias utiles y concretas.",
+      "Si el usuario pregunta por una cita, orienta primero y pregunta que tipo de cita necesita.",
     ].join("\n\n"),
   });
 
@@ -1624,6 +1732,10 @@ async function retrieveOfficialContext(
   message: string,
   intent: ResolvedIntent,
   profile: AssistantProfile,
+  context: {
+    lastPlace: string | null;
+    lastSuggestedItems: string[];
+  },
 ): Promise<RetrievalBundle> {
   const [announcements, knowledgeEntries] = await Promise.all([
     listAnnouncements(),
@@ -1648,6 +1760,10 @@ async function retrieveOfficialContext(
 
     if (directPlaceMatches.length) {
       return directPlaceMatches;
+    }
+
+    if (context.lastPlace && shouldUseLastPlaceReference(normalizeText(message))) {
+      return searchPlaces(context.lastPlace);
     }
 
     if (intent.tourismIntent) {
@@ -1808,7 +1924,7 @@ function buildDeterministicReply(
     case "UNKNOWN":
     default:
       return {
-        reply: `${copy.noData} ${copy.scope}`,
+        reply: buildConversationalFallback(intent, retrieval, intent.language),
         route: "FALLBACK",
         usedOpenAI: false,
       };
@@ -1889,11 +2005,28 @@ async function resolveReply(input: {
   }
 }
 
-function getNextContext(intent: ResolvedIntent) {
+function getNextContext(input: {
+  intent: ResolvedIntent;
+  resolution: QueryResolution | null;
+  previous: {
+    lastPlace: string | null;
+    lastEntityMentioned: string | null;
+    lastSuggestedItems: string[];
+  };
+}) {
   return {
-    lastTopic: intent.topic,
-    lastTimeframe: intent.timeframe,
-    conversationLanguage: intent.language,
+    lastTopic: input.intent.topic,
+    lastTimeframe: input.intent.timeframe,
+    conversationLanguage: input.intent.language,
+    lastPlace: input.resolution?.primaryPlace ?? input.previous.lastPlace,
+    lastEntityMentioned:
+      input.resolution?.primaryPlace ??
+      input.resolution?.suggestedItems[0] ??
+      input.previous.lastEntityMentioned,
+    lastSuggestedItems:
+      input.resolution?.suggestedItems.length
+        ? input.resolution.suggestedItems.slice(0, 5)
+        : input.previous.lastSuggestedItems,
   };
 }
 
@@ -2007,6 +2140,10 @@ async function resolveSingleQuery(input: {
   sessionTimeframe: Timeframe;
   language: AssistantLanguage;
   profile: AssistantProfile;
+  context: {
+    lastPlace: string | null;
+    lastSuggestedItems: string[];
+  };
   allowOpenAI: boolean;
 }): Promise<QueryResolution> {
   const intent: ResolvedIntent = {
@@ -2022,7 +2159,12 @@ async function resolveSingleQuery(input: {
     assistantCapabilityIntent: hasAssistantCapabilityIntent(input.normalizedMessage),
   };
 
-  const retrieval = await retrieveOfficialContext(input.rawMessage, intent, input.profile);
+  const retrieval = await retrieveOfficialContext(
+    input.rawMessage,
+    intent,
+    input.profile,
+    input.context,
+  );
   const resolvedReply = await resolveReply({
     message: input.rawMessage,
     intent,
@@ -2036,6 +2178,11 @@ async function resolveSingleQuery(input: {
     topic: intent.topic,
     timeframe: intent.timeframe,
     sources: retrieval.sources,
+    primaryPlace: retrieval.placeMatches[0]?.name ?? null,
+    suggestedItems: [
+      ...retrieval.placeMatches.slice(0, 3).map((place) => place.name),
+      ...retrieval.announcements.slice(0, 3).map((item) => item.title),
+    ],
   };
 }
 
@@ -2075,6 +2222,10 @@ export async function chatWithAssistant(
   const resolutions: QueryResolution[] = [];
   let rollingTopic = currentSession.context.lastTopic;
   let rollingTimeframe = currentSession.context.lastTimeframe;
+  let rollingContext = {
+    lastPlace: currentSession.context.lastPlace,
+    lastSuggestedItems: currentSession.context.lastSuggestedItems,
+  };
 
   for (const subQuery of subQueries) {
     const normalizedSubQuery = normalizeText(subQuery);
@@ -2085,12 +2236,19 @@ export async function chatWithAssistant(
       sessionTimeframe: rollingTimeframe,
       language,
       profile: currentSession.profile,
+      context: rollingContext,
       allowOpenAI: subQueries.length === 1,
     });
 
     resolutions.push(resolution);
     rollingTopic = resolution.topic;
     rollingTimeframe = resolution.timeframe;
+    rollingContext = {
+      lastPlace: resolution.primaryPlace ?? rollingContext.lastPlace,
+      lastSuggestedItems: resolution.suggestedItems.length
+        ? resolution.suggestedItems
+        : rollingContext.lastSuggestedItems,
+    };
   }
 
   const lastResolution = resolutions.at(-1);
@@ -2115,7 +2273,14 @@ export async function chatWithAssistant(
   const finalReply = finalizeReply(combinedReply, language);
   const updated = addAssistantTurn(session.id, "assistant", finalReply);
 
-  updateAssistantContext(sessionId, getNextContext(finalIntent));
+  updateAssistantContext(
+    sessionId,
+    getNextContext({
+      intent: finalIntent,
+      resolution: lastResolution ?? null,
+      previous: currentSession.context,
+    }),
+  );
 
   const meta = buildMeta({
     topic: resolutions[0]?.topic ?? finalIntent.topic,

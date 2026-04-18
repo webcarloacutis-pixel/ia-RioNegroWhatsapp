@@ -155,7 +155,7 @@ export async function POST(request: Request) {
 
       await sendMessage({
         message:
-          "Conversacion reiniciada. Puedes hacer una nueva consulta oficial sobre Rionegro.\n\nEste es el canal oficial de informacion del municipio de Rionegro.",
+          "Conversacion reiniciada. Puedes hacer una nueva consulta sobre Rionegro cuando quieras.",
         segment: null,
         scheduledAt: new Date(),
         mode: "MANUAL",

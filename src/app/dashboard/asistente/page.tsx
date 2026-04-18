@@ -6,11 +6,10 @@ import {
   municipalityContact,
 } from "@/lib/rionegro-content";
 import { getAssistantAnalyticsSummary } from "@/server/assistant-analytics-service";
-import { getAssistantConfig, getConversation } from "@/server/rionegro-assistant";
+import { getConversation } from "@/server/rionegro-assistant";
 
 export default async function AssistantPage() {
   const analytics = await getAssistantAnalyticsSummary();
-  const config = getAssistantConfig();
   const testScenarios = [
     {
       title: "Identidad del municipio",
@@ -74,8 +73,6 @@ export default async function AssistantPage() {
       mayorName={mayorProfile.name}
       contactEmail={municipalityContact.citizenEmail}
       contactPhone={municipalityContact.phone}
-      openAIEnabled={config.openAIEnabled}
-      openAIModel={config.openAIModel}
     />
   );
 }

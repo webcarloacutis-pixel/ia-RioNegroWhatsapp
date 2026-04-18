@@ -121,8 +121,8 @@ export const ASSISTANT_ROUTE_LABELS: Record<
   RULE_BASED: "Reglas",
   KNOWLEDGE_BASE: "Base de conocimiento",
   ANNOUNCEMENTS: "Comunicados",
-  HYBRID_AI: "Hibrido con OpenAI",
-  FALLBACK: "Respuesta de respaldo",
+  HYBRID_AI: "Respuesta conversacional",
+  FALLBACK: "Orientacion general",
 };
 
 export const DEFAULT_AUDIENCE_SIZE = 1250;

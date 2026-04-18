@@ -10,6 +10,9 @@ type AssistantConversationContext = {
   lastTopic: AssistantTopicValue | null;
   lastTimeframe: "today" | "tomorrow" | "recent" | "none";
   conversationLanguage: "es" | "en";
+  lastPlace: string | null;
+  lastEntityMentioned: string | null;
+  lastSuggestedItems: string[];
 };
 
 type AssistantSession = {
@@ -50,6 +53,9 @@ export function getAssistantSession(id: string) {
       lastTopic: null,
       lastTimeframe: "none",
       conversationLanguage: "es",
+      lastPlace: null,
+      lastEntityMentioned: null,
+      lastSuggestedItems: [],
     },
   };
 
@@ -106,6 +112,9 @@ export function resetAssistantSession(sessionId: string) {
       lastTopic: null,
       lastTimeframe: "none",
       conversationLanguage: "es",
+      lastPlace: null,
+      lastEntityMentioned: null,
+      lastSuggestedItems: [],
     },
   });
 }
