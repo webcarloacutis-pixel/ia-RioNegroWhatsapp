@@ -1,11 +1,12 @@
-import {
-  AnnouncementStatus,
-  DeliveryMode,
-  type AnnouncementType,
-} from "@prisma/client";
+import { AnnouncementStatus, DeliveryMode, DeliveryStatus } from "@prisma/client";
 import { subDays } from "date-fns";
 
-import { DEFAULT_AUDIENCE_SIZE, TYPE_LABELS } from "@/lib/constants";
+import {
+  DEFAULT_ANNOUNCEMENT_TYPES,
+  DEFAULT_AUDIENCE_SIZE,
+  formatAnnouncementTypeLabel,
+  normalizeAnnouncementType,
+} from "@/lib/constants";
 import { AppError } from "@/lib/errors";
 import { prisma } from "@/lib/prisma";
 import type {
@@ -25,7 +26,7 @@ type AnnouncementInput = {
   title: string;
   message: string;
   location: string | null;
-  type: AnnouncementType;
+  type: string;
   scheduledAt: string;
   segmentId: string | null;
 };
@@ -34,6 +35,7 @@ type SegmentInput = {
   name: string;
   description: string | null;
   estimatedUsers: number;
+  recipientPhones: string[];
 };
 
 type KnowledgeInput = {
@@ -89,6 +91,28 @@ function buildTrendFromLogs(logs: { createdAt: Date }[]) {
   }));
 }
 
+function buildTypeBreakdown(
+  typeUsage: Array<{
+    type: string;
+    _count: {
+      type: number;
+    };
+  }>,
+) {
+  const usageMap = new Map(
+    typeUsage.map((item) => [normalizeAnnouncementType(item.type), item._count.type]),
+  );
+
+  const orderedTypes = Array.from(
+    new Set([...DEFAULT_ANNOUNCEMENT_TYPES, ...typeUsage.map((item) => normalizeAnnouncementType(item.type))]),
+  );
+
+  return orderedTypes.map((type) => ({
+    label: formatAnnouncementTypeLabel(type),
+    value: usageMap.get(type) ?? 0,
+  }));
+}
+
 function isDatabaseUnavailable(error: unknown) {
   if (!(error instanceof Error)) {
     return false;
@@ -132,6 +156,7 @@ async function resolveAudience(segmentId: string | null) {
         id: true,
         name: true,
         estimatedUsers: true,
+        recipientPhones: true,
       },
     });
 
@@ -152,6 +177,7 @@ async function resolveAudience(segmentId: string | null) {
     id: null,
     name: "Cobertura general",
     estimatedUsers: audience._sum.estimatedUsers ?? DEFAULT_AUDIENCE_SIZE,
+    recipientPhones: [],
   };
 }
 
@@ -225,7 +251,7 @@ async function createAnnouncementDb(input: AnnouncementInput) {
       title: input.title,
       message: input.message,
       location: input.location,
-      type: input.type,
+      type: normalizeAnnouncementType(input.type),
       scheduledAt: parseScheduledDate(input.scheduledAt),
       segmentId: input.segmentId,
     },
@@ -252,7 +278,7 @@ async function updateAnnouncementDb(id: string, input: AnnouncementInput) {
       title: input.title,
       message: input.message,
       location: input.location,
-      type: input.type,
+      type: normalizeAnnouncementType(input.type),
       scheduledAt: parseScheduledDate(input.scheduledAt),
       segmentId: input.segmentId,
     },
@@ -284,6 +310,7 @@ async function simulateAnnouncementSendDb(id: string) {
     segment: audience,
     scheduledAt: announcement.scheduledAt,
     mode: "DEMO",
+    to: audience.recipientPhones.join(","),
   });
 
   const log = await prisma.deliveryLog.create({
@@ -327,6 +354,7 @@ async function sendAnnouncementNowDb(
     segment: audience,
     scheduledAt: announcement.scheduledAt,
     mode,
+    to: audience.recipientPhones.join(","),
   });
 
   const [updatedAnnouncement, log] = await prisma.$transaction([
@@ -413,7 +441,12 @@ async function createSegmentDb(input: SegmentInput) {
   }
 
   const segment = await prisma.segment.create({
-    data: input,
+    data: {
+      name: input.name,
+      description: input.description,
+      estimatedUsers: input.estimatedUsers,
+      recipientPhones: input.recipientPhones,
+    },
     include: {
       _count: {
         select: {
@@ -457,7 +490,12 @@ async function updateSegmentDb(id: string, input: SegmentInput) {
 
   const segment = await prisma.segment.update({
     where: { id },
-    data: input,
+    data: {
+      name: input.name,
+      description: input.description,
+      estimatedUsers: input.estimatedUsers,
+      recipientPhones: input.recipientPhones,
+    },
     include: {
       _count: {
         select: {
@@ -610,10 +648,7 @@ async function getDashboardDataDb(): Promise<DashboardData> {
       segments: segmentStats._count,
     },
     messageTrend: buildTrendFromLogs(trendLogs),
-    typeBreakdown: Object.entries(TYPE_LABELS).map(([value, label]) => ({
-      label,
-      value: typeUsage.find((item) => item.type === value)?._count.type ?? 0,
-    })),
+    typeBreakdown: buildTypeBreakdown(typeUsage),
     upcomingAnnouncements: upcoming.map(serializeAnnouncement),
     recentLogs,
   };
@@ -713,19 +748,42 @@ async function getMetricsDataDb(): Promise<MetricsData> {
       executedMessages: logs.length,
       deliveredUsers: logs.reduce((total, log) => total + log.deliveredCount, 0),
       demoExecutions: logs.filter((log) => log.mode === DeliveryMode.DEMO).length,
-      mostUsedType:
-        TYPE_LABELS[typeUsageSorted[0]?.type ?? "GENERAL"] ?? TYPE_LABELS.GENERAL,
+      mostUsedType: formatAnnouncementTypeLabel(typeUsageSorted[0]?.type ?? "GENERAL"),
     },
     deliveryTrend: buildTrendFromLogs(logs),
-    typeUsage: Object.entries(TYPE_LABELS).map(([value, label]) => ({
-      label,
-      value: typeUsage.find((item) => item.type === value)?._count.type ?? 0,
-    })),
+    typeUsage: buildTypeBreakdown(typeUsage),
     segmentReach: Array.from(segmentReachMap.entries())
       .map(([label, value]) => ({ label, value }))
       .sort((left, right) => right.value - left.value),
     recentDemoLogs: demoLogs.map(serializeDeliveryLog),
   };
+}
+
+async function createFailedDeliveryLogDb(announcementId: string, error: unknown) {
+  const log = await prisma.deliveryLog.create({
+    data: {
+      announcementId,
+      mode: DeliveryMode.SCHEDULED,
+      status: DeliveryStatus.FAILED,
+      deliveredCount: 0,
+      details: error instanceof Error ? error.message : "No se pudo enviar el comunicado programado.",
+    },
+    include: {
+      announcement: {
+        select: {
+          id: true,
+          title: true,
+        },
+      },
+      segment: {
+        select: {
+          name: true,
+        },
+      },
+    },
+  });
+
+  return serializeDeliveryLog(log);
 }
 
 async function processScheduledAnnouncementsDb() {
@@ -744,12 +802,22 @@ async function processScheduledAnnouncementsDb() {
   const processed: DeliveryLogSummary[] = [];
 
   for (const announcement of dueAnnouncements) {
-    const result = await sendAnnouncementNowDb(announcement.id, DeliveryMode.SCHEDULED);
-    processed.push(result.log);
+    try {
+      const result = await sendAnnouncementNowDb(announcement.id, DeliveryMode.SCHEDULED);
+      processed.push(result.log);
+    } catch (error) {
+      console.error("[scheduler] fallo al enviar comunicado programado", {
+        announcementId: announcement.id,
+        title: announcement.title,
+        error: error instanceof Error ? error.message : error,
+      });
+
+      processed.push(await createFailedDeliveryLogDb(announcement.id, error));
+    }
   }
 
   return {
-    processedCount: processed.length,
+    processedCount: processed.filter((log) => log.status === "SUCCESS").length,
     processed,
   };
 }

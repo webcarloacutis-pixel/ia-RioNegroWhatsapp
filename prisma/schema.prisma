@@ -67,6 +67,7 @@ model Segment {
   name           String        @unique
   description    String?
   estimatedUsers Int           @default(0)
+  recipientPhones String[]     @default([])
   announcements  Announcement[]
   deliveryLogs   DeliveryLog[]
   createdAt      DateTime      @default(now())
@@ -78,7 +79,7 @@ model Announcement {
   title        String
   message      String             @db.Text
   location     String?
-  type         AnnouncementType
+  type         String
   scheduledAt  DateTime
   status       AnnouncementStatus @default(SCHEDULED)
   sentAt       DateTime?

@@ -21,12 +21,14 @@ type SegmentFormState = {
   name: string;
   description: string;
   estimatedUsers: string;
+  recipientPhones: string;
 };
 
 const initialForm: SegmentFormState = {
   name: "",
   description: "",
   estimatedUsers: "0",
+  recipientPhones: "",
 };
 
 export function SegmentsManager({ segments }: SegmentsManagerProps) {
@@ -66,6 +68,7 @@ export function SegmentsManager({ segments }: SegmentsManagerProps) {
           ...form,
           description: form.description || null,
           estimatedUsers: Number(form.estimatedUsers),
+          recipientPhones: form.recipientPhones,
         }),
       });
 
@@ -96,6 +99,7 @@ export function SegmentsManager({ segments }: SegmentsManagerProps) {
       name: segment.name,
       description: segment.description ?? "",
       estimatedUsers: String(segment.estimatedUsers),
+      recipientPhones: segment.recipientPhones.join("\n"),
     });
   }
 
@@ -158,6 +162,23 @@ export function SegmentsManager({ segments }: SegmentsManagerProps) {
               />
             </label>
 
+            <label className="block space-y-2">
+              <span className="text-sm font-semibold text-foreground">
+                Numeros de WhatsApp del segmento
+              </span>
+              <Textarea
+                value={form.recipientPhones}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, recipientPhones: event.target.value }))
+                }
+                className="min-h-28"
+                placeholder={"+573108853250\n+573162215323"}
+              />
+              <p className="text-xs text-muted">
+                Puedes pegar varios numeros separados por linea, coma o punto y coma.
+              </p>
+            </label>
+
             <div className="flex flex-wrap gap-3">
               <Button type="submit" disabled={isPending}>
                 {editingId ? "Actualizar segmento" : "Crear segmento"}
@@ -196,6 +217,9 @@ export function SegmentsManager({ segments }: SegmentsManagerProps) {
                 </p>
                 <div className="mt-4 text-sm text-muted">
                   <p>{segment.activeAnnouncements} comunicado(s) asociados</p>
+                  <p className="mt-1">
+                    {segment.recipientCount} numero(s) de WhatsApp asociado(s)
+                  </p>
                   <p className="mt-1">Creado el {formatDate(segment.createdAt)}</p>
                 </div>
                 <div className="mt-5 flex flex-wrap gap-3">

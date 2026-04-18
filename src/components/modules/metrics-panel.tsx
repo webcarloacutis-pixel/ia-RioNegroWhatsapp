@@ -327,9 +327,7 @@ export function MetricsPanel({ data, assistantAnalytics }: MetricsPanelProps) {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-semibold text-foreground">{query.topic}</p>
-                    <Badge tone={query.usedOpenAI ? "success" : "info"}>
-                      {query.usedOpenAI ? "OpenAI" : query.route}
-                    </Badge>
+                    <Badge tone="info">Canal oficial</Badge>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-muted">{query.message}</p>
                   <p className="mt-1 text-sm text-muted">{formatDateTime(query.createdAt)}</p>

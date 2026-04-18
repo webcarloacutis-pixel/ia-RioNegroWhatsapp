@@ -1,9 +1,44 @@
 import { z } from "zod";
 
 import {
-  ANNOUNCEMENT_TYPE_VALUES,
   KNOWLEDGE_CATEGORY_SUGGESTIONS,
+  normalizeAnnouncementType,
 } from "@/lib/constants";
+
+function normalizeRecipientPhone(value: string) {
+  const digits = value.replace(/\D/g, "");
+
+  if (!digits) {
+    return null;
+  }
+
+  return digits.startsWith("57") ? `+${digits}` : `+57${digits}`;
+}
+
+function parseRecipientPhones(value: unknown) {
+  if (Array.isArray(value)) {
+    return Array.from(
+      new Set(
+        value
+          .map((item) => (typeof item === "string" ? normalizeRecipientPhone(item) : null))
+          .filter((item): item is string => Boolean(item)),
+      ),
+    );
+  }
+
+  if (typeof value !== "string") {
+    return [];
+  }
+
+  return Array.from(
+    new Set(
+      value
+        .split(/[,\n;]/)
+        .map((item) => normalizeRecipientPhone(item.trim()))
+        .filter((item): item is string => Boolean(item)),
+    ),
+  );
+}
 
 export const loginSchema = z.object({
   email: z.email("Ingresa un correo valido."),
@@ -28,9 +63,12 @@ export const announcementInputSchema = z.object({
     .optional()
     .nullable()
     .transform((value) => value || null),
-  type: z.enum(ANNOUNCEMENT_TYPE_VALUES, {
-    error: "Selecciona el tipo de comunicado.",
-  }),
+  type: z
+    .string()
+    .trim()
+    .min(2, "Selecciona o escribe el tipo de comunicado.")
+    .max(60, "El tipo de comunicado es demasiado largo.")
+    .transform((value) => normalizeAnnouncementType(value)),
   scheduledAt: z.string().min(1, "Selecciona fecha y hora de envio."),
   segmentId: z
     .string()
@@ -58,6 +96,10 @@ export const segmentInputSchema = z.object({
     .int("El numero estimado debe ser entero.")
     .min(0, "El numero estimado no puede ser negativo.")
     .max(500000, "El numero estimado es demasiado alto."),
+  recipientPhones: z
+    .unknown()
+    .optional()
+    .transform((value) => parseRecipientPhones(value)),
 });
 
 export const knowledgeInputSchema = z.object({

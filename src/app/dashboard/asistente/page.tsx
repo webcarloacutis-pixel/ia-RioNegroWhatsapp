@@ -33,6 +33,11 @@ export default async function AssistantPage() {
       goal: "Probar listado de eventos con fecha y lugar.",
     },
     {
+      title: "Turismo y planes",
+      prompt: "Que lugares hay de interes en Rionegro?",
+      goal: "Validar recomendaciones utiles de lugares y planes oficiales.",
+    },
+    {
       title: "Noticias",
       prompt: "Dame las noticias mas recientes de Rionegro.",
       goal: "Verificar respuesta tipo boletin institucional.",
@@ -51,6 +56,11 @@ export default async function AssistantPage() {
       title: "PQRS",
       prompt: "Donde puedo poner una queja o solicitud?",
       goal: "Validar orientacion a canales oficiales.",
+    },
+    {
+      title: "Citas ambiguas",
+      prompt: "Necesito una cita para movilidad",
+      goal: "Comprobar que el bot oriente sin caer en respuesta cortante.",
     },
   ];
 

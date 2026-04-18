@@ -1,4 +1,4 @@
-export const ANNOUNCEMENT_TYPE_VALUES = [
+export const DEFAULT_ANNOUNCEMENT_TYPES = [
   "EVENT",
   "NEWS",
   "ROAD_CLOSURE",
@@ -6,6 +6,8 @@ export const ANNOUNCEMENT_TYPE_VALUES = [
   "ALERT",
   "GENERAL",
 ] as const;
+
+export const ANNOUNCEMENT_TYPE_VALUES = DEFAULT_ANNOUNCEMENT_TYPES;
 
 export const ANNOUNCEMENT_STATUS_VALUES = ["SCHEDULED", "SENT"] as const;
 
@@ -45,7 +47,7 @@ export const KNOWLEDGE_CATEGORY_SUGGESTIONS = [
 export const ADMIN_DEMO_EMAIL = "admin@rionegro.gov";
 export const ADMIN_DEMO_PASSWORD = "admin123";
 
-export const TYPE_LABELS: Record<(typeof ANNOUNCEMENT_TYPE_VALUES)[number], string> = {
+export const TYPE_LABELS: Record<(typeof DEFAULT_ANNOUNCEMENT_TYPES)[number], string> = {
   EVENT: "Evento",
   NEWS: "Noticia",
   ROAD_CLOSURE: "Cierre vial",
@@ -53,6 +55,29 @@ export const TYPE_LABELS: Record<(typeof ANNOUNCEMENT_TYPE_VALUES)[number], stri
   ALERT: "Alerta",
   GENERAL: "General",
 };
+
+export function normalizeAnnouncementType(value: string) {
+  return value
+    .trim()
+    .replace(/\s+/g, "_")
+    .replace(/[^\p{L}\p{N}_-]/gu, "")
+    .toUpperCase();
+}
+
+export function formatAnnouncementTypeLabel(value: string) {
+  const normalized = normalizeAnnouncementType(value);
+  const knownLabel = TYPE_LABELS[normalized as keyof typeof TYPE_LABELS];
+
+  if (knownLabel) {
+    return knownLabel;
+  }
+
+  return value
+    .trim()
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
 
 export const STATUS_LABELS: Record<
   (typeof ANNOUNCEMENT_STATUS_VALUES)[number],

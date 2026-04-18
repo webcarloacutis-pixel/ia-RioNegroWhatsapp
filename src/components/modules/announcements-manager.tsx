@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useState, useTransition } from "react";
 import { Edit3, Send, Sparkles, Trash2 } from "lucide-react";
@@ -11,8 +12,8 @@ import { Input } from "@/components/ui/input";
 import { PanelCard } from "@/components/ui/panel-card";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { ANNOUNCEMENT_TYPE_VALUES, TYPE_LABELS } from "@/lib/constants";
-import { formatDateTime, toDateTimeLocalValue } from "@/lib/format";
+import { ANNOUNCEMENT_TYPE_VALUES } from "@/lib/constants";
+import { formatDateTime, formatTypeLabel, toDateTimeLocalValue } from "@/lib/format";
 import type { AnnouncementSummary, SegmentSummary } from "@/lib/types";
 
 type AnnouncementsManagerProps = {
@@ -54,6 +55,17 @@ export function AnnouncementsManager({
           new Date(right.scheduledAt).getTime() - new Date(left.scheduledAt).getTime(),
       ),
     [announcements],
+  );
+  const availableTypes = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...ANNOUNCEMENT_TYPE_VALUES,
+          ...announcements.map((announcement) => announcement.type),
+          form.type,
+        ]),
+      ).filter(Boolean),
+    [announcements, form.type],
   );
 
   function resetForm() {
@@ -155,7 +167,8 @@ export function AnnouncementsManager({
         <h1 className="mt-4 text-4xl text-foreground">Crea, organiza y activa informacion oficial</h1>
         <p className="mt-4 max-w-3xl text-base leading-8 text-muted">
           Disenado para que el equipo de la Alcaldia pueda cargar mensajes claros, programarlos y
-          demostrar el flujo de envios sin tocar aun la integracion de WhatsApp.
+          enviarlos por WhatsApp a numeros generales o a los destinatarios asociados a cada
+          segmento.
         </p>
       </section>
 
@@ -185,18 +198,24 @@ export function AnnouncementsManager({
             <div className="grid gap-4 md:grid-cols-2">
               <label className="block space-y-2">
                 <span className="text-sm font-semibold text-foreground">Tipo</span>
-                <Select
+                <Input
                   value={form.type}
                   onChange={(event) =>
                     setForm((current) => ({ ...current, type: event.target.value }))
                   }
-                >
-                  {ANNOUNCEMENT_TYPE_VALUES.map((type) => (
+                  list="announcement-type-options"
+                  placeholder="Ej. Evento, Feria de empleo o Salud publica"
+                />
+                <datalist id="announcement-type-options">
+                  {availableTypes.map((type) => (
                     <option key={type} value={type}>
-                      {TYPE_LABELS[type]}
+                      {formatTypeLabel(type)}
                     </option>
                   ))}
-                </Select>
+                </datalist>
+                <p className="text-xs text-muted">
+                  Puedes elegir una categoria existente o escribir una nueva.
+                </p>
               </label>
 
               <label className="block space-y-2">
@@ -223,7 +242,15 @@ export function AnnouncementsManager({
             </label>
 
             <label className="block space-y-2">
-              <span className="text-sm font-semibold text-foreground">Segmento</span>
+              <span className="flex items-center justify-between gap-3 text-sm font-semibold text-foreground">
+                <span>Segmento</span>
+                <Link
+                  href="/dashboard/segmentacion"
+                  className="text-xs font-medium text-primary transition hover:opacity-80"
+                >
+                  Crear o editar segmentos
+                </Link>
+              </span>
               <Select
                 value={form.segmentId}
                 onChange={(event) =>
@@ -233,7 +260,7 @@ export function AnnouncementsManager({
                 <option value="">Cobertura general</option>
                 {segments.map((segment) => (
                   <option key={segment.id} value={segment.id}>
-                    {segment.name}
+                    {segment.name} ({segment.recipientCount} numeros)
                   </option>
                 ))}
               </Select>
@@ -284,7 +311,7 @@ export function AnnouncementsManager({
                   <div>
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-lg font-semibold text-foreground">{announcement.title}</p>
-                      <Badge tone="info">{TYPE_LABELS[announcement.type]}</Badge>
+                      <Badge tone="info">{formatTypeLabel(announcement.type)}</Badge>
                       <Badge tone={announcement.status === "SENT" ? "success" : "warning"}>
                         {announcement.status === "SENT" ? "Enviado" : "Programado"}
                       </Badge>
@@ -321,7 +348,6 @@ export function AnnouncementsManager({
                   <Button
                     variant="primary"
                     className="gap-2"
-                    disabled={announcement.status === "SENT"}
                     onClick={() => handleSendNow(announcement.id)}
                   >
                     <Send className="size-4" />

@@ -1,12 +1,11 @@
 import type {
   ANNOUNCEMENT_STATUS_VALUES,
-  ANNOUNCEMENT_TYPE_VALUES,
   ASSISTANT_ROUTE_VALUES,
   ASSISTANT_TOPIC_VALUES,
   DELIVERY_MODE_VALUES,
 } from "@/lib/constants";
 
-export type AnnouncementTypeValue = (typeof ANNOUNCEMENT_TYPE_VALUES)[number];
+export type AnnouncementTypeValue = string;
 export type AnnouncementStatusValue = (typeof ANNOUNCEMENT_STATUS_VALUES)[number];
 export type DeliveryModeValue = (typeof DELIVERY_MODE_VALUES)[number];
 export type AssistantTopicValue = (typeof ASSISTANT_TOPIC_VALUES)[number];
@@ -17,6 +16,8 @@ export type SegmentSummary = {
   name: string;
   description: string | null;
   estimatedUsers: number;
+  recipientPhones: string[];
+  recipientCount: number;
   activeAnnouncements: number;
   lastUsedAt: string | null;
   createdAt: string;

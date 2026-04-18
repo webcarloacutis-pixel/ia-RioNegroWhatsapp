@@ -1,7 +1,7 @@
 import {
   DELIVERY_MODE_LABELS,
   STATUS_LABELS,
-  TYPE_LABELS,
+  formatAnnouncementTypeLabel,
 } from "@/lib/constants";
 
 export function formatDateTime(value: Date | string | null | undefined) {
@@ -43,8 +43,8 @@ export function toDateTimeLocalValue(value: Date | string | null | undefined) {
   return new Date(date.getTime() - timezoneOffset).toISOString().slice(0, 16);
 }
 
-export function formatTypeLabel(value: keyof typeof TYPE_LABELS) {
-  return TYPE_LABELS[value] ?? value;
+export function formatTypeLabel(value: string) {
+  return formatAnnouncementTypeLabel(value);
 }
 
 export function formatStatusLabel(value: keyof typeof STATUS_LABELS) {

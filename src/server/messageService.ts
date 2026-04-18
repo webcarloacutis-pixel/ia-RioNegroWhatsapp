@@ -5,6 +5,7 @@ type SendMessageInput = {
         id: string | null;
         name: string;
         estimatedUsers: number;
+        recipientPhones?: string[];
       }
     | null;
   scheduledAt: Date;
@@ -46,7 +47,7 @@ async function sendMessageMock({
   scheduledAt,
   mode,
 }: SendMessageInput) {
-  const deliveredCount = segment?.estimatedUsers ?? DEFAULT_AUDIENCE;
+  const deliveredCount = segment?.recipientPhones?.length || segment?.estimatedUsers || DEFAULT_AUDIENCE;
   const targetName = segment?.name ?? "Cobertura general";
   const preview = message.length > 80 ? `${message.slice(0, 80)}...` : message;
 
@@ -74,13 +75,14 @@ async function sendMessageUltraMsg({
   to,
 }: SendMessageInput) {
   const targetName = segment?.name ?? "Cobertura general";
-  const recipients = resolveRecipients(to);
+  const recipients = resolveRecipients(to || segment?.recipientPhones?.join(",") || null);
 
   if (!recipients.length) {
     throw new Error("No hay destinatarios configurados para UltraMsg.");
   }
 
   const responses: unknown[] = [];
+  const failures: string[] = [];
 
   for (const recipient of recipients) {
     const payload = new URLSearchParams({
@@ -116,7 +118,8 @@ async function sendMessageUltraMsg({
         body: parsedBody,
       });
 
-      throw new Error(`UltraMsg devolvio ${response.status} al enviar a ${recipient}.`);
+      failures.push(`${recipient} (${response.status})`);
+      continue;
     }
 
     responses.push({
@@ -125,17 +128,29 @@ async function sendMessageUltraMsg({
     });
   }
 
+  if (!responses.length) {
+    throw new Error(
+      failures.length
+        ? `UltraMsg no pudo enviar a ningun destinatario: ${failures.join(", ")}.`
+        : "UltraMsg no pudo enviar el mensaje.",
+    );
+  }
+
   console.log("[messageService] envio UltraMsg ejecutado", {
     mode,
     scheduledAt: scheduledAt.toISOString(),
     segment: targetName,
     to: recipients,
     body: responses,
+    failures,
   });
 
   return {
-    deliveredCount: recipients.length,
-    log: `Enviado por UltraMsg a ${recipients.join(", ")}`,
+    deliveredCount: responses.length,
+    log:
+      failures.length > 0
+        ? `Enviado por UltraMsg a ${responses.length} destinatario(s). Fallaron: ${failures.join(", ")}`
+        : `Enviado por UltraMsg a ${recipients.join(", ")}`,
   };
 }
 

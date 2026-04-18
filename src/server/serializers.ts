@@ -85,6 +85,8 @@ export function serializeSegment(segment: SegmentWithMeta): SegmentSummary {
     name: segment.name,
     description: segment.description,
     estimatedUsers: segment.estimatedUsers,
+    recipientPhones: segment.recipientPhones,
+    recipientCount: segment.recipientPhones.length,
     activeAnnouncements: segment._count.announcements,
     lastUsedAt: segment.deliveryLogs[0]?.createdAt.toISOString() ?? null,
     createdAt: segment.createdAt.toISOString(),

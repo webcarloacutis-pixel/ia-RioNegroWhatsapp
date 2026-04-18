@@ -374,6 +374,8 @@ export const assistantSampleQuestions = [
   "Que es Rionegro?",
   "Quien es el alcalde de Rionegro?",
   "Que hay hoy en Rionegro?",
+  "Que lugares hay de interes en Rionegro?",
+  "Necesito una cita para movilidad",
   "Que programas tiene la Alcaldia?",
   "Cuales son las noticias mas recientes?",
   "Donde puedo poner una queja o solicitud?",

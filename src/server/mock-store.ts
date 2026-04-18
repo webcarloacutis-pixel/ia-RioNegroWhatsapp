@@ -1,11 +1,16 @@
 import {
+  DeliveryStatus,
   type AnnouncementStatus,
-  type AnnouncementType,
   type DeliveryMode,
 } from "@prisma/client";
 import { subDays } from "date-fns";
 
-import { DEFAULT_AUDIENCE_SIZE, TYPE_LABELS } from "@/lib/constants";
+import {
+  DEFAULT_ANNOUNCEMENT_TYPES,
+  DEFAULT_AUDIENCE_SIZE,
+  formatAnnouncementTypeLabel,
+  normalizeAnnouncementType,
+} from "@/lib/constants";
 import { AppError } from "@/lib/errors";
 import {
   buildOfficialAnnouncements,
@@ -27,7 +32,7 @@ type AnnouncementInput = {
   title: string;
   message: string;
   location: string | null;
-  type: AnnouncementType;
+  type: string;
   scheduledAt: string;
   segmentId: string | null;
 };
@@ -36,6 +41,7 @@ type SegmentInput = {
   name: string;
   description: string | null;
   estimatedUsers: number;
+  recipientPhones: string[];
 };
 
 type KnowledgeInput = {
@@ -49,6 +55,7 @@ type MockSegment = {
   name: string;
   description: string | null;
   estimatedUsers: number;
+  recipientPhones: string[];
   createdAt: Date;
   updatedAt: Date;
 };
@@ -58,7 +65,7 @@ type MockAnnouncement = {
   title: string;
   message: string;
   location: string | null;
-  type: AnnouncementType;
+  type: string;
   scheduledAt: Date;
   status: AnnouncementStatus;
   sentAt: Date | null;
@@ -147,6 +154,20 @@ function buildTrendFromLogs(logs: { createdAt: Date }[]) {
   }));
 }
 
+function buildTypeBreakdown(typeValues: string[]) {
+  const counts = new Map<string, number>();
+
+  for (const value of typeValues) {
+    const normalized = normalizeAnnouncementType(value);
+    counts.set(normalized, (counts.get(normalized) ?? 0) + 1);
+  }
+
+  return Array.from(new Set([...DEFAULT_ANNOUNCEMENT_TYPES, ...counts.keys()])).map((type) => ({
+    label: formatAnnouncementTypeLabel(type),
+    value: counts.get(type) ?? 0,
+  }));
+}
+
 function initializeState(): MockState {
   const now = new Date();
 
@@ -155,6 +176,7 @@ function initializeState(): MockState {
     name: segment.name,
     description: segment.description,
     estimatedUsers: segment.estimatedUsers,
+    recipientPhones: [],
     createdAt: now,
     updatedAt: now,
   }));
@@ -181,7 +203,7 @@ function initializeState(): MockState {
       title: item.title,
       message: item.message,
       location: item.location,
-      type: item.type as AnnouncementType,
+      type: normalizeAnnouncementType(item.type),
       scheduledAt,
       status: item.status,
       sentAt: item.status === "SENT" ? scheduledAt : null,
@@ -289,6 +311,8 @@ function serializeSegment(segment: MockSegment): SegmentSummary {
     name: segment.name,
     description: segment.description,
     estimatedUsers: segment.estimatedUsers,
+    recipientPhones: segment.recipientPhones,
+    recipientCount: segment.recipientPhones.length,
     activeAnnouncements,
     lastUsedAt,
     createdAt: segment.createdAt.toISOString(),
@@ -362,6 +386,7 @@ async function resolveAudience(segmentId: string | null) {
       id: segment.id,
       name: segment.name,
       estimatedUsers: segment.estimatedUsers,
+      recipientPhones: segment.recipientPhones,
     };
   }
 
@@ -374,6 +399,7 @@ async function resolveAudience(segmentId: string | null) {
     id: null,
     name: "Cobertura general",
     estimatedUsers: estimatedUsers || DEFAULT_AUDIENCE_SIZE,
+    recipientPhones: [],
   };
 }
 
@@ -404,7 +430,7 @@ export async function createAnnouncement(input: AnnouncementInput) {
     title: input.title,
     message: input.message,
     location: input.location,
-    type: input.type,
+    type: normalizeAnnouncementType(input.type),
     scheduledAt: parseScheduledDate(input.scheduledAt),
     status: "SCHEDULED",
     sentAt: null,
@@ -423,7 +449,7 @@ export async function updateAnnouncement(id: string, input: AnnouncementInput) {
   announcement.title = input.title;
   announcement.message = input.message;
   announcement.location = input.location;
-  announcement.type = input.type;
+  announcement.type = normalizeAnnouncementType(input.type);
   announcement.scheduledAt = parseScheduledDate(input.scheduledAt);
   announcement.segmentId = input.segmentId;
   announcement.updatedAt = new Date();
@@ -447,6 +473,7 @@ export async function simulateAnnouncementSend(id: string) {
     segment: audience,
     scheduledAt: announcement.scheduledAt,
     mode: "DEMO",
+    to: audience.recipientPhones.join(","),
   });
 
   const log = createLog({
@@ -475,6 +502,7 @@ export async function sendAnnouncementNow(
     segment: audience,
     scheduledAt: announcement.scheduledAt,
     mode,
+    to: audience.recipientPhones.join(","),
   });
 
   announcement.status = "SENT";
@@ -518,6 +546,7 @@ export async function createSegment(input: SegmentInput) {
     name: input.name,
     description: input.description,
     estimatedUsers: input.estimatedUsers,
+    recipientPhones: input.recipientPhones,
     createdAt: now,
     updatedAt: now,
   };
@@ -541,6 +570,7 @@ export async function updateSegment(id: string, input: SegmentInput) {
   segment.name = input.name;
   segment.description = input.description;
   segment.estimatedUsers = input.estimatedUsers;
+  segment.recipientPhones = input.recipientPhones;
   segment.updatedAt = new Date();
 
   return serializeSegment(segment);
@@ -621,10 +651,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       segments: state.segments.length,
     },
     messageTrend: buildTrendFromLogs(state.deliveryLogs),
-    typeBreakdown: Object.entries(TYPE_LABELS).map(([value, label]) => ({
-      label,
-      value: state.announcements.filter((item) => item.type === value).length,
-    })),
+    typeBreakdown: buildTypeBreakdown(state.announcements.map((item) => item.type)),
     upcomingAnnouncements: [...scheduledAnnouncements]
       .sort((left, right) => left.scheduledAt.getTime() - right.scheduledAt.getTime())
       .slice(0, 4)
@@ -654,12 +681,9 @@ export async function getMetricsData(): Promise<MetricsData> {
   );
   const demoExecutions = state.deliveryLogs.filter((log) => log.mode === "DEMO").length;
   const mostUsedType =
-    Object.entries(TYPE_LABELS)
-      .map(([value, label]) => ({
-        label,
-        value: state.announcements.filter((item) => item.type === value).length,
-      }))
-      .sort((left, right) => right.value - left.value)[0]?.label ?? "General";
+    buildTypeBreakdown(state.announcements.map((item) => item.type)).sort(
+      (left, right) => right.value - left.value,
+    )[0]?.label ?? "General";
 
   const segmentReachMap = new Map<string, number>();
 
@@ -676,10 +700,7 @@ export async function getMetricsData(): Promise<MetricsData> {
       mostUsedType,
     },
     deliveryTrend: buildTrendFromLogs(state.deliveryLogs),
-    typeUsage: Object.entries(TYPE_LABELS).map(([value, label]) => ({
-      label,
-      value: state.announcements.filter((item) => item.type === value).length,
-    })),
+    typeUsage: buildTypeBreakdown(state.announcements.map((item) => item.type)),
     segmentReach: Array.from(segmentReachMap.entries())
       .map(([label, value]) => ({ label, value }))
       .sort((left, right) => right.value - left.value),
@@ -703,12 +724,24 @@ export async function processScheduledAnnouncements() {
   const processed: DeliveryLogSummary[] = [];
 
   for (const announcement of dueAnnouncements) {
-    const result = await sendAnnouncementNow(announcement.id, "SCHEDULED");
-    processed.push(result.log);
+    try {
+      const result = await sendAnnouncementNow(announcement.id, "SCHEDULED");
+      processed.push(result.log);
+    } catch (error) {
+      const failedLog = createLog({
+        announcementId: announcement.id,
+        segmentId: announcement.segmentId,
+        mode: "SCHEDULED",
+        deliveredCount: 0,
+        details: error instanceof Error ? error.message : "No se pudo enviar el comunicado programado.",
+      });
+      failedLog.status = DeliveryStatus.FAILED;
+      processed.push(serializeDeliveryLog(failedLog));
+    }
   }
 
   return {
-    processedCount: processed.length,
+    processedCount: processed.filter((item) => item.status === "SUCCESS").length,
     processed,
   };
 }

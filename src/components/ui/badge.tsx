@@ -2,7 +2,7 @@ import { cn } from "@/lib/utils";
 
 type BadgeProps = {
   children: React.ReactNode;
-  tone?: "default" | "info" | "success" | "warning";
+  tone?: "default" | "info" | "success" | "warning" | "danger";
   className?: string;
 };
 
@@ -11,6 +11,7 @@ const toneClasses: Record<NonNullable<BadgeProps["tone"]>, string> = {
   info: "bg-primary-soft text-primary",
   success: "bg-[#dbf2e8] text-success",
   warning: "bg-[#faebcf] text-[#93661c]",
+  danger: "bg-[#f9d8d8] text-[#a33434]",
 };
 
 export function Badge({ children, tone = "default", className }: BadgeProps) {

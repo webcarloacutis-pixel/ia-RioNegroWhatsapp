@@ -276,7 +276,7 @@ export function AssistantPlayground({
             </div>
 
             <div className="bg-[linear-gradient(180deg,rgba(11,36,53,0.06),rgba(23,63,115,0.02))] px-4 py-6 sm:px-6">
-              <div className="mx-auto w-full max-w-[44rem] overflow-hidden rounded-[2rem] border border-white/40 bg-[#e9edef] shadow-[0_30px_90px_rgba(9,22,34,0.18)]">
+              <div className="mx-auto w-full max-w-[48rem] overflow-hidden rounded-[2rem] border border-white/40 bg-[#e9edef] shadow-[0_30px_90px_rgba(9,22,34,0.18)]">
                 <div className="flex items-center justify-between border-b border-black/5 bg-[#f0f2f5] px-4 py-3">
                   <div className="flex items-center gap-2">
                     <span className="h-3 w-3 rounded-full bg-[#ff5f57]" />
@@ -289,7 +289,7 @@ export function AssistantPlayground({
                   <div className="w-[4.5rem]" />
                 </div>
 
-                <div className="grid min-h-[34rem] grid-cols-[minmax(0,1fr)_16rem]">
+                <div className="grid min-h-[30rem] grid-cols-1 xl:grid-cols-[minmax(0,1fr)_16rem]">
                   <div className="flex min-w-0 flex-col">
                     <div className="flex items-center gap-3 bg-[#1f6f5c] px-4 py-3 text-white">
                       <button className="rounded-full p-1 text-white/90">
@@ -319,7 +319,7 @@ export function AssistantPlayground({
 
                     <div
                       ref={chatViewportRef}
-                      className="max-h-[21rem] min-h-[21rem] space-y-3 overflow-y-auto px-4 py-4"
+                      className="min-h-[18rem] max-h-[20rem] space-y-3 overflow-y-auto px-4 py-4 sm:min-h-[21rem] sm:max-h-[23rem] xl:min-h-[24rem] xl:max-h-[24rem]"
                       style={{
                         backgroundColor: "#efeae2",
                         backgroundImage:
@@ -409,15 +409,15 @@ export function AssistantPlayground({
                     </div>
                   </div>
 
-                  <aside className="border-l border-black/5 bg-[#f0f2f5] px-3 py-4">
+                  <aside className="border-t border-black/5 bg-[#f0f2f5] px-3 py-4 xl:border-l xl:border-t-0">
                     <p className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-muted">
                       Atajos
                     </p>
-                    <div className="space-y-2">
+                    <div className="flex gap-2 overflow-x-auto pb-1 xl:block xl:space-y-2 xl:overflow-visible xl:pb-0">
                       {sampleQuestions.slice(0, 6).map((question) => (
                         <button
                           key={question}
-                          className="w-full rounded-full border border-[#d0d7dd] bg-white px-3 py-2 text-left text-xs text-foreground transition hover:border-[#1f6f5c] hover:text-[#1f6f5c]"
+                          className="min-w-[13rem] rounded-full border border-[#d0d7dd] bg-white px-3 py-2 text-left text-xs text-foreground transition hover:border-[#1f6f5c] hover:text-[#1f6f5c] xl:w-full xl:min-w-0"
                           onClick={() => void sendMessage(question)}
                           disabled={isSending}
                         >

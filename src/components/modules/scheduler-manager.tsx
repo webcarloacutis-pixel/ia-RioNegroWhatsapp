@@ -53,11 +53,21 @@ export function SchedulerManager({ data }: SchedulerManagerProps) {
   async function handleRunScheduler() {
     try {
       const result = await request("/api/scheduler/run", { method: "POST" });
-      toast.success(
-        result.processedCount > 0
-          ? `Se procesaron ${result.processedCount} comunicado(s).`
-          : "No habia comunicados pendientes para este ciclo.",
-      );
+      const failedCount = Array.isArray(result.processed)
+        ? result.processed.filter((item: { status: string }) => item.status === "FAILED").length
+        : 0;
+
+      if (failedCount > 0) {
+        toast.error(
+          `Se enviaron ${result.processedCount} comunicado(s) y fallaron ${failedCount}. Revisa la bitacora.`,
+        );
+      } else {
+        toast.success(
+          result.processedCount > 0
+            ? `Se procesaron ${result.processedCount} comunicado(s).`
+            : "No habia comunicados pendientes para este ciclo.",
+        );
+      }
       startTransition(() => router.refresh());
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo ejecutar el scheduler.");
@@ -162,8 +172,16 @@ export function SchedulerManager({ data }: SchedulerManagerProps) {
               <div key={log.id} className="rounded-[24px] bg-surface px-4 py-4">
                 <div className="flex items-center justify-between gap-3">
                   <p className="font-semibold text-foreground">{log.announcementTitle}</p>
-                  <Badge tone={log.mode === "DEMO" ? "warning" : "success"}>
-                    {formatDeliveryModeLabel(log.mode)}
+                  <Badge
+                    tone={
+                      log.status === "FAILED"
+                        ? "danger"
+                        : log.mode === "DEMO"
+                          ? "warning"
+                          : "success"
+                    }
+                  >
+                    {log.status === "FAILED" ? "Fallido" : formatDeliveryModeLabel(log.mode)}
                   </Badge>
                 </div>
                 <p className="mt-2 text-sm text-muted">{log.details ?? "Evento registrado"}.</p>

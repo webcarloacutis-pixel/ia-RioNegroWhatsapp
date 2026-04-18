@@ -61,7 +61,31 @@ async function main() {
   assert.match(scheduleCase.reply, /SOMOS \(Movilidad y Transito\)/i);
   assert.match(scheduleCase.reply, /Horario de atencion/i);
 
-  console.log("QA assistant: 4/4 pruebas aprobadas.");
+  const tourismCase = await runCase(
+    "qa-tourism-es",
+    "que lugares hay de interes en rionegro",
+  );
+  assert.equal(tourismCase.language, "es");
+  assert.match(tourismCase.reply, /lugares y planes de interes|lugares que puedes visitar/i);
+  assert.match(tourismCase.reply, /Parque Principal|San Antonio de Pereira|Casa de la Convencion/i);
+
+  const appointmentCase = await runCase(
+    "qa-appointment-es",
+    "necesito una cita para movilidad",
+  );
+  assert.equal(appointmentCase.language, "es");
+  assert.match(appointmentCase.reply, /no se agendan citas directamente por WhatsApp/i);
+  assert.match(appointmentCase.reply, /SOMOS \(Movilidad y Transito\)/i);
+
+  const plansCase = await runCase(
+    "qa-plans-es",
+    "que puedo hacer hoy en rionegro",
+  );
+  assert.equal(plansCase.language, "es");
+  assert.match(plansCase.reply, /lugares y planes de interes|planes oficiales disponibles/i);
+  assert.doesNotMatch(plansCase.reply, /I do not have that information/i);
+
+  console.log("QA assistant: 7/7 pruebas aprobadas.");
 }
 
 void main();

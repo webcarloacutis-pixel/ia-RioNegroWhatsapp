@@ -41,6 +41,8 @@ type ResolvedIntent = {
   locationIntent: boolean;
   automotiveIntent: boolean;
   institutionalServicesIntent: boolean;
+  tourismIntent: boolean;
+  appointmentIntent: boolean;
   hoursIntent: boolean;
   assistantCapabilityIntent: boolean;
 };
@@ -210,6 +212,13 @@ function getCopy(language: AssistantLanguage) {
       placeManyTitle: "I found these official locations in Rionegro:",
       placeReferenceLabel: "Reference area",
       multiIntentIntro: "Sure, I can help you with each point:",
+      tourismTitle: "These are some places and plans of interest in Rionegro:",
+      tourismEmpty:
+        "I can suggest official places in Rionegro such as the main square, San Antonio de Pereira, Casa de la Convencion, Tutucan, San Nicolas and Llanogrande commercial areas.",
+      appointmentReply:
+        "I can help you identify the office you need, although this channel does not schedule appointments directly by WhatsApp.",
+      appointmentPrompt:
+        "If you tell me which office or procedure you need, I can guide you with the location, opening hours and official contact.",
       automotiveTitle:
         "If your car broke down, I can suggest these automotive points registered in Rionegro:",
       automotiveFallback:
@@ -259,6 +268,13 @@ function getCopy(language: AssistantLanguage) {
     placeManyTitle: "Encontre estas ubicaciones oficiales en Rionegro:",
     placeReferenceLabel: "Referencia",
     multiIntentIntro: "Claro, te ayudo con cada punto:",
+    tourismTitle: "Estos son algunos lugares y planes de interes en Rionegro:",
+    tourismEmpty:
+      "Puedo sugerirte lugares oficiales de interes en Rionegro como el Parque Principal, San Antonio de Pereira, la Casa de la Convencion, Tutucan, San Nicolas y la zona de Llanogrande.",
+    appointmentReply:
+      "Puedo ayudarte a identificar la dependencia que necesitas, aunque por este canal no se agendan citas directamente por WhatsApp.",
+    appointmentPrompt:
+      "Si me dices para que dependencia o tramite necesitas la cita, te indico ubicacion, horario y canal oficial.",
     automotiveTitle:
       "Si tu carro se dano, puedo sugerirte estos puntos automotrices registrados en Rionegro:",
     automotiveFallback:
@@ -396,11 +412,15 @@ function detectLanguage(text: string, lastLanguage: AssistantLanguage): Assistan
     return lastLanguage;
   }
 
-  if (Math.abs(englishScore - spanishScore) <= 1) {
-    return lastLanguage;
+  if (spanishScore > englishScore) {
+    return "es";
   }
 
-  return englishScore > spanishScore ? "en" : "es";
+  if (englishScore > spanishScore) {
+    return "en";
+  }
+
+  return lastLanguage;
 }
 
 function detectEntryLanguage(text: string): AssistantLanguage {
@@ -501,6 +521,32 @@ function hasLocationIntent(text: string) {
   ]);
 }
 
+function hasTourismIntent(text: string) {
+  return includesAny(text, [
+    "que hacer",
+    "que puedo hacer",
+    "que hacer hoy",
+    "planes",
+    "plan para hoy",
+    "que lugares hay",
+    "lugares hay de interes",
+    "lugares de interes",
+    "lugar de interes",
+    "lugares para visitar",
+    "sitios turisticos",
+    "sitios de interes",
+    "turismo",
+    "visitar",
+    "conocer",
+    "what to do",
+    "what can i do",
+    "places of interest",
+    "tourism",
+    "what to visit",
+    "interesting places",
+  ]);
+}
+
 function hasAutomotiveIntent(text: string) {
   return includesAny(text, [
     "carro",
@@ -519,6 +565,21 @@ function hasAutomotiveIntent(text: string) {
     "spare parts",
     "vehicle",
     "broke down",
+  ]);
+}
+
+function hasAppointmentIntent(text: string) {
+  return includesAny(text, [
+    "cita",
+    "citas",
+    "agendar",
+    "agendar cita",
+    "agendar una cita",
+    "sacar cita",
+    "appointment",
+    "appointments",
+    "schedule appointment",
+    "book appointment",
   ]);
 }
 
@@ -643,6 +704,10 @@ function detectTopic(text: string, lastTopic: AssistantTopicValue | null): Assis
 
   if (hasAssistantCapabilityIntent(text)) {
     return "FAQ";
+  }
+
+  if (hasTourismIntent(text)) {
+    return "EVENTS";
   }
 
   if (includesAny(text, ["denunciar", "denuncia", "report", "complaint"])) {
@@ -954,6 +1019,40 @@ function searchAutomotivePlaces(message: string) {
   return automotivePlaces.slice(0, 4);
 }
 
+function searchTourismPlaces(message: string) {
+  const tokens = tokenize(message);
+  const tourismPlaces = officialPlaces.filter((place) =>
+    ["turismo", "deporte", "comercio", "cultura"].includes(normalizeText(place.category)),
+  );
+  const prioritizedPlaces = tourismPlaces
+    .slice()
+    .sort((left, right) => {
+      const leftPriority = normalizeText(left.category) === "turismo" ? 0 : 1;
+      const rightPriority = normalizeText(right.category) === "turismo" ? 0 : 1;
+
+      if (leftPriority !== rightPriority) {
+        return leftPriority - rightPriority;
+      }
+
+      return left.name.localeCompare(right.name);
+    });
+
+  const ranked = prioritizedPlaces
+    .map((place) => ({
+      place,
+      score: scoreByTokens(buildPlaceSearchText(place), tokens),
+    }))
+    .sort((left, right) => right.score - left.score);
+
+  const positiveMatches = ranked.filter((item) => item.score > 0).slice(0, 6).map((item) => item.place);
+
+  if (positiveMatches.length) {
+    return positiveMatches;
+  }
+
+  return prioritizedPlaces.slice(0, 6);
+}
+
 function searchAnnouncements(
   message: string,
   topic: AssistantTopicValue,
@@ -1147,6 +1246,57 @@ function buildAutomotiveReply(message: string, language: AssistantLanguage) {
   ].join("\n\n");
 }
 
+function buildTourismReply(
+  announcements: AnnouncementSummary[],
+  placeMatches: OfficialPlace[],
+  timeframe: Timeframe,
+  language: AssistantLanguage,
+) {
+  const copy = getCopy(language);
+  const tourismPlaces = placeMatches.length ? placeMatches : searchTourismPlaces("");
+  const events = announcements
+    .filter((item) => item.type === "EVENT")
+    .slice(0, timeframe === "today" || timeframe === "tomorrow" ? 3 : 2);
+
+  const parts = [copy.tourismTitle];
+
+  if (events.length) {
+    parts.push(
+      language === "en"
+        ? `Official plans available ${timeframe === "today" ? "for today" : timeframe === "tomorrow" ? "for tomorrow" : "right now"}:\n${formatBulletList(
+            events.map(
+              (item) =>
+                `${item.title} | ${formatDate(item.scheduledAt, language)}${item.location ? ` | ${item.location}` : ""}. ${item.message}`,
+            ),
+          )}`
+        : `Planes oficiales disponibles ${timeframe === "today" ? "para hoy" : timeframe === "tomorrow" ? "para manana" : "en este momento"}:\n${formatBulletList(
+            events.map(
+              (item) =>
+                `${item.title} | ${formatDate(item.scheduledAt, language)}${item.location ? ` | ${item.location}` : ""}. ${item.message}`,
+            ),
+          )}`,
+    );
+  }
+
+  if (tourismPlaces.length) {
+    parts.push(
+      language === "en"
+        ? `Places you can visit:\n${formatBulletList(
+            tourismPlaces.slice(0, 5).map((place) => `${place.name}: ${place.address}${place.area ? ` (${place.area})` : ""}.`),
+          )}`
+        : `Lugares que puedes visitar:\n${formatBulletList(
+            tourismPlaces.slice(0, 5).map((place) => `${place.name}: ${place.address}${place.area ? ` (${place.area})` : ""}.`),
+          )}`,
+    );
+  }
+
+  if (parts.length === 1) {
+    parts.push(copy.tourismEmpty);
+  }
+
+  return parts.join("\n\n");
+}
+
 function buildInstitutionalServicesReply(message: string, language: AssistantLanguage) {
   const copy = getCopy(language);
   const normalizedMessage = normalizeText(message);
@@ -1195,6 +1345,53 @@ function buildInstitutionalServicesReply(message: string, language: AssistantLan
     ),
     copy.servicesFooter,
   ].join("\n\n");
+}
+
+function buildAppointmentReply(message: string, placeMatches: OfficialPlace[], language: AssistantLanguage) {
+  const copy = getCopy(language);
+  const normalized = normalizeText(message);
+  const mobilityMatch =
+    placeMatches.find((place) => normalizeText(place.name).includes("movilidad")) ??
+    officialPlaces.find((place) => normalizeText(place.name).includes("movilidad"));
+
+  if (
+    includesAny(normalized, [
+      "movilidad",
+      "transito",
+      "licencia",
+      "comparendo",
+      "pase",
+      "mobility",
+      "transit",
+      "license",
+      "traffic ticket",
+    ]) &&
+    mobilityMatch
+  ) {
+    return language === "en"
+      ? [
+          copy.appointmentReply,
+          `${mobilityMatch.name} is located at ${mobilityMatch.address}${mobilityMatch.area ? ` (${mobilityMatch.area})` : ""}.`,
+          `${copy.hoursLabel}: ${mobilityMatch.openingHoursEn ?? getCopy("en").hoursFallback}`,
+        ].join("\n\n")
+      : [
+          copy.appointmentReply,
+          `${mobilityMatch.name} esta ubicado en ${mobilityMatch.address}${mobilityMatch.area ? ` (${mobilityMatch.area})` : ""}.`,
+          `${copy.hoursLabel}: ${mobilityMatch.openingHoursEs ?? getCopy("es").hoursFallback}`,
+        ].join("\n\n");
+  }
+
+  return language === "en"
+    ? [
+        copy.appointmentReply,
+        copy.appointmentPrompt,
+        "For example, I can guide you with Mobility, Treasury, Planning or Citizen Services.",
+      ].join("\n\n")
+    : [
+        copy.appointmentReply,
+        copy.appointmentPrompt,
+        "Por ejemplo, puedo orientarte con Movilidad, Hacienda, Planeacion o Atencion al Ciudadano.",
+      ].join("\n\n");
 }
 
 function buildAlertsReply(announcements: AnnouncementSummary[], language: AssistantLanguage) {
@@ -1446,7 +1643,19 @@ async function retrieveOfficialContext(
     intent.topic === "NEWS"
       ? getLatestAnnouncements(announcements, "NEWS", 5)
       : searchAnnouncements(message, intent.topic, intent.timeframe, announcements, profile);
-  const matchedPlaces = searchPlaces(message);
+  const matchedPlaces = (() => {
+    const directPlaceMatches = searchPlaces(message);
+
+    if (directPlaceMatches.length) {
+      return directPlaceMatches;
+    }
+
+    if (intent.tourismIntent) {
+      return searchTourismPlaces(message);
+    }
+
+    return [];
+  })();
 
   return {
     announcements: matchedAnnouncements,
@@ -1462,6 +1671,30 @@ function buildDeterministicReply(
   retrieval: RetrievalBundle,
 ): DraftReplyResult {
   const copy = getCopy(intent.language);
+
+  if (intent.tourismIntent) {
+    return {
+      reply: buildTourismReply(
+        retrieval.announcements,
+        retrieval.placeMatches,
+        intent.timeframe,
+        intent.language,
+      ),
+      route:
+        retrieval.announcements.length || retrieval.placeMatches.length
+          ? "KNOWLEDGE_BASE"
+          : "FALLBACK",
+      usedOpenAI: false,
+    };
+  }
+
+  if (intent.appointmentIntent) {
+    return {
+      reply: buildAppointmentReply(message, retrieval.placeMatches, intent.language),
+      route: "RULE_BASED",
+      usedOpenAI: false,
+    };
+  }
 
   if (intent.automotiveIntent) {
     return {
@@ -1595,6 +1828,8 @@ function shouldUseOpenAI(
     intent.topic === "OUT_OF_SCOPE" ||
     intent.topic === "DENUNCIAS" ||
     intent.topic === "GREETING" ||
+    intent.tourismIntent ||
+    intent.appointmentIntent ||
     intent.automotiveIntent ||
     intent.hoursIntent ||
     intent.institutionalServicesIntent ||
@@ -1781,6 +2016,8 @@ async function resolveSingleQuery(input: {
     locationIntent: hasLocationIntent(input.normalizedMessage),
     automotiveIntent: hasAutomotiveIntent(input.normalizedMessage),
     institutionalServicesIntent: hasInstitutionalServicesIntent(input.normalizedMessage),
+    tourismIntent: hasTourismIntent(input.normalizedMessage),
+    appointmentIntent: hasAppointmentIntent(input.normalizedMessage),
     hoursIntent: hasHoursIntent(input.normalizedMessage),
     assistantCapabilityIntent: hasAssistantCapabilityIntent(input.normalizedMessage),
   };
@@ -1866,6 +2103,8 @@ export async function chatWithAssistant(
     locationIntent: hasLocationIntent(normalizedMessage),
     automotiveIntent: hasAutomotiveIntent(normalizedMessage),
     institutionalServicesIntent: hasInstitutionalServicesIntent(normalizedMessage),
+    tourismIntent: hasTourismIntent(normalizedMessage),
+    appointmentIntent: hasAppointmentIntent(normalizedMessage),
     hoursIntent: hasHoursIntent(normalizedMessage),
     assistantCapabilityIntent: hasAssistantCapabilityIntent(normalizedMessage),
   };
@@ -1922,5 +2161,7 @@ export const assistantInternals = {
   splitMultiIntentMessage,
   hasAutomotiveIntent,
   hasInstitutionalServicesIntent,
+  hasTourismIntent,
+  hasAppointmentIntent,
   hasHoursIntent,
 };
