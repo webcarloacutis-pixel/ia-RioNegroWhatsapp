@@ -164,3 +164,24 @@ export type AssistantAnalyticsSummary = {
     createdAt: string;
   }>;
 };
+
+export type AssistantConversationExchange = {
+  id: string;
+  userMessage: string;
+  assistantReply: string;
+  topic: string;
+  route: string;
+  createdAt: string;
+};
+
+export type AssistantConversationThread = {
+  sessionId: string;
+  title: string;
+  phoneNumber: string | null;
+  channel: "WHATSAPP" | "PANEL";
+  exchangeCount: number;
+  messageCount: number;
+  lastMessage: string;
+  lastActivityAt: string;
+  exchanges: AssistantConversationExchange[];
+};

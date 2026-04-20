@@ -6,6 +6,7 @@ import {
 } from "@/lib/constants";
 import { prisma } from "@/lib/prisma";
 import type {
+  AssistantConversationThread,
   AssistantAnalyticsSummary,
   AssistantProfile,
   AssistantRouteValue,
@@ -171,6 +172,48 @@ function buildAnalyticsSummary(logs: AssistantQueryLogRecord[]): AssistantAnalyt
   };
 }
 
+function buildConversationThreads(logs: AssistantQueryLogRecord[]): AssistantConversationThread[] {
+  const grouped = new Map<string, AssistantQueryLogRecord[]>();
+
+  for (const log of logs) {
+    const current = grouped.get(log.sessionId) ?? [];
+    current.push(log);
+    grouped.set(log.sessionId, current);
+  }
+
+  return Array.from(grouped.entries())
+    .map(([sessionId, items]) => {
+      const orderedItems = [...items].sort(
+        (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
+      );
+      const latest = orderedItems[orderedItems.length - 1];
+      const phoneNumber = sessionId.startsWith("ultramsg:") ? sessionId.replace("ultramsg:", "") : null;
+
+      return {
+        sessionId,
+        title: phoneNumber ? phoneNumber : "Simulador del panel",
+        phoneNumber,
+        channel: phoneNumber ? ("WHATSAPP" as const) : ("PANEL" as const),
+        exchangeCount: orderedItems.length,
+        messageCount: orderedItems.length * 2,
+        lastMessage: latest?.userMessage ?? "",
+        lastActivityAt: latest?.createdAt.toISOString() ?? new Date(0).toISOString(),
+        exchanges: orderedItems.map((item) => ({
+          id: item.id,
+          userMessage: item.userMessage,
+          assistantReply: item.assistantReply,
+          topic: ASSISTANT_TOPIC_LABELS[item.topic],
+          route: ASSISTANT_ROUTE_LABELS[item.route],
+          createdAt: item.createdAt.toISOString(),
+        })),
+      };
+    })
+    .sort(
+      (left, right) =>
+        new Date(right.lastActivityAt).getTime() - new Date(left.lastActivityAt).getTime(),
+    );
+}
+
 async function getAssistantAnalyticsSummaryDb() {
   const logs = await prisma.assistantQueryLog.findMany({
     orderBy: {
@@ -201,6 +244,36 @@ async function getAssistantAnalyticsSummaryMock() {
   return buildAnalyticsSummary(getMockStore());
 }
 
+async function getAssistantConversationThreadsDb() {
+  const logs = await prisma.assistantQueryLog.findMany({
+    orderBy: {
+      createdAt: "desc",
+    },
+    take: 1000,
+  });
+
+  return buildConversationThreads(
+    logs.map((log) => ({
+      id: log.id,
+      sessionId: log.sessionId,
+      userMessage: log.userMessage,
+      assistantReply: log.assistantReply,
+      topic: log.detectedTopic as AssistantTopicValue,
+      route: log.route as AssistantRouteValue,
+      usedOpenAI: log.usedOpenAI,
+      profile: {
+        zone: log.zone,
+        userType: log.userType,
+      },
+      createdAt: log.createdAt,
+    })),
+  );
+}
+
+async function getAssistantConversationThreadsMock() {
+  return buildConversationThreads(getMockStore());
+}
+
 export async function recordAssistantQuery(input: AssistantQueryLogInput) {
   return withMockFallback(
     () => recordAssistantQueryDb(input),
@@ -212,5 +285,12 @@ export async function getAssistantAnalyticsSummary() {
   return withMockFallback(
     getAssistantAnalyticsSummaryDb,
     getAssistantAnalyticsSummaryMock,
+  );
+}
+
+export async function getAssistantConversationThreads() {
+  return withMockFallback(
+    getAssistantConversationThreadsDb,
+    getAssistantConversationThreadsMock,
   );
 }
