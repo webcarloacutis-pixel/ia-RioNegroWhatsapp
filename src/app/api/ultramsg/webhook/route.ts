@@ -1,21 +1,102 @@
 import { NextResponse } from "next/server";
 
+import {
+  generateElevenLabsSpeech,
+  isElevenLabsConfigured,
+} from "@/server/elevenlabs-service";
+import { sendWhatsAppAudio, sendWhatsAppText } from "@/server/messageService";
+import { isOpenAIConfigured, transcribeAudio } from "@/server/openai-service";
 import { chatWithAssistant, resetConversation } from "@/server/rionegro-assistant";
-import { sendMessage } from "@/server/messageService";
+
+export const runtime = "nodejs";
+
+type UltraMsgMessageData = {
+  id?: string;
+  from?: string;
+  to?: string;
+  body?: string;
+  caption?: string;
+  type?: string;
+  mimetype?: string;
+  mimeType?: string;
+  filename?: string;
+  fromMe?: boolean;
+  time?: number;
+} & Record<string, unknown>;
 
 type UltraMsgWebhookPayload = {
   event_type?: string;
   instanceId?: string;
-  data?: {
-    id?: string;
-    from?: string;
-    to?: string;
-    body?: string;
-    type?: string;
-    fromMe?: boolean;
-    time?: number;
-  };
+  data?: UltraMsgMessageData;
+} & Record<string, unknown>;
+
+type IgnoreResult = {
+  ignored: boolean;
+  reason?: string;
 };
+
+type MediaSource = {
+  value: string;
+  kind: "url" | "data-uri" | "base64";
+  mimeType?: string;
+  filename?: string;
+};
+
+type DownloadedMedia = {
+  bytes: Buffer;
+  mimeType: string;
+  filename: string;
+};
+
+const SUPPORTED_MESSAGE_TYPES = new Set([
+  "chat",
+  "audio",
+  "ptt",
+  "voice",
+  "image",
+  "document",
+]);
+const AUDIO_MESSAGE_TYPES = new Set(["audio", "ptt", "voice"]);
+const MEDIA_SOURCE_KEYS = [
+  "media",
+  "mediaUrl",
+  "media_url",
+  "downloadUrl",
+  "download_url",
+  "url",
+  "file",
+  "audio",
+  "body",
+];
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX_MESSAGES = 20;
+
+const globalForWebhook = globalThis as unknown as {
+  __rionegroWhatsAppInboundIds?: Set<string>;
+  __rionegroWhatsAppRateLimit?: Map<
+    string,
+    {
+      count: number;
+      resetAt: number;
+    }
+  >;
+};
+
+function getInboundIds() {
+  if (!globalForWebhook.__rionegroWhatsAppInboundIds) {
+    globalForWebhook.__rionegroWhatsAppInboundIds = new Set<string>();
+  }
+
+  return globalForWebhook.__rionegroWhatsAppInboundIds;
+}
+
+function getRateLimitMap() {
+  if (!globalForWebhook.__rionegroWhatsAppRateLimit) {
+    globalForWebhook.__rionegroWhatsAppRateLimit = new Map();
+  }
+
+  return globalForWebhook.__rionegroWhatsAppRateLimit;
+}
 
 function normalizeText(value: string) {
   return value
@@ -24,47 +105,220 @@ function normalizeText(value: string) {
     .trim();
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function parseJsonObject(value: string) {
+  try {
+    const parsed = JSON.parse(value);
+    return isPlainObject(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function coerceWebhookPayload(value: unknown): UltraMsgWebhookPayload {
+  if (!isPlainObject(value)) {
+    return {};
+  }
+
+  const dataValue = value.data;
+  const data =
+    typeof dataValue === "string"
+      ? (parseJsonObject(dataValue) as UltraMsgMessageData)
+      : isPlainObject(dataValue)
+        ? (dataValue as UltraMsgMessageData)
+        : undefined;
+
+  if (data) {
+    return {
+      ...value,
+      data,
+    } as UltraMsgWebhookPayload;
+  }
+
+  if ("from" in value || "body" in value || "type" in value) {
+    return {
+      event_type: typeof value.event_type === "string" ? value.event_type : undefined,
+      instanceId: typeof value.instanceId === "string" ? value.instanceId : undefined,
+      data: value as UltraMsgMessageData,
+    };
+  }
+
+  return value as UltraMsgWebhookPayload;
+}
+
+function formValue(params: URLSearchParams, ...keys: string[]) {
+  for (const key of keys) {
+    const value = params.get(key);
+
+    if (value !== null) {
+      return value;
+    }
+  }
+
+  return undefined;
+}
+
 async function parseWebhookPayload(request: Request): Promise<UltraMsgWebhookPayload> {
   const contentType = request.headers.get("content-type") ?? "";
 
   if (contentType.includes("application/json")) {
-    return (await request.json()) as UltraMsgWebhookPayload;
-  }
-
-  if (contentType.includes("application/x-www-form-urlencoded")) {
-    const form = await request.formData();
-    const rawData = form.get("data");
-
-    if (typeof rawData === "string") {
-      try {
-        return JSON.parse(rawData) as UltraMsgWebhookPayload;
-      } catch {
-        return {
-          event_type: typeof form.get("event_type") === "string" ? String(form.get("event_type")) : undefined,
-          instanceId: typeof form.get("instanceId") === "string" ? String(form.get("instanceId")) : undefined,
-          data: {
-            from: typeof form.get("from") === "string" ? String(form.get("from")) : undefined,
-            to: typeof form.get("to") === "string" ? String(form.get("to")) : undefined,
-            body: typeof form.get("body") === "string" ? String(form.get("body")) : undefined,
-            type: typeof form.get("type") === "string" ? String(form.get("type")) : undefined,
-            fromMe: String(form.get("fromMe") ?? "").toLowerCase() === "true",
-          },
-        };
-      }
+    try {
+      return coerceWebhookPayload(await request.json());
+    } catch {
+      return {};
     }
   }
 
   const rawText = await request.text();
 
-  if (!rawText) {
+  if (!rawText.trim()) {
     return {};
   }
 
-  try {
-    return JSON.parse(rawText) as UltraMsgWebhookPayload;
-  } catch {
-    return {};
+  if (contentType.includes("application/x-www-form-urlencoded")) {
+    const form = new URLSearchParams(rawText);
+    const rawData = formValue(form, "data");
+
+    if (rawData) {
+      return coerceWebhookPayload(parseJsonObject(rawData));
+    }
+
+    return {
+      event_type: formValue(form, "event_type"),
+      instanceId: formValue(form, "instanceId", "instance_id"),
+      data: {
+        id: formValue(form, "id", "data.id", "data[id]"),
+        from: formValue(form, "from", "data.from", "data[from]"),
+        to: formValue(form, "to", "data.to", "data[to]"),
+        body: formValue(form, "body", "data.body", "data[body]"),
+        caption: formValue(form, "caption", "data.caption", "data[caption]"),
+        type: formValue(form, "type", "data.type", "data[type]"),
+        mimetype: formValue(form, "mimetype", "data.mimetype", "data[mimetype]"),
+        mimeType: formValue(form, "mimeType", "data.mimeType", "data[mimeType]"),
+        filename: formValue(form, "filename", "data.filename", "data[filename]"),
+        fromMe:
+          formValue(form, "fromMe", "data.fromMe", "data[fromMe]")?.toLowerCase() ===
+          "true",
+      },
+    };
   }
+
+  return coerceWebhookPayload(parseJsonObject(rawText));
+}
+
+function getMessageType(payload: UltraMsgWebhookPayload) {
+  const data = payload.data;
+  const explicitType = String(data?.type ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (explicitType) {
+    return explicitType;
+  }
+
+  const mimeType = String(data?.mimetype ?? data?.mimeType ?? "").toLowerCase();
+
+  if (mimeType.startsWith("audio/")) return "audio";
+  if (mimeType.startsWith("image/")) return "image";
+  if (mimeType) return "document";
+  if (data?.body || data?.caption) return "chat";
+
+  return "";
+}
+
+function isAudioMessageType(type: string) {
+  return AUDIO_MESSAGE_TYPES.has(type);
+}
+
+function getIncomingText(payload: UltraMsgWebhookPayload) {
+  const data = payload.data;
+  const type = getMessageType(payload);
+  const caption = typeof data?.caption === "string" ? data.caption.trim() : "";
+  const body = typeof data?.body === "string" ? data.body.trim() : "";
+
+  if (type === "chat") {
+    return caption || body;
+  }
+
+  if (isAudioMessageType(type)) {
+    return caption;
+  }
+
+  if (caption) {
+    return caption;
+  }
+
+  if (looksLikeUrl(body) || looksLikeDataUri(body) || looksLikeBase64(body)) {
+    return "";
+  }
+
+  return caption || body;
+}
+
+function isIncomingMessageEvent(payload: UltraMsgWebhookPayload) {
+  const eventType = payload.event_type?.trim().toLowerCase();
+
+  if (!eventType) {
+    return true;
+  }
+
+  if (
+    eventType.includes("ack") ||
+    eventType.includes("reaction") ||
+    eventType.includes("create")
+  ) {
+    return false;
+  }
+
+  return (
+    eventType === "message_received" ||
+    eventType === "message" ||
+    eventType === "messages" ||
+    eventType === "incoming" ||
+    eventType.includes("received")
+  );
+}
+
+function shouldIgnoreMessage(payload: UltraMsgWebhookPayload): IgnoreResult {
+  const data = payload.data;
+  const type = getMessageType(payload);
+  const incomingText = getIncomingText(payload);
+
+  if (!isIncomingMessageEvent(payload)) {
+    return { ignored: true, reason: "unsupported_event" };
+  }
+
+  if (!data) {
+    return { ignored: true, reason: "missing_data" };
+  }
+
+  if (data.fromMe) {
+    return { ignored: true, reason: "from_me" };
+  }
+
+  if (
+    (typeof data.from === "string" && data.from.toLowerCase().includes("@g.us")) ||
+    (typeof data.to === "string" && data.to.toLowerCase().includes("@g.us"))
+  ) {
+    return { ignored: true, reason: "group_message" };
+  }
+
+  if (!SUPPORTED_MESSAGE_TYPES.has(type)) {
+    return { ignored: true, reason: "unsupported_type" };
+  }
+
+  if (!isAudioMessageType(type) && !incomingText) {
+    return { ignored: true, reason: "empty_message" };
+  }
+
+  if (process.env.WHATSAPP_SAFE_MODE === "true" && !data.id) {
+    return { ignored: true, reason: "missing_message_id" };
+  }
+
+  return { ignored: false };
 }
 
 function extractPhoneNumber(chatId?: string) {
@@ -82,32 +336,436 @@ function extractPhoneNumber(chatId?: string) {
   return digits ? `+${digits}` : null;
 }
 
-function buildSessionId(phoneNumber: string) {
-  return `ultramsg:${phoneNumber}`;
+function maskRecipient(value: string) {
+  const digits = value.replace(/\D/g, "");
+  return digits.length <= 4 ? "****" : `****${digits.slice(-4)}`;
 }
 
-function shouldIgnoreMessage(payload: UltraMsgWebhookPayload) {
-  const body = payload.data?.body?.trim();
-  const type = payload.data?.type?.trim().toLowerCase();
-
-  if (payload.data?.fromMe) {
-    return true;
-  }
-
-  if (!body) {
-    return true;
-  }
-
-  if (type && type !== "chat") {
-    return true;
-  }
-
-  return false;
+function buildSessionId(phoneNumber: string) {
+  return `whatsapp:${phoneNumber}`;
 }
 
 function isResetCommand(message: string) {
   const normalized = normalizeText(message).toLowerCase();
   return ["reset", "reiniciar", "restart", "nuevo chat"].includes(normalized);
+}
+
+function isDuplicateInboundMessage(messageId?: string) {
+  if (!messageId) {
+    return false;
+  }
+
+  const inboundIds = getInboundIds();
+
+  if (inboundIds.has(messageId)) {
+    console.log("[whatsapp] skipped duplicate", {
+      messageId,
+      scope: "inbound_webhook",
+    });
+
+    return true;
+  }
+
+  inboundIds.add(messageId);
+
+  if (inboundIds.size > 1000) {
+    const oldest = inboundIds.values().next().value;
+
+    if (oldest) {
+      inboundIds.delete(oldest);
+    }
+  }
+
+  return false;
+}
+
+function isRateLimitAllowed(recipient: string) {
+  const now = Date.now();
+  const rateLimitMap = getRateLimitMap();
+  const current = rateLimitMap.get(recipient);
+
+  if (!current || current.resetAt <= now) {
+    rateLimitMap.set(recipient, {
+      count: 1,
+      resetAt: now + RATE_LIMIT_WINDOW_MS,
+    });
+    return true;
+  }
+
+  if (current.count >= RATE_LIMIT_MAX_MESSAGES) {
+    console.warn("[whatsapp] rate limit reached", {
+      from: maskRecipient(recipient),
+    });
+    return false;
+  }
+
+  current.count += 1;
+  return true;
+}
+
+function looksLikeUrl(value: string) {
+  return /^https?:\/\//i.test(value);
+}
+
+function looksLikeDataUri(value: string) {
+  return /^data:[^;]+;base64,/i.test(value);
+}
+
+function looksLikeBase64(value: string) {
+  const cleaned = value.replace(/\s+/g, "");
+  return cleaned.length > 32 && /^[a-zA-Z0-9+/]+={0,2}$/.test(cleaned);
+}
+
+function readStringCandidate(value: unknown, depth = 0): string | null {
+  if (typeof value === "string") {
+    return value.trim() || null;
+  }
+
+  if (!isPlainObject(value) || depth > 2) {
+    return null;
+  }
+
+  for (const key of MEDIA_SOURCE_KEYS) {
+    const nested = readStringCandidate(value[key], depth + 1);
+
+    if (nested) {
+      return nested;
+    }
+  }
+
+  return null;
+}
+
+function classifyMediaSource(
+  value: string,
+  data: UltraMsgMessageData,
+): MediaSource | null {
+  const mimeType =
+    typeof data.mimetype === "string"
+      ? data.mimetype
+      : typeof data.mimeType === "string"
+        ? data.mimeType
+        : undefined;
+  const filename = typeof data.filename === "string" ? data.filename : undefined;
+
+  if (looksLikeUrl(value)) {
+    return {
+      value,
+      kind: "url",
+      mimeType,
+      filename,
+    };
+  }
+
+  if (looksLikeDataUri(value)) {
+    return {
+      value,
+      kind: "data-uri",
+      mimeType,
+      filename,
+    };
+  }
+
+  if (looksLikeBase64(value)) {
+    return {
+      value,
+      kind: "base64",
+      mimeType,
+      filename,
+    };
+  }
+
+  return null;
+}
+
+function extractMediaSource(payload: UltraMsgWebhookPayload): MediaSource | null {
+  const data = payload.data;
+
+  if (!data) {
+    return null;
+  }
+
+  for (const key of MEDIA_SOURCE_KEYS) {
+    const candidate = readStringCandidate(data[key]);
+
+    if (!candidate) {
+      continue;
+    }
+
+    const mediaSource = classifyMediaSource(candidate, data);
+
+    if (mediaSource) {
+      return mediaSource;
+    }
+  }
+
+  return null;
+}
+
+function extensionFromMimeType(mimeType: string) {
+  if (mimeType.includes("mpeg") || mimeType.includes("mp3")) return "mp3";
+  if (mimeType.includes("ogg") || mimeType.includes("opus")) return "ogg";
+  if (mimeType.includes("wav")) return "wav";
+  if (mimeType.includes("m4a") || mimeType.includes("mp4")) return "m4a";
+  if (mimeType.includes("webm")) return "webm";
+  return "ogg";
+}
+
+function inferMimeTypeFromUrl(value: string) {
+  const pathname = (() => {
+    try {
+      return new URL(value).pathname.toLowerCase();
+    } catch {
+      return value.toLowerCase();
+    }
+  })();
+
+  if (pathname.endsWith(".mp3")) return "audio/mpeg";
+  if (pathname.endsWith(".wav")) return "audio/wav";
+  if (pathname.endsWith(".m4a") || pathname.endsWith(".mp4")) return "audio/mp4";
+  if (pathname.endsWith(".webm")) return "audio/webm";
+  return "audio/ogg";
+}
+
+function getFilenameFromUrl(value: string) {
+  try {
+    const pathname = new URL(value).pathname;
+    const filename = pathname.split("/").filter(Boolean).at(-1);
+    return filename ? decodeURIComponent(filename) : null;
+  } catch {
+    return null;
+  }
+}
+
+function sanitizeFilename(value: string, mimeType: string) {
+  const cleaned = value.replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "");
+  const extension = extensionFromMimeType(mimeType);
+
+  if (!cleaned) {
+    return `nota-voz.${extension}`;
+  }
+
+  return /\.[a-z0-9]+$/i.test(cleaned) ? cleaned : `${cleaned}.${extension}`;
+}
+
+async function downloadMedia(mediaSource: MediaSource): Promise<DownloadedMedia> {
+  if (mediaSource.kind === "url") {
+    const response = await fetch(mediaSource.value);
+
+    if (!response.ok) {
+      throw new Error(`No se pudo descargar el medio (${response.status}).`);
+    }
+
+    const responseMimeType = response.headers.get("content-type")?.split(";")[0];
+    const mimeType =
+      mediaSource.mimeType || responseMimeType || inferMimeTypeFromUrl(mediaSource.value);
+    const filename = sanitizeFilename(
+      mediaSource.filename || getFilenameFromUrl(mediaSource.value) || "nota-voz",
+      mimeType,
+    );
+
+    return {
+      bytes: Buffer.from(await response.arrayBuffer()),
+      mimeType,
+      filename,
+    };
+  }
+
+  if (mediaSource.kind === "data-uri") {
+    const match = mediaSource.value.match(/^data:([^;]+);base64,(.+)$/i);
+
+    if (!match) {
+      throw new Error("Data URI de audio invalido.");
+    }
+
+    const mimeType = mediaSource.mimeType || match[1] || "audio/ogg";
+
+    return {
+      bytes: Buffer.from(match[2], "base64"),
+      mimeType,
+      filename: sanitizeFilename(mediaSource.filename || "nota-voz", mimeType),
+    };
+  }
+
+  const mimeType = mediaSource.mimeType || "audio/ogg";
+
+  return {
+    bytes: Buffer.from(mediaSource.value.replace(/\s+/g, ""), "base64"),
+    mimeType,
+    filename: sanitizeFilename(mediaSource.filename || "nota-voz", mimeType),
+  };
+}
+
+async function sendAssistantReply({
+  recipient,
+  reply,
+  inboundMessageId,
+}: {
+  recipient: string;
+  reply: string;
+  inboundMessageId?: string;
+}) {
+  const audioEnabled = process.env.WHATSAPP_AUDIO_REPLIES !== "false";
+
+  if (audioEnabled && isElevenLabsConfigured()) {
+    try {
+      const speech = await generateElevenLabsSpeech(reply);
+
+      await sendWhatsAppAudio({
+        to: recipient,
+        audioBase64: speech.audioBase64,
+        mimeType: speech.mimeType,
+        caption: reply,
+        inboundReply: true,
+        inboundMessageId,
+      });
+
+      if (
+        process.env.WHATSAPP_SEND_TEXT_WITH_AUDIO === "true" &&
+        process.env.WHATSAPP_SAFE_MODE !== "true"
+      ) {
+        await sendWhatsAppText({
+          to: recipient,
+          message: reply,
+          inboundReply: true,
+          inboundMessageId,
+        });
+      }
+
+      return { audio: true, text: false };
+    } catch (error) {
+      console.warn("[elevenlabs] error generating audio, falling back to text", {
+        error: error instanceof Error ? error.message : "unknown_error",
+      });
+    }
+  }
+
+  await sendWhatsAppText({
+    to: recipient,
+    message: reply,
+    inboundReply: true,
+    inboundMessageId,
+  });
+
+  return { audio: false, text: true };
+}
+
+async function processTextMessage(input: {
+  incomingText: string;
+  recipient: string;
+  sessionId: string;
+  inboundMessageId?: string;
+}) {
+  if (isResetCommand(input.incomingText)) {
+    resetConversation(input.sessionId);
+
+    return sendAssistantReply({
+      recipient: input.recipient,
+      reply:
+        "Conversacion reiniciada. Puedes hacer una nueva consulta sobre Rionegro cuando quieras.",
+      inboundMessageId: input.inboundMessageId,
+    });
+  }
+
+  const result = await chatWithAssistant(input.sessionId, input.incomingText);
+
+  console.log("[assistant] reply generated", {
+    chars: result.reply.length,
+    usedOpenAI: result.meta.usedOpenAI,
+  });
+
+  return sendAssistantReply({
+    recipient: input.recipient,
+    reply: result.reply,
+    inboundMessageId: input.inboundMessageId,
+  });
+}
+
+async function processAudioMessage(input: {
+  payload: UltraMsgWebhookPayload;
+  recipient: string;
+  sessionId: string;
+  inboundMessageId?: string;
+}) {
+  console.log("[whatsapp] audio received", {
+    from: maskRecipient(input.recipient),
+    messageId: input.inboundMessageId,
+  });
+
+  const mediaSource = extractMediaSource(input.payload);
+
+  if (!mediaSource) {
+    return sendAssistantReply({
+      recipient: input.recipient,
+      reply:
+        "No pude descargar la nota de voz. Por favor enviame el mensaje escrito o revisa que UltraMsg tenga activo Webhook Download Media.",
+      inboundMessageId: input.inboundMessageId,
+    });
+  }
+
+  if (!isOpenAIConfigured()) {
+    return sendAssistantReply({
+      recipient: input.recipient,
+      reply:
+        "No pude transcribir la nota de voz en este momento. Por favor enviame el mensaje escrito.",
+      inboundMessageId: input.inboundMessageId,
+    });
+  }
+
+  let media: DownloadedMedia;
+
+  try {
+    media = await downloadMedia(mediaSource);
+  } catch (error) {
+    console.warn("[whatsapp] audio download failed", {
+      error: error instanceof Error ? error.message : "unknown_error",
+    });
+
+    return sendAssistantReply({
+      recipient: input.recipient,
+      reply:
+        "No pude descargar la nota de voz. Por favor enviame el mensaje escrito o revisa que UltraMsg tenga activo Webhook Download Media.",
+      inboundMessageId: input.inboundMessageId,
+    });
+  }
+
+  console.log("[transcription] started", {
+    bytes: media.bytes.byteLength,
+    mimeType: media.mimeType,
+  });
+
+  const transcription = await transcribeAudio({
+    audio: media.bytes,
+    filename: media.filename,
+    mimeType: media.mimeType,
+    language: process.env.WHATSAPP_LANGUAGE || "es",
+  });
+
+  console.log("[transcription] result", {
+    chars: transcription.length,
+  });
+
+  if (!transcription) {
+    return sendAssistantReply({
+      recipient: input.recipient,
+      reply:
+        "No pude entender la nota de voz. Por favor intenta enviarla de nuevo o escribeme el mensaje.",
+      inboundMessageId: input.inboundMessageId,
+    });
+  }
+
+  const result = await chatWithAssistant(input.sessionId, transcription);
+
+  console.log("[assistant] reply generated", {
+    chars: result.reply.length,
+    usedOpenAI: result.meta.usedOpenAI,
+  });
+
+  return sendAssistantReply({
+    recipient: input.recipient,
+    reply: result.reply,
+    inboundMessageId: input.inboundMessageId,
+  });
 }
 
 export async function GET() {
@@ -119,26 +777,34 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    console.log("[whatsapp] webhook received", {
+      contentType: request.headers.get("content-type") ?? "unknown",
+    });
+
     const payload = await parseWebhookPayload(request);
+    const ignoreResult = shouldIgnoreMessage(payload);
 
-    if (payload.event_type && payload.event_type !== "message_received") {
+    if (ignoreResult.ignored) {
       return NextResponse.json({
         ok: true,
         ignored: true,
-        reason: "unsupported_event",
+        reason: ignoreResult.reason,
       });
     }
 
-    if (shouldIgnoreMessage(payload)) {
+    const data = payload.data as UltraMsgMessageData;
+    const type = getMessageType(payload);
+    const inboundMessageId = data.id;
+
+    if (isDuplicateInboundMessage(inboundMessageId)) {
       return NextResponse.json({
         ok: true,
         ignored: true,
-        reason: "unsupported_message",
+        reason: "duplicate",
       });
     }
 
-    const incomingText = payload.data?.body?.trim() ?? "";
-    const recipient = extractPhoneNumber(payload.data?.from);
+    const recipient = extractPhoneNumber(data.from);
 
     if (!recipient) {
       return NextResponse.json({
@@ -148,45 +814,46 @@ export async function POST(request: Request) {
       });
     }
 
-    const sessionId = buildSessionId(recipient);
-
-    if (isResetCommand(incomingText)) {
-      resetConversation(sessionId);
-
-      await sendMessage({
-        message:
-          "Conversacion reiniciada. Puedes hacer una nueva consulta sobre Rionegro cuando quieras.",
-        segment: null,
-        scheduledAt: new Date(),
-        mode: "MANUAL",
-        to: recipient,
-      });
-
+    if (!isRateLimitAllowed(recipient)) {
       return NextResponse.json({
         ok: true,
-        sent: true,
-        to: recipient,
-        reset: true,
+        ignored: true,
+        reason: "rate_limit",
       });
     }
 
-    const result = await chatWithAssistant(sessionId, incomingText);
+    const sessionId = buildSessionId(recipient);
 
-    await sendMessage({
-      message: result.reply,
-      segment: null,
-      scheduledAt: new Date(),
-      mode: "MANUAL",
-      to: recipient,
+    console.log("[whatsapp] inbound message", {
+      from: maskRecipient(recipient),
+      type,
+      messageId: inboundMessageId,
     });
+
+    const replyStatus = isAudioMessageType(type)
+      ? await processAudioMessage({
+          payload,
+          recipient,
+          sessionId,
+          inboundMessageId,
+        })
+      : await processTextMessage({
+          incomingText: getIncomingText(payload),
+          recipient,
+          sessionId,
+          inboundMessageId,
+        });
 
     return NextResponse.json({
       ok: true,
       sent: true,
-      to: recipient,
+      to: maskRecipient(recipient),
+      reply: replyStatus,
     });
   } catch (error) {
-    console.error("[ultramsg-webhook] error", error);
+    console.error("[ultramsg-webhook] error", {
+      error: error instanceof Error ? error.message : "unknown_error",
+    });
 
     return NextResponse.json(
       {

@@ -2322,11 +2322,16 @@ export function getConversation(sessionId: string): AssistantTurn[] {
 }
 
 export const assistantInternals = {
+  normalizeText,
   detectLanguage,
+  detectTopic,
+  detectTimeframe,
   splitMultiIntentMessage,
   hasAutomotiveIntent,
   hasInstitutionalServicesIntent,
   hasTourismIntent,
   hasAppointmentIntent,
   hasHoursIntent,
+  hasLocationIntent,
+  hasAssistantCapabilityIntent,
 };

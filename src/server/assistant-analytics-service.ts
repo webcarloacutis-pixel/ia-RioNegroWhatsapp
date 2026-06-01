@@ -187,7 +187,11 @@ function buildConversationThreads(logs: AssistantQueryLogRecord[]): AssistantCon
         (left, right) => left.createdAt.getTime() - right.createdAt.getTime(),
       );
       const latest = orderedItems[orderedItems.length - 1];
-      const phoneNumber = sessionId.startsWith("ultramsg:") ? sessionId.replace("ultramsg:", "") : null;
+      const phoneNumber = sessionId.startsWith("whatsapp:")
+        ? sessionId.replace("whatsapp:", "")
+        : sessionId.startsWith("ultramsg:")
+          ? sessionId.replace("ultramsg:", "")
+          : null;
 
       return {
         sessionId,
@@ -294,3 +298,12 @@ export async function getAssistantConversationThreads() {
     getAssistantConversationThreadsMock,
   );
 }
+
+export const assistantAnalyticsInternals = {
+  buildAnalyticsSummary,
+  buildConversationThreads,
+  isDatabaseUnavailable,
+  resetMockStore() {
+    globalForAssistantAnalytics.__rionegroAssistantLogs = [];
+  },
+};

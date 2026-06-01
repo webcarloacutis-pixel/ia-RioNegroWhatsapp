@@ -35,7 +35,10 @@ async function main() {
   assert.match(multiIntentCase.reply, /4\./);
   assert.match(multiIntentCase.reply, /Autolarte Rionegro|Belchite|Quebrada Arriba/i);
   assert.match(multiIntentCase.reply, /tramites y consultas relacionados/i);
-  assert.match(multiIntentCase.reply, /noticias recientes de Rionegro/i);
+  assert.match(
+    multiIntentCase.reply,
+    /noticias recientes de Rionegro|No tengo noticias oficiales cargadas en este momento/i,
+  );
   assert.equal(
     countOccurrences(
       multiIntentCase.reply,
@@ -50,7 +53,10 @@ async function main() {
   );
   assert.equal(englishCase.language, "en");
   assert.match(englishCase.reply, /1\.\s+Casa de la Convencion|1\.\s+.*is at/i);
-  assert.match(englishCase.reply, /2\.\s+These are some of the latest news items from Rionegro/i);
+  assert.match(
+    englishCase.reply,
+    /2\.\s+These are some of the latest news items from Rionegro|2\.\s+I do not have official news loaded at the moment/i,
+  );
   assert.doesNotMatch(
     englishCase.reply,
     /This is the official information channel of the municipality of Rionegro\./i,

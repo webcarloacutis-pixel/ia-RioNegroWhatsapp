@@ -1,4 +1,6 @@
-# WhatsApp Rionegro - Canal Oficial Inteligente del Municipio
+# ia-RioNegroWhatsapp
+
+WhatsApp Rionegro - Canal Oficial Inteligente del Municipio
 
 Panel administrativo completo para demo institucional de la Alcaldia de Rionegro.
 
