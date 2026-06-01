@@ -51,11 +51,31 @@ function isDatabaseUnavailable(error: unknown) {
     return false;
   }
 
+  const errorWithCode = error as Error & { code?: string };
+  const prismaRecoverableCodes = new Set([
+    "P1000",
+    "P1001",
+    "P1002",
+    "P1008",
+    "P1010",
+    "P1011",
+    "P1012",
+    "P1017",
+    "P2021",
+    "P2022",
+  ]);
+  const message = error.message;
+
   return (
-    error.message.includes("Authentication failed against database server") ||
-    error.message.includes("Can't reach database server") ||
-    error.message.includes("Timed out fetching a new connection") ||
-    error.message.includes("Error querying the database")
+    Boolean(errorWithCode.code && prismaRecoverableCodes.has(errorWithCode.code)) ||
+    message.includes("Authentication failed against database server") ||
+    message.includes("Can't reach database server") ||
+    message.includes("Timed out fetching a new connection") ||
+    message.includes("Error querying the database") ||
+    message.includes("does not exist") ||
+    message.includes("The table") ||
+    message.includes("Environment variable not found") ||
+    message.includes("Invalid `prisma.")
   );
 }
 
