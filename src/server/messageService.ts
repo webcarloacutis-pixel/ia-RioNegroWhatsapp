@@ -32,6 +32,11 @@ type WhatsAppAudioInput = {
   inboundMessageId?: string;
 };
 
+type SafeInboundReservation = {
+  allowed: boolean;
+  markSent: () => void;
+};
+
 const globalForWhatsAppMessages = globalThis as unknown as {
   __rionegroWhatsAppSentInboundIds?: Set<string>;
 };
@@ -134,6 +139,19 @@ function reserveSafeInboundReply(input: {
           sentInboundIds.delete(oldest);
         }
       }
+    },
+  };
+}
+
+function reserveSafeInboundReplyForFallback(inboundMessageId?: string): SafeInboundReservation {
+  if (!isWhatsAppSafeMode() || !inboundMessageId) {
+    return { allowed: true, markSent: () => undefined };
+  }
+
+  return {
+    allowed: true,
+    markSent: () => {
+      getSentInboundIds().add(inboundMessageId);
     },
   };
 }
@@ -256,6 +274,45 @@ export async function sendWhatsAppAudio({
   console.log("[ultramsg] reply sent", {
     to: maskRecipient(to),
     type: "audio",
+  });
+
+  return response.data;
+}
+
+export async function sendWhatsAppTextAfterAudioFailure({
+  to,
+  message,
+  inboundMessageId,
+}: WhatsAppTextInput) {
+  const safeReservation = reserveSafeInboundReplyForFallback(inboundMessageId);
+  const token = getUltraMsgToken();
+  const data = qs.stringify({
+    token,
+    to,
+    body: message,
+  });
+
+  console.log("[ultramsg] sending text", {
+    to: maskRecipient(to),
+    inboundReply: true,
+    fallback: "audio_failed",
+  });
+
+  const response = await axios({
+    method: "post",
+    url: `${getUltraMsgBaseUrl()}/messages/chat`,
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    data,
+  });
+
+  safeReservation.markSent();
+
+  console.log("[ultramsg] reply sent", {
+    to: maskRecipient(to),
+    type: "text",
+    fallback: "audio_failed",
   });
 
   return response.data;

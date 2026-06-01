@@ -2,11 +2,16 @@
   "name": "rionegro-panel-alcaldia",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": "20.x"
+  },
   "scripts": {
     "dev": "concurrently \"npm:dev:frontend\" \"npm:dev:backend\"",
     "dev:frontend": "next dev -p 3030",
     "dev:backend": "tsx watch --env-file=.env src/server/scheduler.ts",
     "build": "next build --webpack",
+    "build:render": "npx prisma generate && npx prisma db push && npm run build",
+    "postinstall": "npx prisma generate",
     "start": "next start -p ${PORT:-3030}",
     "start:frontend": "next start -p ${PORT:-3030}",
     "start:backend": "tsx --env-file=.env src/server/scheduler.ts",
@@ -15,6 +20,7 @@
     "lint": "eslint .",
     "test:unit": "tsx --test tests/run-unit-tests.ts",
     "qa:assistant": "tsx --env-file=.env qa/assistant.qa.ts",
+    "test:webhook": "node scripts/test-ultramsg-webhook.mjs",
     "db:start": "docker compose up -d postgres",
     "db:stop": "docker compose down",
     "db:generate": "prisma generate",

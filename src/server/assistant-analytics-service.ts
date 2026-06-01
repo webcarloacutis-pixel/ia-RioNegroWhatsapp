@@ -63,6 +63,7 @@ function isDatabaseUnavailable(error: unknown) {
     "P1017",
     "P2021",
     "P2022",
+    "P2024",
   ]);
   const message = error.message;
 
@@ -74,7 +75,10 @@ function isDatabaseUnavailable(error: unknown) {
     message.includes("Error querying the database") ||
     message.includes("does not exist") ||
     message.includes("The table") ||
+    message.includes("relation") ||
     message.includes("Environment variable not found") ||
+    message.includes("PrismaClientInitializationError") ||
+    message.includes("PrismaClientKnownRequestError") ||
     message.includes("Invalid `prisma.")
   );
 }

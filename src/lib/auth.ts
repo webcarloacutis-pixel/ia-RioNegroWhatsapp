@@ -12,7 +12,13 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? ADMIN_DEMO_PASSWORD;
 
 export async function isAdminAuthenticated() {
   const cookieStore = await cookies();
-  return cookieStore.get(AUTH_COOKIE_NAME)?.value === AUTH_COOKIE_VALUE;
+  const authenticated = cookieStore.get(AUTH_COOKIE_NAME)?.value === AUTH_COOKIE_VALUE;
+
+  console.log("[auth] session check", {
+    authenticated,
+  });
+
+  return authenticated;
 }
 
 export async function getAdminProfile() {
@@ -67,5 +73,13 @@ export async function createAdminSession() {
 
 export async function clearAdminSession() {
   const cookieStore = await cookies();
-  cookieStore.delete(AUTH_COOKIE_NAME);
+  cookieStore.set({
+    name: AUTH_COOKIE_NAME,
+    value: "",
+    httpOnly: true,
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    path: "/",
+    maxAge: 0,
+  });
 }

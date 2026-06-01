@@ -4,7 +4,11 @@ import {
   generateElevenLabsSpeech,
   isElevenLabsConfigured,
 } from "@/server/elevenlabs-service";
-import { sendWhatsAppAudio, sendWhatsAppText } from "@/server/messageService";
+import {
+  sendWhatsAppAudio,
+  sendWhatsAppText,
+  sendWhatsAppTextAfterAudioFailure,
+} from "@/server/messageService";
 import { isOpenAIConfigured, transcribeAudio } from "@/server/openai-service";
 import { chatWithAssistant, resetConversation } from "@/server/rionegro-assistant";
 
@@ -70,6 +74,8 @@ const MEDIA_SOURCE_KEYS = [
 ];
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_MESSAGES = 20;
+const ASSISTANT_FALLBACK_REPLY =
+  "Recibi tu mensaje, pero en este momento no pude consultar toda la informacion. Por favor intenta de nuevo en unos minutos o escribenos por los canales oficiales de la Alcaldia de Rionegro.";
 
 const globalForWebhook = globalThis as unknown as {
   __rionegroWhatsAppInboundIds?: Set<string>;
@@ -637,17 +643,61 @@ async function sendAssistantReply({
       console.warn("[elevenlabs] error generating audio, falling back to text", {
         error: error instanceof Error ? error.message : "unknown_error",
       });
+
+      try {
+        await sendWhatsAppTextAfterAudioFailure({
+          to: recipient,
+          message: reply,
+          inboundReply: true,
+          inboundMessageId,
+        });
+
+        return { audio: false, text: true, fallback: "audio_failed" };
+      } catch (textError) {
+        console.error("[ultramsg] text fallback failed", {
+          error: textError instanceof Error ? textError.message : "unknown_error",
+        });
+
+        return { audio: false, text: false, error: "send_failed" };
+      }
     }
   }
 
-  await sendWhatsAppText({
-    to: recipient,
-    message: reply,
-    inboundReply: true,
-    inboundMessageId,
-  });
+  try {
+    await sendWhatsAppText({
+      to: recipient,
+      message: reply,
+      inboundReply: true,
+      inboundMessageId,
+    });
+  } catch (error) {
+    console.error("[ultramsg] text send failed", {
+      error: error instanceof Error ? error.message : "unknown_error",
+    });
+
+    return { audio: false, text: false, error: "send_failed" };
+  }
 
   return { audio: false, text: true };
+}
+
+async function getAssistantReplySafely(sessionId: string, message: string) {
+  try {
+    const result = await chatWithAssistant(sessionId, message);
+
+    console.log("[assistant] reply generated", {
+      chars: result.reply.length,
+      usedOpenAI: result.meta.usedOpenAI,
+    });
+
+    return result.reply;
+  } catch (error) {
+    console.error("[assistant] reply fallback", {
+      error: error instanceof Error ? error.message : "unknown_error",
+    });
+
+    return ASSISTANT_FALLBACK_REPLY;
+  }
 }
 
 async function processTextMessage(input: {
@@ -667,16 +717,11 @@ async function processTextMessage(input: {
     });
   }
 
-  const result = await chatWithAssistant(input.sessionId, input.incomingText);
-
-  console.log("[assistant] reply generated", {
-    chars: result.reply.length,
-    usedOpenAI: result.meta.usedOpenAI,
-  });
+  const reply = await getAssistantReplySafely(input.sessionId, input.incomingText);
 
   return sendAssistantReply({
     recipient: input.recipient,
-    reply: result.reply,
+    reply,
     inboundMessageId: input.inboundMessageId,
   });
 }
@@ -687,7 +732,7 @@ async function processAudioMessage(input: {
   sessionId: string;
   inboundMessageId?: string;
 }) {
-  console.log("[whatsapp] audio received", {
+  console.log("[whatsapp] inbound audio", {
     from: maskRecipient(input.recipient),
     messageId: input.inboundMessageId,
   });
@@ -734,12 +779,27 @@ async function processAudioMessage(input: {
     mimeType: media.mimeType,
   });
 
-  const transcription = await transcribeAudio({
-    audio: media.bytes,
-    filename: media.filename,
-    mimeType: media.mimeType,
-    language: process.env.WHATSAPP_LANGUAGE || "es",
-  });
+  let transcription = "";
+
+  try {
+    transcription = await transcribeAudio({
+      audio: media.bytes,
+      filename: media.filename,
+      mimeType: media.mimeType,
+      language: process.env.WHATSAPP_LANGUAGE || "es",
+    });
+  } catch (error) {
+    console.error("[transcription] error", {
+      error: error instanceof Error ? error.message : "unknown_error",
+    });
+
+    return sendAssistantReply({
+      recipient: input.recipient,
+      reply:
+        "Recibi tu nota de voz, pero no pude transcribirla en este momento. Por favor enviame el mensaje escrito.",
+      inboundMessageId: input.inboundMessageId,
+    });
+  }
 
   console.log("[transcription] result", {
     chars: transcription.length,
@@ -754,16 +814,11 @@ async function processAudioMessage(input: {
     });
   }
 
-  const result = await chatWithAssistant(input.sessionId, transcription);
-
-  console.log("[assistant] reply generated", {
-    chars: result.reply.length,
-    usedOpenAI: result.meta.usedOpenAI,
-  });
+  const reply = await getAssistantReplySafely(input.sessionId, transcription);
 
   return sendAssistantReply({
     recipient: input.recipient,
-    reply: result.reply,
+    reply,
     inboundMessageId: input.inboundMessageId,
   });
 }
@@ -772,6 +827,12 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     service: "ultramsg-webhook",
+    postUrl: "/api/webhook",
+    acceptedContentTypes: [
+      "application/json",
+      "application/x-www-form-urlencoded",
+      "text/plain",
+    ],
   });
 }
 
@@ -830,6 +891,18 @@ export async function POST(request: Request) {
       messageId: inboundMessageId,
     });
 
+    if (isAudioMessageType(type)) {
+      console.log("[whatsapp] inbound audio", {
+        from: maskRecipient(recipient),
+        messageId: inboundMessageId,
+      });
+    } else {
+      console.log("[whatsapp] inbound text", {
+        from: maskRecipient(recipient),
+        messageId: inboundMessageId,
+      });
+    }
+
     const replyStatus = isAudioMessageType(type)
       ? await processAudioMessage({
           payload,
@@ -851,16 +924,14 @@ export async function POST(request: Request) {
       reply: replyStatus,
     });
   } catch (error) {
-    console.error("[ultramsg-webhook] error", {
+    console.error("[whatsapp] webhook error", {
       error: error instanceof Error ? error.message : "unknown_error",
     });
 
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Error procesando el webhook de UltraMsg.",
-      },
-      { status: 500 },
-    );
+    return NextResponse.json({
+      ok: true,
+      accepted: true,
+      error: "webhook_processing_error",
+    });
   }
 }
