@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   BarChart3,
   BookOpenText,
@@ -14,6 +14,7 @@ import {
   MessageSquareShare,
   Radar,
   Send,
+  Siren,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -25,6 +26,7 @@ import { cn } from "@/lib/utils";
 const navigation = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/dashboard/comunicados", label: "Comunicados", icon: MessageSquareShare },
+  { href: "/dashboard/denuncias", label: "Denuncias y Reportes", icon: Siren },
   { href: "/dashboard/programador", label: "Programador", icon: Send },
   { href: "/dashboard/asistente", label: "Asistente IA", icon: Bot },
   { href: "/dashboard/conversaciones", label: "Conversaciones", icon: MessageCircle },
@@ -43,6 +45,36 @@ export function AppShell({ adminEmail, children }: AppShellProps) {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
+  const [pendingReportsCount, setPendingReportsCount] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadPendingReportsCount() {
+      try {
+        const response = await fetch("/api/admin/citizen-reports?status=pending&limit=1");
+
+        if (!response.ok) return;
+
+        const payload = await response.json();
+        const count = Number(payload.data?.summary?.pending ?? 0);
+
+        if (!cancelled) {
+          setPendingReportsCount(count);
+        }
+      } catch {
+        // El badge es informativo; si falla, la navegacion sigue funcionando.
+      }
+    }
+
+    void loadPendingReportsCount();
+    const interval = window.setInterval(loadPendingReportsCount, 30_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
 
   async function handleLogout() {
     try {
@@ -125,7 +157,17 @@ export function AppShell({ adminEmail, children }: AppShellProps) {
                 )}
               >
                 <Icon className="size-4" />
-                <span>{item.label}</span>
+                <span className="flex-1">{item.label}</span>
+                {item.href === "/dashboard/denuncias" && pendingReportsCount > 0 ? (
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-xs font-semibold",
+                      active ? "bg-[#102947] text-white" : "bg-white/14 text-white",
+                    )}
+                  >
+                    {pendingReportsCount}
+                  </span>
+                ) : null}
               </Link>
             );
           })}

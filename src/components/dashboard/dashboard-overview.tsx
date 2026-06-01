@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   Area,
   AreaChart,
@@ -19,13 +20,36 @@ import type { DashboardData } from "@/lib/types";
 
 type DashboardOverviewProps = {
   data: DashboardData;
+  pendingCitizenReports?: number;
 };
 
 const pieColors = ["#173f73", "#0d7b82", "#f2b24d", "#1f8f62", "#c77d4f"];
 
-export function DashboardOverview({ data }: DashboardOverviewProps) {
+export function DashboardOverview({
+  data,
+  pendingCitizenReports = 0,
+}: DashboardOverviewProps) {
   return (
     <div className="space-y-6">
+      {pendingCitizenReports > 0 ? (
+        <section className="rounded-[28px] border border-[#f2b24d]/45 bg-[#fff7e6] px-6 py-5">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <Badge tone="warning">Nueva denuncia ciudadana pendiente</Badge>
+              <p className="mt-2 text-lg font-semibold text-foreground">
+                Hay {pendingCitizenReports} reporte(s) ciudadano(s) pendientes por revisar.
+              </p>
+            </div>
+            <Link
+              href="/dashboard/denuncias"
+              className="rounded-2xl bg-primary px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#12355f]"
+            >
+              Ver reportes
+            </Link>
+          </div>
+        </section>
+      ) : null}
+
       <section className="panel-card overflow-hidden rounded-[34px] px-7 py-8">
         <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
           <div className="max-w-3xl">

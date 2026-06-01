@@ -11,6 +11,10 @@ import {
 } from "@/server/messageService";
 import { isOpenAIConfigured, transcribeAudio } from "@/server/openai-service";
 import { chatWithAssistant, resetConversation } from "@/server/rionegro-assistant";
+import {
+  createCitizenReport,
+  isCitizenReportMessage,
+} from "@/server/citizen-report-service";
 
 export const runtime = "nodejs";
 
@@ -61,6 +65,7 @@ const SUPPORTED_MESSAGE_TYPES = new Set([
   "document",
 ]);
 const AUDIO_MESSAGE_TYPES = new Set(["audio", "ptt", "voice"]);
+const IMAGE_MESSAGE_TYPES = new Set(["image"]);
 const MEDIA_SOURCE_KEYS = [
   "media",
   "mediaUrl",
@@ -239,6 +244,10 @@ function isAudioMessageType(type: string) {
   return AUDIO_MESSAGE_TYPES.has(type);
 }
 
+function isImageMessageType(type: string) {
+  return IMAGE_MESSAGE_TYPES.has(type);
+}
+
 function getIncomingText(payload: UltraMsgWebhookPayload) {
   const data = payload.data;
   const type = getMessageType(payload);
@@ -316,7 +325,7 @@ function shouldIgnoreMessage(payload: UltraMsgWebhookPayload): IgnoreResult {
     return { ignored: true, reason: "unsupported_type" };
   }
 
-  if (!isAudioMessageType(type) && !incomingText) {
+  if (!isAudioMessageType(type) && !isImageMessageType(type) && !incomingText) {
     return { ignored: true, reason: "empty_message" };
   }
 
@@ -726,6 +735,94 @@ async function processTextMessage(input: {
   });
 }
 
+function getImageAttachment(payload: UltraMsgWebhookPayload) {
+  const mediaSource = extractMediaSource(payload);
+
+  if (!mediaSource) {
+    return null;
+  }
+
+  if (mediaSource.kind !== "url") {
+    console.log("[citizen-reports] image detected", {
+      stored: false,
+      reason: "no_persistent_url",
+    });
+    return null;
+  }
+
+  const data = payload.data;
+  const mimeType =
+    typeof data?.mimetype === "string"
+      ? data.mimetype
+      : typeof data?.mimeType === "string"
+        ? data.mimeType
+        : undefined;
+
+  console.log("[citizen-reports] image detected", {
+    stored: true,
+    mimeType,
+  });
+
+  return {
+    url: mediaSource.value,
+    filename:
+      typeof data?.filename === "string"
+        ? data.filename
+        : getFilenameFromUrl(mediaSource.value) ?? undefined,
+    mimeType,
+  };
+}
+
+async function processCitizenReportMessage(input: {
+  payload: UltraMsgWebhookPayload;
+  type: string;
+  incomingText: string;
+  recipient: string;
+  inboundMessageId?: string;
+}) {
+  const hasImage = isImageMessageType(input.type);
+  const image = hasImage ? getImageAttachment(input.payload) : null;
+  const data = input.payload.data;
+  const description = input.incomingText.trim();
+
+  if (hasImage && !description) {
+    return sendAssistantReply({
+      recipient: input.recipient,
+      reply:
+        "Recibimos la imagen. Por favor envianos una breve descripcion de lo que sucedio y la ubicacion para crear el reporte correctamente.",
+      inboundMessageId: input.inboundMessageId,
+    });
+  }
+
+  if (!description || !isCitizenReportMessage(description)) {
+    return null;
+  }
+
+  console.log("[citizen-reports] detected whatsapp report", {
+    type: input.type,
+    hasImage: Boolean(image),
+    reporter: maskRecipient(input.recipient),
+  });
+
+  await createCitizenReport({
+    description,
+    source: "whatsapp",
+    reporterPhone: input.recipient,
+    whatsappMessageId: input.inboundMessageId,
+    whatsappFrom: data?.from,
+    whatsappRawType: input.type,
+    images: image ? [image] : [],
+  });
+
+  return sendAssistantReply({
+    recipient: input.recipient,
+    reply: image
+      ? "Gracias. Recibimos tu reporte con imagen. Sera revisado por el equipo de administracion antes de tomar cualquier accion o publicarlo."
+      : "Gracias. Recibimos tu reporte ciudadano y sera revisado por el equipo de administracion.\n\nSi puedes, envianos una foto del suceso y la ubicacion exacta para ayudar a atenderlo mejor.",
+    inboundMessageId: input.inboundMessageId,
+  });
+}
+
 async function processAudioMessage(input: {
   payload: UltraMsgWebhookPayload;
   recipient: string;
@@ -903,19 +1000,31 @@ export async function POST(request: Request) {
       });
     }
 
-    const replyStatus = isAudioMessageType(type)
-      ? await processAudioMessage({
+    const incomingText = getIncomingText(payload);
+    const citizenReportReply = isAudioMessageType(type)
+      ? null
+      : await processCitizenReportMessage({
           payload,
+          type,
+          incomingText,
           recipient,
-          sessionId,
-          inboundMessageId,
-        })
-      : await processTextMessage({
-          incomingText: getIncomingText(payload),
-          recipient,
-          sessionId,
           inboundMessageId,
         });
+    const replyStatus =
+      citizenReportReply ??
+      (isAudioMessageType(type)
+        ? await processAudioMessage({
+            payload,
+            recipient,
+            sessionId,
+            inboundMessageId,
+          })
+        : await processTextMessage({
+            incomingText,
+            recipient,
+            sessionId,
+            inboundMessageId,
+          }));
 
     return NextResponse.json({
       ok: true,

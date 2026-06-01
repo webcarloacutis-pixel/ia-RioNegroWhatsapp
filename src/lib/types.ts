@@ -11,6 +11,61 @@ export type DeliveryModeValue = (typeof DELIVERY_MODE_VALUES)[number];
 export type AssistantTopicValue = (typeof ASSISTANT_TOPIC_VALUES)[number];
 export type AssistantRouteValue = (typeof ASSISTANT_ROUTE_VALUES)[number];
 
+export type CitizenReportStatus =
+  | "pending"
+  | "reviewing"
+  | "approved"
+  | "rejected"
+  | "converted_to_mass_message"
+  | "attended"
+  | "resolved";
+
+export type CitizenReportPriority = "low" | "normal" | "high" | "urgent";
+
+export type CitizenReportImageSummary = {
+  id: string;
+  url: string;
+  filename: string | null;
+  mimeType: string | null;
+  size: number | null;
+  createdAt: string;
+};
+
+export type CitizenReportSummary = {
+  id: string;
+  title: string | null;
+  description: string;
+  type: string;
+  category: string | null;
+  priority: CitizenReportPriority;
+  status: CitizenReportStatus;
+  location: string | null;
+  address: string | null;
+  neighborhood: string | null;
+  source: string;
+  reporterPhone: string | null;
+  reporterName: string | null;
+  whatsappMessageId: string | null;
+  whatsappFrom: string | null;
+  whatsappRawType: string | null;
+  images: CitizenReportImageSummary[];
+  adminNotes: string | null;
+  massMessageId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  reviewedAt: string | null;
+  resolvedAt: string | null;
+};
+
+export type CitizenReportListResult = {
+  reports: CitizenReportSummary[];
+  summary: {
+    total: number;
+    pending: number;
+    urgent: number;
+  };
+};
+
 export type SegmentSummary = {
   id: string;
   name: string;

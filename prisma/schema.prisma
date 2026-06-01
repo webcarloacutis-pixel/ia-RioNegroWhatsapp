@@ -93,6 +93,49 @@ model Announcement {
   @@index([status, scheduledAt])
 }
 
+model CitizenReport {
+  id                String               @id @default(cuid())
+  title             String?
+  description       String               @db.Text
+  type              String               @default("general")
+  category          String?
+  priority          String               @default("normal")
+  status            String               @default("pending")
+  location          String?
+  address           String?
+  neighborhood      String?
+  source            String               @default("whatsapp")
+  reporterPhone     String?
+  reporterName      String?
+  whatsappMessageId String?              @unique
+  whatsappFrom      String?
+  whatsappRawType   String?
+  images            CitizenReportImage[]
+  adminNotes        String?              @db.Text
+  massMessageId     String?
+  createdAt         DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  reviewedAt        DateTime?
+  resolvedAt        DateTime?
+
+  @@index([status, createdAt])
+  @@index([priority, createdAt])
+  @@index([category, createdAt])
+}
+
+model CitizenReportImage {
+  id        String        @id @default(cuid())
+  reportId  String
+  report    CitizenReport @relation(fields: [reportId], references: [id], onDelete: Cascade)
+  url       String        @db.Text
+  filename  String?
+  mimeType  String?
+  size      Int?
+  createdAt DateTime      @default(now())
+
+  @@index([reportId])
+}
+
 model KnowledgeBaseEntry {
   id        String   @id @default(cuid())
   question  String
