@@ -27,12 +27,36 @@ services:
         sync: false
       - key: OPENAI_MODEL
         value: gpt-5-mini
+      - key: OPENAI_TRANSCRIPTION_MODEL
+        value: gpt-4o-mini-transcribe
+      - key: ULTRAMSG_INSTANCE_ID
+        sync: false
+      - key: ULTRAMSG_BASE_URL
+        sync: false
       - key: ULTRAMSG_API_URL
         sync: false
       - key: ULTRAMSG_TOKEN
         sync: false
       - key: ULTRAMSG_DEFAULT_TO
         sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        sync: false
+      - key: ELEVENLABS_MODEL_ID
+        value: eleven_multilingual_v2
+      - key: ELEVENLABS_OUTPUT_FORMAT
+        value: mp3_44100_128
+      - key: ELEVENLABS_LANGUAGE_CODE
+        value: es
+      - key: WHATSAPP_SAFE_MODE
+        value: "true"
+      - key: WHATSAPP_AUDIO_REPLIES
+        value: "true"
+      - key: WHATSAPP_SEND_TEXT_WITH_AUDIO
+        value: "false"
+      - key: WHATSAPP_LANGUAGE
+        value: es
 
   - type: worker
     name: rionegro-panel-scheduler
@@ -60,12 +84,36 @@ services:
         sync: false
       - key: OPENAI_MODEL
         value: gpt-5-mini
+      - key: OPENAI_TRANSCRIPTION_MODEL
+        value: gpt-4o-mini-transcribe
+      - key: ULTRAMSG_INSTANCE_ID
+        sync: false
+      - key: ULTRAMSG_BASE_URL
+        sync: false
       - key: ULTRAMSG_API_URL
         sync: false
       - key: ULTRAMSG_TOKEN
         sync: false
       - key: ULTRAMSG_DEFAULT_TO
         sync: false
+      - key: ELEVENLABS_API_KEY
+        sync: false
+      - key: ELEVENLABS_VOICE_ID
+        sync: false
+      - key: ELEVENLABS_MODEL_ID
+        value: eleven_multilingual_v2
+      - key: ELEVENLABS_OUTPUT_FORMAT
+        value: mp3_44100_128
+      - key: ELEVENLABS_LANGUAGE_CODE
+        value: es
+      - key: WHATSAPP_SAFE_MODE
+        value: "true"
+      - key: WHATSAPP_AUDIO_REPLIES
+        value: "true"
+      - key: WHATSAPP_SEND_TEXT_WITH_AUDIO
+        value: "false"
+      - key: WHATSAPP_LANGUAGE
+        value: es
 
 databases:
   - name: rionegro-panel-db
