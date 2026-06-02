@@ -12,8 +12,8 @@ import {
 import { isOpenAIConfigured, transcribeAudio } from "@/server/openai-service";
 import { chatWithAssistant, resetConversation } from "@/server/rionegro-assistant";
 import {
-  createCitizenReport,
-  isCitizenReportMessage,
+  detectCitizenReportIntent,
+  handleCitizenReport,
 } from "@/server/citizen-report-service";
 
 export const runtime = "nodejs";
@@ -74,6 +74,7 @@ const MEDIA_SOURCE_KEYS = [
   "download_url",
   "url",
   "file",
+  "image",
   "audio",
   "body",
 ];
@@ -743,7 +744,7 @@ function getImageAttachment(payload: UltraMsgWebhookPayload) {
   }
 
   if (mediaSource.kind !== "url") {
-    console.log("[citizen-reports] image detected", {
+    console.log("[citizen-reports] image received", {
       stored: false,
       reason: "no_persistent_url",
     });
@@ -758,7 +759,7 @@ function getImageAttachment(payload: UltraMsgWebhookPayload) {
         ? data.mimeType
         : undefined;
 
-  console.log("[citizen-reports] image detected", {
+  console.log("[citizen-reports] image received", {
     stored: true,
     mimeType,
   });
@@ -784,43 +785,53 @@ async function processCitizenReportMessage(input: {
   const image = hasImage ? getImageAttachment(input.payload) : null;
   const data = input.payload.data;
   const description = input.incomingText.trim();
+  const reportIntent = detectCitizenReportIntent(description, input.type);
 
-  if (hasImage && !description) {
-    return sendAssistantReply({
-      recipient: input.recipient,
-      reply:
-        "Recibimos la imagen. Por favor envianos una breve descripcion de lo que sucedio y la ubicacion para crear el reporte correctamente.",
-      inboundMessageId: input.inboundMessageId,
+  if (!reportIntent.isReport && !hasImage) {
+    console.log("[citizen-reports] routed to general assistant", {
+      type: input.type,
+      reporter: maskRecipient(input.recipient),
     });
-  }
-
-  if (!description || !isCitizenReportMessage(description)) {
     return null;
   }
 
-  console.log("[citizen-reports] detected whatsapp report", {
-    type: input.type,
-    hasImage: Boolean(image),
-    reporter: maskRecipient(input.recipient),
-  });
-
-  await createCitizenReport({
-    description,
-    source: "whatsapp",
-    reporterPhone: input.recipient,
+  const result = await handleCitizenReport({
+    text: description,
+    messageType: input.type,
+    recipient: input.recipient,
     whatsappMessageId: input.inboundMessageId,
     whatsappFrom: data?.from,
     whatsappRawType: input.type,
     images: image ? [image] : [],
+    hasImage,
+    reportIntent,
   });
 
-  return sendAssistantReply({
+  if (!result.handled) {
+    console.log("[citizen-reports] routed to general assistant", {
+      type: input.type,
+      reporter: maskRecipient(input.recipient),
+    });
+    return null;
+  }
+
+  const replyStatus = await sendAssistantReply({
     recipient: input.recipient,
-    reply: image
-      ? "Gracias. Recibimos tu reporte con imagen. Sera revisado por el equipo de administracion antes de tomar cualquier accion o publicarlo."
-      : "Gracias. Recibimos tu reporte ciudadano y sera revisado por el equipo de administracion.\n\nSi puedes, envianos una foto del suceso y la ubicacion exacta para ayudar a atenderlo mejor.",
+    reply: result.reply,
     inboundMessageId: input.inboundMessageId,
   });
+
+  console.log("[citizen-reports] confirmation sent", {
+    type: input.type,
+    category: result.report?.category,
+    priority: result.report?.priority,
+    needsMoreInfo: Boolean(result.needsMoreInfo),
+  });
+
+  return {
+    ...replyStatus,
+    handledAs: "citizen_report",
+  };
 }
 
 async function processAudioMessage(input: {
@@ -911,6 +922,18 @@ async function processAudioMessage(input: {
     });
   }
 
+  const citizenReportReply = await processCitizenReportMessage({
+    payload: input.payload,
+    type: "audio",
+    incomingText: transcription,
+    recipient: input.recipient,
+    inboundMessageId: input.inboundMessageId,
+  });
+
+  if (citizenReportReply) {
+    return citizenReportReply;
+  }
+
   const reply = await getAssistantReplySafely(input.sessionId, transcription);
 
   return sendAssistantReply({
@@ -990,6 +1013,11 @@ export async function POST(request: Request) {
 
     if (isAudioMessageType(type)) {
       console.log("[whatsapp] inbound audio", {
+        from: maskRecipient(recipient),
+        messageId: inboundMessageId,
+      });
+    } else if (isImageMessageType(type)) {
+      console.log("[whatsapp] inbound image", {
         from: maskRecipient(recipient),
         messageId: inboundMessageId,
       });

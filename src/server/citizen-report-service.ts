@@ -48,6 +48,45 @@ type UpdateCitizenReportInput = {
   adminNotes?: string | null;
 };
 
+export type CitizenReportIntent = {
+  isReport: boolean;
+  type: string;
+  category: string;
+  priority: CitizenReportPriority;
+  title: string;
+  location?: string;
+  needsLocation: boolean;
+  needsImage: boolean;
+  isUrgentSituation: boolean;
+  matchedKeywords: string[];
+};
+
+type HandleCitizenReportInput = {
+  text: string;
+  messageType: string;
+  recipient: string;
+  whatsappMessageId?: string;
+  whatsappFrom?: string;
+  whatsappRawType?: string;
+  images?: CitizenReportImageInput[];
+  hasImage?: boolean;
+  reportIntent?: CitizenReportIntent;
+};
+
+type HandleCitizenReportResult =
+  | {
+      handled: true;
+      reply: string;
+      report?: CitizenReportSummary;
+      needsMoreInfo?: boolean;
+    }
+  | {
+      handled: false;
+      reply?: never;
+      report?: never;
+      needsMoreInfo?: never;
+    };
+
 type CitizenReportRecord = Omit<CitizenReportSummary, "images"> & {
   images: CitizenReportSummary["images"];
 };
@@ -81,20 +120,30 @@ const REPORT_KEYWORDS = [
   "reporte",
   "reporto",
   "alerta",
-  "emergencia",
   "accidente",
   "choque",
   "trancon",
   "trancón",
+  "taco",
+  "tacos",
   "via cerrada",
   "vía cerrada",
+  "cierre vial",
+  "cierre de via",
+  "cierre de vía",
+  "bloqueo",
+  "bloqueo vial",
   "carro mal parqueado",
   "moto mal parqueada",
+  "moto en el anden",
+  "moto en el andén",
+  "vehiculo mal parqueado",
+  "vehículo mal parqueado",
   "mal parqueado",
   "invadiendo el anden",
   "invadiendo el andén",
-  "semaforo dañado",
-  "semáforo dañado",
+  "semaforo",
+  "semáforo",
   "hueco",
   "arbol caido",
   "árbol caído",
@@ -102,10 +151,179 @@ const REPORT_KEYWORDS = [
   "inundación",
   "poste caido",
   "poste caído",
+  "poste en riesgo",
+  "cable caido",
+  "cable caído",
+  "alcantarilla destapada",
   "basura",
   "ruido",
+  "emergencia",
+  "incendio",
+  "explosion",
+  "explosión",
+  "atentado",
+  "ataque",
+  "ataque terrorista",
+  "posible atentado",
+  "balacera",
+  "disparos",
+  "derrumbe",
+  "deslizamiento",
+  "manifestacion",
+  "manifestación",
+  "disturbios",
+  "riña",
+  "pelea",
+  "persona herida",
+  "heridos",
+  "ambulancia",
+  "fuga de gas",
+  "animal en la via",
+  "animal en la vía",
+  "aceite en la via",
+  "aceite en la vía",
+  "peligro en la via",
+  "peligro en la vía",
   "anden",
   "andén",
+];
+
+const REPORT_NATURAL_PATTERNS = [
+  /\bhay\s+(?:un|una)\s+accidente\b/,
+  /\bse\s+cayo\s+(?:un\s+)?arbol\b/,
+  /\bse\s+cayo\s+(?:un\s+)?poste\b/,
+  /\bhay\s+(?:un|una)\s+(?:carro|moto|vehiculo).*(?:bloqueando|mal\s+parquead|anden)\b/,
+  /\bla\s+via\s+esta\s+cerrada\b/,
+  /\bel\s+semaforo\s+(?:no\s+sirve|esta\s+danado|danado)\b/,
+  /\bhay\s+(?:un\s+)?hueco\b/,
+  /\buna\s+moto\s+esta\s+en\s+el\s+anden\b/,
+  /\bhay\s+(?:un\s+)?taco\b/,
+  /\bhay\s+(?:una\s+)?explosion\b/,
+  /\bhay\s+(?:un\s+)?incendio\b/,
+  /\bescuche\s+disparos\b/,
+  /\bhay\s+(?:una\s+)?inundacion\b/,
+  /\bhay\s+(?:un\s+)?cierre\s+vial\b/,
+  /\bhay\s+(?:un\s+)?bloqueo\b/,
+  /\bhay\s+(?:una\s+)?persona\s+herida\b/,
+];
+
+const URGENT_SITUATION_PATTERN =
+  /(atentado|ataque terrorista|posible atentado|explosion|balacera|disparos|incendio|fuga de gas|herido|heridos|ambulancia)/;
+
+const CLASSIFICATION_RULES: Array<{
+  pattern: RegExp;
+  category: string;
+  priority: CitizenReportPriority;
+  type: string;
+}> = [
+  {
+    pattern: /(atentado|ataque(?: terrorista)?|posible atentado|balacera|disparos)/,
+    category: "Seguridad",
+    priority: "urgent",
+    type: "seguridad",
+  },
+  {
+    pattern: /(incendio)/,
+    category: "Incendio",
+    priority: "urgent",
+    type: "emergencia",
+  },
+  {
+    pattern: /(explosion)/,
+    category: "Explosión",
+    priority: "urgent",
+    type: "emergencia",
+  },
+  {
+    pattern: /(fuga de gas)/,
+    category: "Emergencia",
+    priority: "urgent",
+    type: "emergencia",
+  },
+  {
+    pattern: /(accidente|choque|herido|heridos|ambulancia)/,
+    category: "Accidente",
+    priority: "urgent",
+    type: "transito",
+  },
+  {
+    pattern: /(derrumbe|deslizamiento)/,
+    category: "Riesgo",
+    priority: "urgent",
+    type: "emergencia",
+  },
+  {
+    pattern: /(inundacion)/,
+    category: "Inundación",
+    priority: "urgent",
+    type: "emergencia",
+  },
+  {
+    pattern: /(manifestacion|disturbios|bloqueo(?:\s+vial)?)/,
+    category: "Orden público",
+    priority: "high",
+    type: "seguridad",
+  },
+  {
+    pattern: /(trancon|tacos?|via cerrada|cierre vial|cierre de via|bloqueando la via|animal en la via)/,
+    category: "Tránsito",
+    priority: "high",
+    type: "transito",
+  },
+  {
+    pattern: /(aceite en la via|peligro en la via)/,
+    category: "Riesgo vial",
+    priority: "high",
+    type: "transito",
+  },
+  {
+    pattern: /(carro|moto|vehiculo).*(mal parquead|bloqueando|obstruyendo)|mal parquead|anden|invadiendo/,
+    category: "Vehículo mal parqueado",
+    priority: "normal",
+    type: "transito",
+  },
+  {
+    pattern: /(semaforo)/,
+    category: "Semáforo dañado",
+    priority: "high",
+    type: "transito",
+  },
+  {
+    pattern: /(hueco)/,
+    category: "Hueco en vía",
+    priority: "normal",
+    type: "infraestructura",
+  },
+  {
+    pattern: /(arbol caido|se cayo.*arbol)/,
+    category: "Árbol caído",
+    priority: "high",
+    type: "emergencia",
+  },
+  {
+    pattern: /(poste caido|se cayo.*poste|poste en riesgo|cable caido|alcantarilla destapada)/,
+    category: "Servicios públicos",
+    priority: "high",
+    type: "infraestructura",
+  },
+  {
+    pattern: /(basura)/,
+    category: "Basuras",
+    priority: "normal",
+    type: "convivencia",
+  },
+  {
+    pattern: /(ruido|rina|pelea)/,
+    category: "Ruido",
+    priority: "normal",
+    type: "convivencia",
+  },
+  {
+    pattern: /(emergencia)/,
+    category: "Emergencia",
+    priority: "urgent",
+    type: "emergencia",
+  },
 ];
 
 const globalForCitizenReports = globalThis as unknown as {
@@ -246,8 +464,15 @@ function maskPhone(value?: string | null) {
 
 function inferLocation(text: string) {
   const patterns = [
-    /\b(?:en|por|cerca de|cerca al|cerca del|frente a|via|vía)\s+([^.,;]+)/i,
-    /\b(?:sector|zona|barrio)\s+([^.,;]+)/i,
+    /\b(?:en|por)\s+(San Antonio|Ojos de Agua|el centro|la autopista|el aeropuerto|la glorieta|Llanogrande)\b/i,
+    /\b(?:en|por)\s+((?:la\s+)?v[ií]a\s+[^.,;\n]+)/i,
+    /\bv[ií]a\s+(?!esta\b|cerrada\b|bloqueada\b)([^.,;\n]+)/i,
+    /\bcerca\s+(?:al|del|de)\s+([^.,;\n]+)/i,
+    /\bfrente\s+(?:al|a la|a)\s+([^.,;\n]+)/i,
+    /\ben\s+la\s+entrada\s+(?:del|de la)\s+([^.,;\n]+)/i,
+    /\b(?:en|por)\s+((?:el\s+)?barrio\s+[^.,;\n]+)/i,
+    /\b(?:en|por)\s+((?:la\s+)?vereda\s+[^.,;\n]+)/i,
+    /\b(?:sector|zona)\s+([^.,;\n]+)/i,
   ];
 
   for (const pattern of patterns) {
@@ -255,78 +480,216 @@ function inferLocation(text: string) {
     const value = match?.[1]?.trim();
 
     if (value && value.length >= 3) {
-      return sanitizeText(value, 120);
+      const sanitized = sanitizeText(value, 120);
+      const normalized = normalizeText(sanitized);
+
+      if (
+        ![
+          "el anden",
+          "anden",
+          "la via",
+          "via",
+          "la calle",
+          "calle",
+          "el lugar",
+          "lugar",
+        ].includes(normalized)
+      ) {
+        return sanitized;
+      }
     }
   }
 
   return undefined;
 }
 
-export function isCitizenReportMessage(text: string) {
-  const normalized = normalizeText(text);
-  return REPORT_KEYWORDS.some((keyword) => normalized.includes(normalizeText(keyword)));
+function getMatchedReportKeywords(normalizedText: string) {
+  const keywordMatches = REPORT_KEYWORDS.filter((keyword) =>
+    normalizedText.includes(normalizeText(keyword)),
+  ).map(normalizeText);
+  const naturalMatches = REPORT_NATURAL_PATTERNS.filter((pattern) =>
+    pattern.test(normalizedText),
+  ).map((pattern) => pattern.source);
+
+  return [...new Set([...keywordMatches, ...naturalMatches])];
 }
 
-export function classifyCitizenReport(text: string): {
-  type: string;
-  category: string;
-  priority: CitizenReportPriority;
-  title: string;
-  location?: string;
-} {
+function buildReportTitle(category: string, text: string) {
+  const cleaned = sanitizeText(text.replace(/^(denuncia|reporte|alerta)\s*:\s*/i, ""), 70);
+  return `${category}: ${cleaned || "Reporte ciudadano"}`;
+}
+
+export function isCitizenReportMessage(text: string) {
+  return detectCitizenReportIntent(text).isReport;
+}
+
+export function detectCitizenReportIntent(
+  text: string,
+  messageType = "chat",
+): CitizenReportIntent {
   const normalized = normalizeText(text);
+  const matchedKeywords = getMatchedReportKeywords(normalized);
   let category = "Otro";
   let priority: CitizenReportPriority = "normal";
   let type = "general";
 
-  if (/(accidente|choque|herido|ambulancia)/.test(normalized)) {
-    category = "Accidente";
-    priority = "urgent";
-    type = "transito";
-  } else if (/(trancon|via cerrada|vía cerrada|bloqueando la via|bloqueando la vía)/.test(normalized)) {
-    category = "Tránsito";
-    priority = "high";
-    type = "transito";
-  } else if (/(mal parquead|anden|andén|invadiendo)/.test(normalized)) {
-    category = "Vehículo mal parqueado";
-    priority = "normal";
-    type = "transito";
-  } else if (/(semaforo|semáforo)/.test(normalized)) {
-    category = "Semáforo dañado";
-    priority = "high";
-    type = "transito";
-  } else if (normalized.includes("hueco")) {
-    category = "Hueco en vía";
-    priority = "normal";
-    type = "infraestructura";
-  } else if (/(arbol caido|árbol caído)/.test(normalized)) {
-    category = "Árbol caído";
-    priority = "high";
-    type = "emergencia";
-  } else if (/(inundacion|inundación)/.test(normalized)) {
-    category = "Inundación";
-    priority = "urgent";
-    type = "emergencia";
-  } else if (/basura/.test(normalized)) {
-    category = "Basuras";
-    priority = "normal";
-    type = "convivencia";
-  } else if (/ruido/.test(normalized)) {
-    category = "Ruido";
-    priority = "low";
-    type = "convivencia";
-  } else if (/emergencia|poste caido|poste caído/.test(normalized)) {
-    category = "Emergencia";
-    priority = "urgent";
-    type = "emergencia";
+  for (const rule of CLASSIFICATION_RULES) {
+    if (rule.pattern.test(normalized)) {
+      category = rule.category;
+      priority = rule.priority;
+      type = rule.type;
+      break;
+    }
   }
 
+  const isReport =
+    Boolean(normalized) &&
+    (matchedKeywords.length > 0 ||
+      category !== "Otro" ||
+      (messageType.toLowerCase() === "image" && normalized.length > 0));
+  const location = inferLocation(text);
+
   return {
+    isReport,
     type,
     category,
     priority,
-    title: `${category}: ${sanitizeText(text, 70)}`,
-    location: inferLocation(text),
+    title: buildReportTitle(category, text),
+    location,
+    needsLocation: isReport && !location,
+    needsImage: isReport,
+    isUrgentSituation: URGENT_SITUATION_PATTERN.test(normalized),
+    matchedKeywords,
+  };
+}
+
+export function classifyCitizenReport(text: string) {
+  return detectCitizenReportIntent(text);
+}
+
+function buildCitizenReportReply(intent: CitizenReportIntent, hasImage: boolean) {
+  if (intent.isUrgentSituation) {
+    if (intent.needsLocation) {
+      return [
+        "Gracias por avisar. Registramos el reporte como posible situación urgente para revisión.",
+        "",
+        "Dime por favor la ubicación exacta o el sector donde ocurre. Si hay personas heridas o riesgo inmediato, comunícate también con la línea de emergencias correspondiente.",
+      ].join("\n");
+    }
+
+    return [
+      "Gracias por avisar. Registramos el reporte como posible situación urgente para revisión.",
+      "",
+      "Si hay personas heridas o riesgo inmediato, por favor comunícate también con la línea de emergencias correspondiente.",
+    ].join("\n");
+  }
+
+  if (intent.needsLocation) {
+    if (intent.category === "Accidente") {
+      return "Gracias por reportarlo. Para registrarlo bien, dime por favor la ubicación exacta o el sector donde ocurrió el accidente. Si puedes, envía también una foto del lugar.";
+    }
+
+    return "Gracias por reportarlo. Para registrarlo correctamente, dime por favor en qué sector o dirección ocurrió. Si puedes, envía también una foto del lugar.";
+  }
+
+  if (hasImage) {
+    return [
+      "Gracias por reportarlo. Ya recibimos la información y la imagen del suceso. El caso queda registrado para revisión del equipo administrativo.",
+      "",
+      "Si tienes otro dato, como un punto de referencia más exacto, puedes enviarlo por aquí.",
+    ].join("\n");
+  }
+
+  return [
+    "Gracias por reportarlo. Ya registramos la información para revisión.",
+    "",
+    "Si puedes, envíanos una foto del lugar para ayudar a identificar mejor el caso.",
+  ].join("\n");
+}
+
+export async function handleCitizenReport(
+  input: HandleCitizenReportInput,
+): Promise<HandleCitizenReportResult> {
+  const messageType = input.messageType.toLowerCase();
+  const hasImage = Boolean(input.hasImage || input.images?.length);
+  const description = sanitizeText(input.text);
+  const intent =
+    input.reportIntent ?? detectCitizenReportIntent(description, messageType);
+
+  if (hasImage) {
+    console.log("[citizen-reports] image received", {
+      storedImages: input.images?.length ?? 0,
+    });
+  }
+
+  if (!description) {
+    return {
+      handled: true,
+      reply:
+        "Recibimos la imagen. Cuéntanos por favor qué ocurrió y en qué lugar para poder registrar el reporte correctamente.",
+      needsMoreInfo: true,
+    };
+  }
+
+  if (!intent.isReport && messageType !== "image") {
+    return { handled: false };
+  }
+
+  if (!intent.isReport && messageType === "image") {
+    return {
+      handled: true,
+      reply:
+        "Recibimos la imagen. Cuéntanos por favor qué ocurrió y en qué lugar para poder registrar el reporte correctamente.",
+      needsMoreInfo: true,
+    };
+  }
+
+  console.log("[citizen-reports] intent detected", {
+    messageType,
+    category: intent.category,
+    priority: intent.priority,
+    reporter: maskPhone(input.recipient),
+  });
+  console.log("[citizen-reports] category classified", {
+    category: intent.category,
+    priority: intent.priority,
+    locationFound: Boolean(intent.location),
+  });
+
+  if (intent.needsLocation) {
+    console.log("[citizen-reports] missing location", {
+      category: intent.category,
+      priority: intent.priority,
+    });
+  }
+
+  console.log("[citizen-reports] creating report", {
+    category: intent.category,
+    priority: intent.priority,
+    hasImage,
+    reporter: maskPhone(input.recipient),
+  });
+
+  const report = await createCitizenReport({
+    title: intent.title,
+    description,
+    type: intent.type,
+    category: intent.category,
+    priority: intent.priority,
+    location: intent.location,
+    source: "whatsapp",
+    reporterPhone: input.recipient,
+    whatsappMessageId: input.whatsappMessageId,
+    whatsappFrom: input.whatsappFrom,
+    whatsappRawType: input.whatsappRawType ?? messageType,
+    images: input.images ?? [],
+  });
+
+  return {
+    handled: true,
+    reply: buildCitizenReportReply(intent, hasImage),
+    report,
+    needsMoreInfo: intent.needsLocation || !hasImage,
   };
 }
 
@@ -698,7 +1061,15 @@ function buildMassMessageDraft(report: CitizenReportSummary) {
     report.category === "Accidente" ||
     report.category === "Tránsito" ||
     report.category === "Vehículo mal parqueado" ||
-    report.category === "Semáforo dañado";
+    report.category === "Semáforo dañado" ||
+    report.category === "Riesgo vial";
+  const isEmergency =
+    report.priority === "urgent" ||
+    report.category === "Incendio" ||
+    report.category === "Explosión" ||
+    report.category === "Seguridad" ||
+    report.category === "Emergencia" ||
+    report.category === "Riesgo";
   const locationLine = report.location ? ` en ${report.location}` : "";
 
   if (isTraffic) {
@@ -710,6 +1081,27 @@ function buildMassMessageDraft(report: CitizenReportSummary) {
         `Se reporta ${report.description}${locationLine}, con posible afectacion en la movilidad del sector.`,
         "",
         "Recomendamos transitar con precaucion, tomar rutas alternas si es posible y estar atentos a las indicaciones de las autoridades.",
+        "",
+        "Alcaldia de Rionegro.",
+      ].join("\n"),
+      type: "ALERT",
+    };
+  }
+
+  if (isEmergency) {
+    const emergencyLine =
+      report.category === "Incendio"
+        ? `Se reporta una posible emergencia por incendio${locationLine}.`
+        : `Se reporta una posible situacion urgente${locationLine}.`;
+
+    return {
+      title: `Borrador alerta ciudadana: ${report.category ?? "Emergencia"}`,
+      message: [
+        "Alerta ciudadana en Rionegro",
+        "",
+        emergencyLine,
+        "",
+        "Recomendamos evitar acercarse al lugar si hay riesgo y estar atentos a las indicaciones de las autoridades.",
         "",
         "Alcaldia de Rionegro.",
       ].join("\n"),
@@ -855,5 +1247,7 @@ export const citizenReportInternals = {
   REPORT_PRIORITIES,
   isAllowedImage,
   isCitizenReportMessage,
+  detectCitizenReportIntent,
   classifyCitizenReport,
+  handleCitizenReport,
 };

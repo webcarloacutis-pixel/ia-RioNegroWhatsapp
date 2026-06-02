@@ -5,6 +5,7 @@ import "./lib/format.test";
 import "./lib/validations.test";
 import "./server/assistant-session.test";
 import "./server/message-service.test";
+import "./server/citizen-report-service.test";
 import "./server/serializers.test";
 import "./server/assistant-analytics-service.test";
 import "./server/rionegro-assistant-internals.test";

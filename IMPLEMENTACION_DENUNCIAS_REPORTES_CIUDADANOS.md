@@ -1,169 +1,296 @@
 # Implementacion denuncias y reportes ciudadanos
 
-## 1. Que se agrego
+## Que cambio
 
-Se agrego un modulo para recibir, clasificar y administrar denuncias o reportes
-ciudadanos enviados por WhatsApp. El flujo cubre texto e imagen con caption:
+Se reforzo el flujo de WhatsApp para que las denuncias, reportes, alertas,
+emergencias y casos ciudadanos entren primero en `MODO REPORTE CIUDADANO`.
+
+Regla principal:
 
 ```text
-WhatsApp -> UltraMsg -> /api/webhook -> deteccion de reporte -> Prisma/fallback -> panel admin
+Primero detectar denuncia/reporte/alerta.
+Solo si NO es reporte, pasar al asistente general de la Alcaldia.
 ```
 
-El sistema confirma al ciudadano la recepcion, pero no publica ni envia mensajes
-masivos sin revision humana.
+Esto evita que mensajes como `Hay un accidente en la via Llanogrande` o
+`DENUNCIA: carro mal parqueado bloqueando la entrada` reciban respuestas de
+tramites, direcciones o informacion general.
 
-## 2. Archivos creados
+## Archivos principales
 
 - `src/server/citizen-report-service.ts`
+- `src/app/api/ultramsg/webhook/route.ts`
 - `src/components/modules/citizen-reports-manager.tsx`
 - `src/app/dashboard/denuncias/page.tsx`
 - `src/app/api/admin/citizen-reports/route.ts`
 - `src/app/api/admin/citizen-reports/[id]/route.ts`
 - `src/app/api/admin/citizen-reports/[id]/convert-to-mass-message/route.ts`
-- `IMPLEMENTACION_DENUNCIAS_REPORTES_CIUDADANOS.md`
-
-## 3. Archivos modificados
-
 - `prisma/schema.prisma`
-- `src/lib/types.ts`
-- `src/app/api/ultramsg/webhook/route.ts`
-- `src/components/layout/app-shell.tsx`
-- `src/app/dashboard/page.tsx`
-- `src/components/dashboard/dashboard-overview.tsx`
 
-## 4. Flujo desde WhatsApp
+## Deteccion de reportes
 
-1. UltraMsg llama `POST /api/webhook`.
-2. El webhook parsea el mensaje como antes.
-3. Antes de llamar al asistente normal, se revisa si el texto parece denuncia,
-   reporte, alerta o caso de transito.
-4. Si coincide, se crea un `CitizenReport`.
-5. El ciudadano recibe confirmacion.
-6. El reporte aparece en `/dashboard/denuncias`.
+El servicio expone:
 
-El bot normal sigue funcionando para mensajes que no parecen reportes.
+```ts
+detectCitizenReportIntent(text, messageType)
+classifyCitizenReport(text)
+handleCitizenReport(input)
+```
 
-## 5. Panel admin
+Detecta palabras y frases naturales como:
 
-La ruta nueva es:
+```text
+denuncia, reporte, alerta, accidente, choque, trancon, taco, via cerrada,
+carro mal parqueado, moto en el anden, semaforo, hueco, arbol caido,
+inundacion, poste caido, cable caido, basura, ruido, incendio, explosion,
+atentado, balacera, disparos, fuga de gas, derrumbe, deslizamiento,
+manifestacion, bloqueo vial, animal en la via, aceite en la via
+```
+
+Tambien detecta frases sin la palabra "denuncia":
+
+```text
+Hay un accidente en...
+Se cayo un arbol en...
+La via esta cerrada...
+El semaforo no sirve...
+Hay un hueco peligroso...
+Escuche disparos cerca al parque...
+```
+
+## Clasificacion
+
+La funcion `classifyCitizenReport(text)` devuelve:
+
+```ts
+{
+  isReport: boolean;
+  category: string;
+  priority: "low" | "normal" | "high" | "urgent";
+  title: string;
+  location?: string;
+  needsLocation: boolean;
+  needsImage: boolean;
+}
+```
+
+Reglas principales:
+
+- `accidente`, `choque`, `heridos`, `ambulancia`: `Accidente` / `urgent`
+- `trancon`, `taco`, `via cerrada`, `cierre vial`: `Transito` / `high`
+- `mal parqueado`, `anden`: `Vehiculo mal parqueado` / `normal`
+- `semaforo`: `Semaforo danado` / `high`
+- `hueco`: `Hueco en via` / `normal`
+- `arbol caido`: `Arbol caido` / `high`
+- `inundacion`: `Inundacion` / `urgent`
+- `poste caido`, `cable caido`: `Servicios publicos` / `high`
+- `incendio`, `explosion`, `fuga de gas`: `urgent`
+- `atentado`, `balacera`, `disparos`: `Seguridad` / `urgent`
+
+## Orden del webhook
+
+El webhook queda asi:
+
+```text
+1. Recibe payload UltraMsg.
+2. Extrae texto, caption, audio o imagen.
+3. Si es audio, transcribe primero.
+4. Detecta si es reporte ciudadano.
+5. Si es reporte, guarda y confirma.
+6. Si NO es reporte, llama al asistente general.
+```
+
+Para imagen:
+
+- Imagen con caption de reporte: crea reporte y asocia imagen si UltraMsg entrega URL.
+- Imagen sin texto: pide descripcion y ubicacion.
+- No se guarda base64 grande en Prisma.
+
+## Respuestas al ciudadano
+
+Si falta ubicacion:
+
+```text
+Gracias por reportarlo. Para registrarlo correctamente, dime por favor en que sector o direccion ocurrio. Si puedes, envia tambien una foto del lugar.
+```
+
+Si tiene descripcion y ubicacion:
+
+```text
+Gracias por reportarlo. Ya registramos la informacion para revision.
+
+Si puedes, envianos una foto del lugar para ayudar a identificar mejor el caso.
+```
+
+Si tiene imagen:
+
+```text
+Gracias por reportarlo. Ya recibimos la informacion y la imagen del suceso. El caso queda registrado para revision del equipo administrativo.
+```
+
+Si es una situacion urgente:
+
+```text
+Gracias por avisar. Registramos el reporte como posible situacion urgente para revision.
+
+Si hay personas heridas o riesgo inmediato, por favor comunicate tambien con la linea de emergencias correspondiente.
+```
+
+Nunca se afirma que ya se envio patrulla, ambulancia, transito o bomberos.
+
+## Panel admin
+
+La ruta del panel es:
 
 ```text
 /dashboard/denuncias
 ```
 
-Permite:
+Muestra:
 
-- Ver reportes recientes.
-- Filtrar por estado.
-- Buscar por descripcion, ubicacion o telefono.
-- Ver detalle.
-- Ver imagenes si UltraMsg entrega una URL.
-- Cambiar estado.
-- Guardar notas internas.
-- Convertir en borrador de comunicado masivo.
+- Contador de pendientes.
+- Contador de urgentes.
+- Descripcion.
+- Ubicacion detectada.
+- Categoria.
+- Prioridad.
+- Estado.
+- Fecha.
+- Telefono del reportante solo para admin.
+- Imagen o enlace si existe.
+- Acciones de estado.
+- Conversion a alerta masiva como borrador.
 
-## 6. Notificacion visual
+Los reportes `urgent` quedan destacados visualmente.
 
-Se agrego:
+## Conversion a alerta masiva
 
-- Badge con contador en el menu lateral.
-- Banner en el dashboard principal cuando hay reportes pendientes.
-- Polling cada 30 segundos desde el menu para actualizar el contador.
+El boton `Convertir en alerta masiva` crea un borrador editable en el modulo de
+comunicados.
 
-No se implementaron WebSockets.
+Importante:
 
-## 7. Imagenes
+- No se envia automaticamente.
+- No incluye telefono ni datos privados del ciudadano.
+- El admin debe revisar y editar antes de enviar.
+- El reporte pasa a `converted_to_mass_message`.
 
-UltraMsg puede enviar imagen en claves como:
+## Imagenes
+
+UltraMsg puede enviar imagen en:
 
 ```text
 media, mediaUrl, media_url, downloadUrl, download_url, url, file, image, body
 ```
 
-La implementacion guarda solo URL y metadata si la imagen viene como URL HTTP/HTTPS
-y parece ser `jpg`, `jpeg`, `png` o `webp`.
+Se guarda URL y metadata cuando la imagen llega por HTTP/HTTPS y cumple tipo
+permitido: `jpg`, `jpeg`, `png` o `webp`.
 
-No se guarda base64 pesado en Prisma.
+Limitacion actual: si UltraMsg entrega base64 o una URL temporal, falta conectar
+storage persistente como Cloudinary, S3, Supabase Storage u otro.
 
-Limitacion actual: no hay storage persistente conectado. Si UltraMsg entrega base64
-o una URL temporal que expire, hace falta conectar Cloudinary, S3, Supabase Storage
-u otro almacenamiento persistente para conservar la imagen.
+## Logs esperados
 
-## 8. Conversion a alerta masiva
+```text
+[citizen-reports] intent detected
+[citizen-reports] category classified
+[citizen-reports] missing location
+[citizen-reports] image received
+[citizen-reports] creating report
+[citizen-reports] report created
+[citizen-reports] duplicate skipped
+[citizen-reports] confirmation sent
+[citizen-reports] routed to general assistant
+```
 
-El boton `Convertir en alerta masiva` crea un comunicado programado a futuro con
-contenido sugerido.
+## Pruebas desde WhatsApp
 
-Importante:
+Mensaje general:
 
-- No se envia automaticamente.
-- Queda para revision y edicion del admin.
-- El reporte cambia a `converted_to_mass_message`.
-- Se guarda `massMessageId`.
+```text
+Hola, donde queda la Alcaldia?
+```
 
-Como el modelo actual de comunicados no tiene estado `DRAFT`, se crea como
-`SCHEDULED` con fecha futura, para evitar envio automatico inmediato.
+Resultado esperado: responde el asistente general. No crea reporte.
 
-## 9. Probar texto
-
-Enviar desde WhatsApp:
+Denuncia:
 
 ```text
 DENUNCIA: carro mal parqueado bloqueando la entrada del hospital
 ```
 
-Resultado esperado:
+Resultado esperado: crea reporte y no responde con direccion de la Alcaldia.
 
-- El ciudadano recibe confirmacion.
-- Render muestra `[citizen-reports] report created`.
-- El reporte aparece en `/dashboard/denuncias`.
-
-## 10. Probar reporte de transito
+Accidente:
 
 ```text
-REPORTE: accidente de transito en la via Llanogrande
+Hay un accidente en la via Llanogrande
 ```
 
-Resultado esperado:
+Resultado esperado: crea reporte `Accidente` con prioridad `urgent`.
 
-- Categoria `Accidente`.
-- Prioridad `urgent`.
-- Aparece en el panel admin.
-
-## 11. Probar imagen con caption
-
-Enviar una imagen con caption:
+Arbol caido:
 
 ```text
-Alerta: semaforo dañado cerca al parque principal
+Se cayo un arbol via Ojos de Agua
 ```
 
-Resultado esperado:
+Resultado esperado: crea reporte `Arbol caido` con prioridad `high`.
 
-- Se crea reporte.
-- Se asocia la imagen si UltraMsg entrega URL util.
-- Aparece miniatura/enlace en el panel.
-
-## 12. Probar imagen sin caption
-
-Enviar una imagen sin texto.
-
-Resultado esperado:
+Hueco sin ubicacion:
 
 ```text
-Recibimos la imagen. Por favor envianos una breve descripcion de lo que sucedio y la ubicacion para crear el reporte correctamente.
+Hay un hueco peligroso
 ```
 
-No se crea un reporte incompleto.
+Resultado esperado: crea reporte y pide ubicacion.
 
-## 13. Probar en Render
+Taco:
 
-Despues de desplegar:
+```text
+Hay un taco en la via hacia el aeropuerto
+```
+
+Resultado esperado: crea reporte `Transito` con prioridad `high`.
+
+Incendio:
+
+```text
+Hay un incendio en una casa en San Antonio
+```
+
+Resultado esperado: crea reporte `Incendio` con prioridad `urgent`.
+
+Disparos:
+
+```text
+Escuche disparos cerca al parque
+```
+
+Resultado esperado: crea reporte `Seguridad` con prioridad `urgent`.
+
+Imagen con caption:
+
+```text
+Alerta: semaforo danado cerca al parque principal
+```
+
+Resultado esperado: crea reporte con imagen si UltraMsg entrega URL util.
+
+Imagen sin caption:
+
+```text
+Sin texto
+```
+
+Resultado esperado: pide descripcion y ubicacion; no pasa al asistente general.
+
+## Probar con curl
 
 ```bash
 curl -X POST "https://ia-rionegrowhatsapp.onrender.com/api/webhook" \
   -H "Content-Type: application/json" \
-  -d '{"event_type":"message_received","instanceId":"instance177604","data":{"id":"report-test-001","from":"573001330213@c.us","body":"DENUNCIA: carro mal parqueado bloqueando la entrada del hospital","type":"chat","fromMe":false}}'
+  -d '{"event_type":"message_received","instanceId":"instance177604","data":{"id":"report-test-accidente-001","from":"573001330213@c.us","body":"Hay un accidente en la via Llanogrande","type":"chat","fromMe":false}}'
 ```
 
 Luego abrir:
@@ -172,53 +299,16 @@ Luego abrir:
 https://ia-rionegrowhatsapp.onrender.com/dashboard/denuncias
 ```
 
-## 14. Revisar UltraMsg
+## Prisma
 
-- Webhook on Received = ON
-- Webhook Download Media = ON
-- Webhook on Create = OFF
-- Webhook on ACK = OFF
-- Webhook On Reaction = OFF
-- URL = `https://ia-rionegrowhatsapp.onrender.com/api/webhook`
-
-## 15. Variables nuevas
-
-No se agregaron variables nuevas obligatorias.
-
-Para imagen persistente falta configurar un storage externo si se quiere conservar
-archivos que lleguen como base64 o URLs temporales.
-
-## 16. Seguridad y privacidad
-
-- Los reportes no se publican automaticamente.
-- Los mensajes masivos no se envian automaticamente.
-- El telefono solo se muestra en admin.
-- Se deduplica por `whatsappMessageId`.
-- No se guardan imagenes base64 grandes en base de datos.
-- Se validan tipos de imagen permitidos.
-- No se loguean tokens ni API keys.
-
-## 17. Logs esperados
-
-```text
-[citizen-reports] detected whatsapp report
-[citizen-reports] image detected
-[citizen-reports] report created
-[citizen-reports] duplicate skipped
-[citizen-reports] admin list loaded
-[citizen-reports] converted to mass message draft
-```
-
-## 18. Migracion Prisma
-
-En Render o local:
+Si falta aplicar el modelo en Render o local:
 
 ```bash
 npx prisma generate
 npx prisma db push
 ```
 
-Si se usa el build recomendado:
+Build recomendado en Render:
 
 ```bash
 npm install && npx prisma generate && npx prisma db push && npm run build
