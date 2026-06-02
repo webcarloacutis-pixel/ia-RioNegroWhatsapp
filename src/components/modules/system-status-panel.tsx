@@ -195,6 +195,7 @@ export function SystemStatusPanel({ snapshot }: SystemStatusPanelProps) {
                 <span>Promedio: {simulation.avgMs}ms</span>
                 <span>p95: {simulation.p95Ms}ms</span>
                 <span>p99: {simulation.p99Ms}ms</span>
+                <span>Intenciones detectadas: {simulation.intentDetected}</span>
                 <span>Reportes creados: {simulation.citizenReportsCreated}</span>
                 <span>Comunicados simulados: {simulation.announcementsSimulated}</span>
               </div>

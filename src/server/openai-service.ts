@@ -4,8 +4,16 @@ const globalForOpenAI = globalThis as unknown as {
   __rionegroOpenAIClient?: OpenAI | null;
 };
 
+function isSimulationMode() {
+  return process.env.SIMULATION_MODE === "true";
+}
+
+export function isOpenAIMockMode() {
+  return process.env.OPENAI_MOCK === "true" || isSimulationMode();
+}
+
 export function isOpenAIConfigured() {
-  return Boolean(process.env.OPENAI_API_KEY);
+  return Boolean(process.env.OPENAI_API_KEY) || isOpenAIMockMode();
 }
 
 export function getOpenAIModel() {
@@ -17,6 +25,10 @@ export function getOpenAITranscriptionModel() {
 }
 
 function getClient() {
+  if (isOpenAIMockMode()) {
+    return null;
+  }
+
   if (!isOpenAIConfigured()) {
     return null;
   }
@@ -34,6 +46,14 @@ export async function generateOpenAIText(input: {
   systemPrompt: string;
   userPrompt: string;
 }) {
+  if (isOpenAIMockMode()) {
+    console.log("[openai] mock text generated", {
+      chars: input.userPrompt.length,
+    });
+
+    return "Respuesta mock de OpenAI para simulacion segura.";
+  }
+
   const client = getClient();
 
   if (!client) {
@@ -82,6 +102,16 @@ export async function transcribeAudio(input: {
   mimeType?: string;
   language?: string;
 }) {
+  if (isOpenAIMockMode()) {
+    console.log("[transcription] mock result", {
+      filename: input.filename ?? "nota-voz.ogg",
+      mimeType: input.mimeType ?? "audio/ogg",
+      language: input.language ?? "es",
+    });
+
+    return "Transcripcion mock de nota de voz para simulacion segura.";
+  }
+
   const client = getClient();
 
   if (!client) {

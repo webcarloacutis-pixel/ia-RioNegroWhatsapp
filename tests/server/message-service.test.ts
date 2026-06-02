@@ -88,3 +88,25 @@ test("sendMessage en dry-run simula UltraMsg con destinatarios", async () => {
   process.env.WHATSAPP_DRY_RUN = previousDryRun;
   process.env.WHATSAPP_SAFE_MODE = previousSafeMode;
 });
+
+test("ULTRAMSG_MOCK bloquea llamadas reales aunque WHATSAPP_DRY_RUN este apagado", async () => {
+  const previousDryRun = process.env.WHATSAPP_DRY_RUN;
+  const previousUltraMsgMock = process.env.ULTRAMSG_MOCK;
+  const previousToken = process.env.ULTRAMSG_TOKEN;
+
+  process.env.WHATSAPP_DRY_RUN = "false";
+  process.env.ULTRAMSG_MOCK = "true";
+  process.env.ULTRAMSG_TOKEN = "";
+
+  const result = await sendWhatsAppText({
+    to: "+573001330213",
+    message: "Prueba UltraMsg mock",
+  });
+
+  assert.equal(result.sent, true);
+  assert.equal(result.simulated, true);
+
+  process.env.WHATSAPP_DRY_RUN = previousDryRun;
+  process.env.ULTRAMSG_MOCK = previousUltraMsgMock;
+  process.env.ULTRAMSG_TOKEN = previousToken;
+});

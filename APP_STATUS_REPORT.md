@@ -1,6 +1,6 @@
 # APP STATUS REPORT
 
-Generado: 2026-06-02T03:19:58.724Z
+Generado: 2026-06-02T03:33:18.975Z
 
 ## Resumen
 
@@ -16,16 +16,16 @@ Modulo | Estado | Riesgo | Evidencia | Que falta | Como probar
 --- | --- | --- | --- | --- | ---
 Auth | OK | Bajo | Login por cookie httpOnly; no depende de Prisma. | Monitoreo continuo | /dashboard/estado-sistema
 Dashboard | Parcial | Medio | Debe mostrar fallback si Prisma falla. | Revisar diagnostico y logs | /dashboard/estado-sistema
-Comunicados | Falla | Alto | Prisma datasource invalido: la URL/runtime no coincide con el cliente generado. | Revisar diagnostico y logs | /dashboard/estado-sistema
+Comunicados | Falla | Alto | Invalid `prisma.announcement.count()` invocation in [local-path] 262 try { 263 const [scheduled, sent, failedLogs, demoLogs, manualLogs, segmentsWithRecipients, due] = 264 await Promise.all([ → 265 prisma.announcement.count( Server has clos | Revisar diagnostico y logs | /dashboard/estado-sistema
 Envio WhatsApp | Parcial | Medio | UltraMsg configurado, pero safe mode bloquea envios proactivos reales. | Revisar diagnostico y logs | /dashboard/estado-sistema
 UltraMsg webhook | OK | Bajo | Webhook publico activo en /api/webhook y /api/ultramsg/webhook. | Monitoreo continuo | /dashboard/estado-sistema
-Denuncias ciudadanas | Falla | Alto | Prisma datasource invalido: la URL/runtime no coincide con el cliente generado. | Revisar diagnostico y logs | /dashboard/estado-sistema
+Denuncias ciudadanas | Falla | Alto | Invalid `prisma.citizenReport.count()` invocation in [local-path] 325 326 try { 327 const [total, pending, urgent, withImages] = await Promise.all([ → 328 prisma.citizenReport.count( Server has closed the connection. | Revisar diagnostico y logs | /dashboard/estado-sistema
 Conversaciones | Parcial | Medio | Depende de AssistantQueryLog con fallback en memoria. | Revisar diagnostico y logs | /dashboard/estado-sistema
-Asistente IA | OK | Bajo | OpenAI configurado. | Monitoreo continuo | /dashboard/estado-sistema
-Prisma DB | Falla | Alto | Prisma datasource invalido: la URL/runtime no coincide con el cliente generado. | Revisar diagnostico y logs | /dashboard/estado-sistema
-OpenAI | OK | Bajo | API key presente. | Monitoreo continuo | /dashboard/estado-sistema
-ElevenLabs | OK | Bajo | API key y voice id presentes. | Monitoreo continuo | /dashboard/estado-sistema
-Render runtime | OK | Bajo | NODE_ENV=undefined; dryRun=false | Monitoreo continuo | /dashboard/estado-sistema
+Asistente IA | OK | Bajo | OpenAI en modo mock seguro. | Monitoreo continuo | /dashboard/estado-sistema
+Prisma DB | Falla | Alto | Invalid `prisma.$queryRaw()` invocation: Server has closed the connection. | Revisar diagnostico y logs | /dashboard/estado-sistema
+OpenAI | OK | Bajo | OPENAI_MOCK/SIMULATION_MODE activo; no se consumen creditos. | Monitoreo continuo | /dashboard/estado-sistema
+ElevenLabs | OK | Bajo | ELEVENLABS_MOCK/SIMULATION_MODE activo; no se genera audio real. | Monitoreo continuo | /dashboard/estado-sistema
+Render runtime | OK | Bajo | NODE_ENV=undefined; dryRun=true | Monitoreo continuo | /dashboard/estado-sistema
 
 ## Rutas 200 esperadas
 
@@ -107,8 +107,11 @@ Render runtime | OK | Bajo | NODE_ENV=undefined; dryRun=false | Monitoreo contin
 - ULTRAMSG_BASE_URL
 - ULTRAMSG_DEFAULT_TO o segmentos con telefonos
 - OPENAI_API_KEY
+- OPENAI_MOCK
 - ELEVENLABS_API_KEY
 - ELEVENLABS_VOICE_ID
+- ELEVENLABS_MOCK
 - WHATSAPP_SAFE_MODE
 - WHATSAPP_DRY_RUN
+- ULTRAMSG_MOCK
 - SIMULATION_MODE

@@ -4,6 +4,14 @@ const DEFAULT_OUTPUT_FORMAT = "mp3_44100_128";
 const DEFAULT_LANGUAGE_CODE = "es";
 const MAX_SPEECH_TEXT_LENGTH = 1200;
 
+function isSimulationMode() {
+  return process.env.SIMULATION_MODE === "true";
+}
+
+export function isElevenLabsMockMode() {
+  return process.env.ELEVENLABS_MOCK === "true" || isSimulationMode();
+}
+
 function getElevenLabsApiKey() {
   return process.env.ELEVENLABS_API_KEY?.trim() ?? "";
 }
@@ -27,10 +35,26 @@ function trimSpeechText(text: string) {
 }
 
 export function isElevenLabsConfigured() {
-  return Boolean(getElevenLabsApiKey() && getElevenLabsVoiceId());
+  return Boolean(getElevenLabsApiKey() && getElevenLabsVoiceId()) || isElevenLabsMockMode();
 }
 
 export async function generateElevenLabsSpeech(text: string) {
+  if (isElevenLabsMockMode()) {
+    const outputFormat = getElevenLabsOutputFormat();
+
+    console.log("[elevenlabs] mock audio generated", {
+      chars: trimSpeechText(text).length,
+      outputFormat,
+    });
+
+    return {
+      audioBase64: Buffer.from("mock-elevenlabs-audio").toString("base64"),
+      mimeType: "audio/mpeg" as const,
+      outputFormat,
+      simulated: true,
+    };
+  }
+
   const apiKey = getElevenLabsApiKey();
   const voiceId = getElevenLabsVoiceId();
 

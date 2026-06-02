@@ -53,7 +53,11 @@ function isWhatsAppSafeMode() {
 }
 
 function isWhatsAppDryRunMode() {
-  return process.env.WHATSAPP_DRY_RUN === "true" || process.env.SIMULATION_MODE === "true";
+  return (
+    process.env.WHATSAPP_DRY_RUN === "true" ||
+    process.env.ULTRAMSG_MOCK === "true" ||
+    process.env.SIMULATION_MODE === "true"
+  );
 }
 
 function getSentInboundIds() {

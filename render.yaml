@@ -25,6 +25,8 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: OPENAI_MOCK
+        value: "false"
       - key: OPENAI_MODEL
         value: gpt-5-mini
       - key: OPENAI_TRANSCRIPTION_MODEL
@@ -37,12 +39,16 @@ services:
         sync: false
       - key: ULTRAMSG_TOKEN
         sync: false
+      - key: ULTRAMSG_MOCK
+        value: "false"
       - key: ULTRAMSG_DEFAULT_TO
         sync: false
       - key: ELEVENLABS_API_KEY
         sync: false
       - key: ELEVENLABS_VOICE_ID
         sync: false
+      - key: ELEVENLABS_MOCK
+        value: "false"
       - key: ELEVENLABS_MODEL_ID
         value: eleven_multilingual_v2
       - key: ELEVENLABS_OUTPUT_FORMAT
@@ -86,6 +92,8 @@ services:
         sync: false
       - key: OPENAI_API_KEY
         sync: false
+      - key: OPENAI_MOCK
+        value: "false"
       - key: OPENAI_MODEL
         value: gpt-5-mini
       - key: OPENAI_TRANSCRIPTION_MODEL
@@ -98,12 +106,16 @@ services:
         sync: false
       - key: ULTRAMSG_TOKEN
         sync: false
+      - key: ULTRAMSG_MOCK
+        value: "false"
       - key: ULTRAMSG_DEFAULT_TO
         sync: false
       - key: ELEVENLABS_API_KEY
         sync: false
       - key: ELEVENLABS_VOICE_ID
         sync: false
+      - key: ELEVENLABS_MOCK
+        value: "false"
       - key: ELEVENLABS_MODEL_ID
         value: eleven_multilingual_v2
       - key: ELEVENLABS_OUTPUT_FORMAT

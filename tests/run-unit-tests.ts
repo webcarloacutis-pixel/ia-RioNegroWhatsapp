@@ -7,6 +7,7 @@ import "./server/assistant-session.test";
 import "./server/message-service.test";
 import "./server/citizen-report-service.test";
 import "./server/debug-api-routes.test";
+import "./server/external-mock-services.test";
 import "./server/serializers.test";
 import "./server/assistant-analytics-service.test";
 import "./server/rionegro-assistant-internals.test";

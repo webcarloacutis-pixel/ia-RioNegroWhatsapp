@@ -4,10 +4,6 @@ import path from "node:path";
 import { detectCitizenReportIntent } from "@/server/citizen-report-service";
 import type { SimulationSummary } from "@/server/qa-service";
 
-process.env.WHATSAPP_DRY_RUN = "true";
-process.env.SIMULATION_MODE = "true";
-process.env.WHATSAPP_AUDIO_REPLIES = "false";
-
 type SimulatedMessage = {
   kind: "general" | "report" | "announcement" | "image" | "invalid";
   text: string;
@@ -43,6 +39,30 @@ const imageMessages = [
   "DENUNCIA: moto en el anden en el centro",
   "",
 ];
+
+const REQUIRED_SIMULATION_FLAGS = [
+  "SIMULATION_MODE",
+  "WHATSAPP_DRY_RUN",
+  "OPENAI_MOCK",
+  "ELEVENLABS_MOCK",
+  "ULTRAMSG_MOCK",
+] as const;
+
+function assertSimulationSafety() {
+  const missingFlags = REQUIRED_SIMULATION_FLAGS.filter(
+    (name) => process.env[name] !== "true",
+  );
+
+  if (missingFlags.length) {
+    throw new Error(
+      [
+        "Simulación bloqueada: faltan variables mock/dry-run para evitar consumo de créditos.",
+        `Activa: ${missingFlags.join(", ")}`,
+        "Requerido: SIMULATION_MODE=true WHATSAPP_DRY_RUN=true OPENAI_MOCK=true ELEVENLABS_MOCK=true ULTRAMSG_MOCK=true",
+      ].join("\n"),
+    );
+  }
+}
 
 function pick<T>(items: T[], index: number) {
   return items[index % items.length];
@@ -81,12 +101,15 @@ function percentile(values: number[], percentileValue: number) {
 }
 
 async function main() {
+  assertSimulationSafety();
+
   const total = 1000;
   const timings: number[] = [];
   const errorsByType: Record<string, number> = {};
   let success = 0;
   let failed = 0;
   let ignored = 0;
+  let intentDetected = 0;
   let citizenReportsCreated = 0;
   let announcementsSimulated = 0;
   let responsesGenerated = 0;
@@ -113,6 +136,10 @@ async function main() {
         message.hasImage ? "image" : "chat",
       );
 
+      if (intent.isReport) {
+        intentDetected += 1;
+      }
+
       if (intent.isReport || message.kind === "image") {
         citizenReportsCreated += intent.isReport ? 1 : 0;
       }
@@ -136,6 +163,7 @@ async function main() {
     success,
     failed,
     ignored,
+    intentDetected,
     citizenReportsCreated,
     announcementsSimulated,
     responsesGenerated,

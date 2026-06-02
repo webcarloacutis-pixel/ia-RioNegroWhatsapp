@@ -27,19 +27,28 @@ Validan endpoints de diagnostico, JSON sin secretos y modo dry-run.
 
 ## Simulacion de 1000 usuarios
 
+Antes de ejecutar, activar obligatoriamente:
+
+```env
+SIMULATION_MODE=true
+WHATSAPP_DRY_RUN=true
+OPENAI_MOCK=true
+ELEVENLABS_MOCK=true
+ULTRAMSG_MOCK=true
+```
+
 ```bash
 npm run simulate:1000
 ```
 
-La simulacion fuerza:
+Si falta alguna variable, el script aborta con:
 
-```env
-WHATSAPP_DRY_RUN=true
-SIMULATION_MODE=true
-WHATSAPP_AUDIO_REPLIES=false
+```text
+Simulación bloqueada: faltan variables mock/dry-run para evitar consumo de créditos.
 ```
 
-No envia mensajes reales a UltraMsg.
+La simulacion no envia mensajes reales a UltraMsg, no llama OpenAI y no genera
+audio real de ElevenLabs.
 
 Guarda resultados en:
 
@@ -99,6 +108,7 @@ Revisar:
 8. Que el worker `rionegro-panel-scheduler` este activo en Render.
 9. Que el segmento tenga telefonos o exista `ULTRAMSG_DEFAULT_TO`.
 10. Que `WHATSAPP_DRY_RUN` no este activo si se quiere envio real.
+11. Que `ULTRAMSG_MOCK` no este activo si se quiere envio real.
 
 ## Si aparecen errores 520
 

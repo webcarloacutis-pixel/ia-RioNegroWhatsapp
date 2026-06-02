@@ -24,6 +24,7 @@ export type SimulationSummary = {
   success: number;
   failed: number;
   ignored: number;
+  intentDetected: number;
   citizenReportsCreated: number;
   announcementsSimulated: number;
   avgMs: number;
@@ -150,6 +151,9 @@ export function getSafeEnvStatus() {
       WHATSAPP_LANGUAGE: flagValue("WHATSAPP_LANGUAGE"),
       WHATSAPP_DRY_RUN: flagValue("WHATSAPP_DRY_RUN"),
       SIMULATION_MODE: flagValue("SIMULATION_MODE"),
+      OPENAI_MOCK: flagValue("OPENAI_MOCK"),
+      ELEVENLABS_MOCK: flagValue("ELEVENLABS_MOCK"),
+      ULTRAMSG_MOCK: flagValue("ULTRAMSG_MOCK"),
     },
   };
 }
@@ -238,7 +242,7 @@ export function getUltraMsgDiagnostics() {
   }
 
   return {
-    ok: Boolean(exists("ULTRAMSG_TOKEN") && baseUrl),
+    ok: messageServiceInternals.isWhatsAppDryRunMode() || Boolean(exists("ULTRAMSG_TOKEN") && baseUrl),
     configured: messageServiceInternals.isUltraMsgConfigured(),
     provider: "ultramsg",
     baseUrlConfigured: Boolean(baseUrl),
@@ -247,7 +251,7 @@ export function getUltraMsgDiagnostics() {
     tokenConfigured: exists("ULTRAMSG_TOKEN"),
     defaultRecipientConfigured: exists("ULTRAMSG_DEFAULT_TO"),
     safeMode: messageServiceInternals.isWhatsAppSafeMode(),
-    dryRun: isSimulationMode(),
+    dryRun: messageServiceInternals.isWhatsAppDryRunMode(),
     error: baseUrlError,
   };
 }
@@ -365,8 +369,12 @@ export async function buildQaSnapshot() {
     getLatestSimulationResult(),
   ]);
 
-  const openAiConfigured = exists("OPENAI_API_KEY");
-  const elevenLabsConfigured = exists("ELEVENLABS_API_KEY") && exists("ELEVENLABS_VOICE_ID");
+  const openAiMock = process.env.OPENAI_MOCK === "true" || process.env.SIMULATION_MODE === "true";
+  const elevenLabsMock =
+    process.env.ELEVENLABS_MOCK === "true" || process.env.SIMULATION_MODE === "true";
+  const openAiConfigured = exists("OPENAI_API_KEY") || openAiMock;
+  const elevenLabsConfigured =
+    (exists("ELEVENLABS_API_KEY") && exists("ELEVENLABS_VOICE_ID")) || elevenLabsMock;
   const pendingReports = citizenReports.ok && "counts" in citizenReports
     ? citizenReports.counts?.pending ?? 0
     : await countPendingCitizenReports().catch(() => 0);
@@ -439,7 +447,11 @@ export async function buildQaSnapshot() {
     metric({
       module: "Asistente IA",
       status: openAiConfigured ? "ok" : "warning",
-      details: openAiConfigured ? "OpenAI configurado." : "Sin OPENAI_API_KEY; usar fallback.",
+      details: openAiMock
+        ? "OpenAI en modo mock seguro."
+        : openAiConfigured
+          ? "OpenAI configurado."
+          : "Sin OPENAI_API_KEY; usar fallback.",
     }),
     metric({
       module: "Prisma DB",
@@ -450,12 +462,20 @@ export async function buildQaSnapshot() {
     metric({
       module: "OpenAI",
       status: openAiConfigured ? "ok" : "warning",
-      details: openAiConfigured ? "API key presente." : "API key ausente.",
+      details: openAiMock
+        ? "OPENAI_MOCK/SIMULATION_MODE activo; no se consumen creditos."
+        : openAiConfigured
+          ? "API key presente."
+          : "API key ausente.",
     }),
     metric({
       module: "ElevenLabs",
       status: elevenLabsConfigured ? "ok" : "warning",
-      details: elevenLabsConfigured ? "API key y voice id presentes." : "Falta API key o voice id.",
+      details: elevenLabsMock
+        ? "ELEVENLABS_MOCK/SIMULATION_MODE activo; no se genera audio real."
+        : elevenLabsConfigured
+          ? "API key y voice id presentes."
+          : "Falta API key o voice id.",
     }),
     metric({
       module: "Render runtime",
