@@ -1,0 +1,16 @@
+{
+  "total": 1000,
+  "success": 950,
+  "failed": 0,
+  "ignored": 50,
+  "citizenReportsCreated": 367,
+  "announcementsSimulated": 150,
+  "responsesGenerated": 950,
+  "avgMs": 1,
+  "p95Ms": 1,
+  "p99Ms": 1,
+  "errorRate": 0,
+  "generatedAt": "2026-06-02T03:18:23.886Z",
+  "dryRun": true,
+  "errorsByType": {}
+}

@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { sendMessage, messageServiceInternals } from "@/server/messageService";
+import {
+  sendMessage,
+  sendWhatsAppText,
+  messageServiceInternals,
+} from "@/server/messageService";
 
 test("normalizeRecipient normaliza numeros colombianos", () => {
   assert.equal(messageServiceInternals.normalizeRecipient("310 885 3250"), "+573108853250");
@@ -36,4 +40,51 @@ test("sendMessage en modo DEMO devuelve conteo estimado sin depender de UltraMsg
 
   assert.equal(result.deliveredCount, 2);
   assert.match(result.log, /Enviado a 2 usuarios/);
+});
+
+test("sendWhatsAppText en dry-run no depende de token ni envia real", async () => {
+  const previousDryRun = process.env.WHATSAPP_DRY_RUN;
+  const previousToken = process.env.ULTRAMSG_TOKEN;
+
+  process.env.WHATSAPP_DRY_RUN = "true";
+  process.env.ULTRAMSG_TOKEN = "";
+
+  const result = await sendWhatsAppText({
+    to: "+573001330213",
+    message: "Prueba dry-run",
+    inboundReply: false,
+  });
+
+  assert.equal(result.sent, true);
+  assert.equal(result.simulated, true);
+  assert.equal(result.provider, "ultramsg");
+
+  process.env.WHATSAPP_DRY_RUN = previousDryRun;
+  process.env.ULTRAMSG_TOKEN = previousToken;
+});
+
+test("sendMessage en dry-run simula UltraMsg con destinatarios", async () => {
+  const previousDryRun = process.env.WHATSAPP_DRY_RUN;
+  const previousSafeMode = process.env.WHATSAPP_SAFE_MODE;
+
+  process.env.WHATSAPP_DRY_RUN = "true";
+  process.env.WHATSAPP_SAFE_MODE = "true";
+
+  const result = await sendMessage({
+    message: "Comunicado de prueba",
+    segment: {
+      id: "seg-test",
+      name: "Prueba",
+      estimatedUsers: 1,
+      recipientPhones: ["+573001330213"],
+    },
+    scheduledAt: new Date("2026-04-20T10:00:00.000Z"),
+    mode: "MANUAL",
+  });
+
+  assert.equal(result.deliveredCount, 1);
+  assert.match(result.log, /Dry-run UltraMsg OK/);
+
+  process.env.WHATSAPP_DRY_RUN = previousDryRun;
+  process.env.WHATSAPP_SAFE_MODE = previousSafeMode;
 });

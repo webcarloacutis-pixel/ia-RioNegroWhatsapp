@@ -51,6 +51,10 @@ services:
         value: es
       - key: WHATSAPP_SAFE_MODE
         value: "true"
+      - key: WHATSAPP_DRY_RUN
+        value: "false"
+      - key: SIMULATION_MODE
+        value: "false"
       - key: WHATSAPP_AUDIO_REPLIES
         value: "true"
       - key: WHATSAPP_SEND_TEXT_WITH_AUDIO
@@ -108,6 +112,10 @@ services:
         value: es
       - key: WHATSAPP_SAFE_MODE
         value: "true"
+      - key: WHATSAPP_DRY_RUN
+        value: "false"
+      - key: SIMULATION_MODE
+        value: "false"
       - key: WHATSAPP_AUDIO_REPLIES
         value: "true"
       - key: WHATSAPP_SEND_TEXT_WITH_AUDIO

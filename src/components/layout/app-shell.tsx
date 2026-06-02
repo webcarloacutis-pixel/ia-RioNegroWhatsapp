@@ -7,6 +7,7 @@ import {
   BarChart3,
   BookOpenText,
   Bot,
+  Activity,
   LayoutDashboard,
   LogOut,
   Menu,
@@ -33,6 +34,7 @@ const navigation = [
   { href: "/dashboard/base-conocimiento", label: "Base de conocimiento", icon: BookOpenText },
   { href: "/dashboard/segmentacion", label: "Segmentacion", icon: Radar },
   { href: "/dashboard/metricas", label: "Metricas", icon: BarChart3 },
+  { href: "/dashboard/estado-sistema", label: "Estado del Sistema", icon: Activity },
 ];
 
 type AppShellProps = {

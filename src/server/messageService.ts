@@ -52,6 +52,10 @@ function isWhatsAppSafeMode() {
   return process.env.WHATSAPP_SAFE_MODE === "true";
 }
 
+function isWhatsAppDryRunMode() {
+  return process.env.WHATSAPP_DRY_RUN === "true" || process.env.SIMULATION_MODE === "true";
+}
+
 function getSentInboundIds() {
   if (!globalForWhatsAppMessages.__rionegroWhatsAppSentInboundIds) {
     globalForWhatsAppMessages.__rionegroWhatsAppSentInboundIds = new Set<string>();
@@ -181,6 +185,27 @@ export async function sendWhatsAppText({
   inboundReply = false,
   inboundMessageId,
 }: WhatsAppTextInput) {
+  if (isWhatsAppDryRunMode()) {
+    console.log("[ultramsg] sending text", {
+      to: maskRecipient(to),
+      inboundReply,
+      dryRun: true,
+    });
+
+    console.log("[ultramsg] reply sent", {
+      to: maskRecipient(to),
+      type: "text",
+      dryRun: true,
+    });
+
+    return {
+      sent: true,
+      simulated: true,
+      provider: "ultramsg",
+      message: "dry-run ok",
+    };
+  }
+
   const safeReservation = reserveSafeInboundReply({
     inboundReply,
     inboundMessageId,
@@ -231,6 +256,27 @@ export async function sendWhatsAppAudio({
   inboundReply = false,
   inboundMessageId,
 }: WhatsAppAudioInput) {
+  if (isWhatsAppDryRunMode()) {
+    console.log("[ultramsg] sending audio", {
+      to: maskRecipient(to),
+      inboundReply,
+      dryRun: true,
+    });
+
+    console.log("[ultramsg] reply sent", {
+      to: maskRecipient(to),
+      type: "audio",
+      dryRun: true,
+    });
+
+    return {
+      sent: true,
+      simulated: true,
+      provider: "ultramsg",
+      message: "dry-run ok",
+    };
+  }
+
   const safeReservation = reserveSafeInboundReply({
     inboundReply,
     inboundMessageId,
@@ -284,6 +330,29 @@ export async function sendWhatsAppTextAfterAudioFailure({
   message,
   inboundMessageId,
 }: WhatsAppTextInput) {
+  if (isWhatsAppDryRunMode()) {
+    console.log("[ultramsg] sending text", {
+      to: maskRecipient(to),
+      inboundReply: true,
+      fallback: "audio_failed",
+      dryRun: true,
+    });
+
+    console.log("[ultramsg] reply sent", {
+      to: maskRecipient(to),
+      type: "text",
+      fallback: "audio_failed",
+      dryRun: true,
+    });
+
+    return {
+      sent: true,
+      simulated: true,
+      provider: "ultramsg",
+      message: "dry-run ok",
+    };
+  }
+
   const safeReservation = reserveSafeInboundReplyForFallback(inboundMessageId);
   const token = getUltraMsgToken();
   const data = qs.stringify({
@@ -360,9 +429,26 @@ async function sendMessageUltraMsg({
 
   const responses: unknown[] = [];
   const failures: string[] = [];
+  const dryRun = isWhatsAppDryRunMode();
+
+  if (dryRun) {
+    console.log("[announcements] dry-run mode", {
+      mode,
+      recipients: recipients.length,
+      segment: targetName,
+    });
+  }
 
   for (const recipient of recipients) {
     try {
+      if (!dryRun) {
+        console.log("[announcements] ultramsg sending", {
+          mode,
+          to: maskRecipient(recipient),
+          segment: targetName,
+        });
+      }
+
       const parsedBody = await sendWhatsAppText({
         to: recipient,
         message,
@@ -408,7 +494,9 @@ async function sendMessageUltraMsg({
     log:
       failures.length > 0
         ? `Enviado por UltraMsg a ${responses.length} destinatario(s). Fallaron: ${failures.join(", ")}`
-        : `Enviado por UltraMsg a ${recipients.join(", ")}`,
+        : dryRun
+          ? `Dry-run UltraMsg OK para ${responses.length} destinatario(s).`
+          : `Enviado por UltraMsg a ${recipients.join(", ")}`,
   };
 }
 
@@ -417,10 +505,15 @@ export async function sendMessage(input: SendMessageInput) {
     return sendMessageMock(input);
   }
 
+  if (isWhatsAppDryRunMode()) {
+    return sendMessageUltraMsg(input);
+  }
+
   if (isWhatsAppSafeMode()) {
-    console.warn(
-      "[messageService] WHATSAPP_SAFE_MODE activo. Se evita envio proactivo y se usa mock como respaldo.",
-    );
+    console.warn("[announcements] blocked by safe mode", {
+      mode: input.mode,
+      segment: input.segment?.name ?? "Cobertura general",
+    });
     return sendMessageMock(input);
   }
 
@@ -438,6 +531,7 @@ export const messageServiceInternals = {
   canResolveUltraMsgBaseUrl,
   getUltraMsgBaseUrl,
   isUltraMsgConfigured,
+  isWhatsAppDryRunMode,
   isWhatsAppSafeMode,
   normalizeRecipient,
   resolveRecipients,

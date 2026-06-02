@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
 
-import { getSafeEnvStatus } from "@/server/qa-service";
+import { getRouteDiagnostics } from "@/server/qa-service";
 
 export const runtime = "nodejs";
 
 export async function GET() {
-  return NextResponse.json(getSafeEnvStatus());
+  return NextResponse.json(getRouteDiagnostics());
 }

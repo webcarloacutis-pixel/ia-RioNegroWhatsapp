@@ -300,6 +300,11 @@ async function listAnnouncementsDb(): Promise<AnnouncementSummary[]> {
 }
 
 async function createAnnouncementDb(input: AnnouncementInput) {
+  console.log("[announcements] create requested", {
+    type: input.type,
+    hasSegment: Boolean(input.segmentId),
+  });
+
   const resolvedType = resolveAnnouncementTypeInput(input.type);
   const announcement = await prisma.announcement.create({
     data: {
@@ -320,6 +325,12 @@ async function createAnnouncementDb(input: AnnouncementInput) {
         },
       },
     },
+  });
+
+  console.log("[announcements] created", {
+    id: announcement.id,
+    status: announcement.status,
+    scheduledAt: announcement.scheduledAt.toISOString(),
   });
 
   return serializeAnnouncement(announcement);
@@ -363,6 +374,22 @@ async function deleteAnnouncementDb(id: string) {
 async function simulateAnnouncementSendDb(id: string) {
   const announcement = await getAnnouncementOrThrow(id);
   const audience = await resolveAudience(announcement.segmentId);
+
+  console.log("[announcements] send requested", {
+    id,
+    mode: "DEMO",
+  });
+  console.log("[announcements] recipients loaded", {
+    id,
+    segment: audience.name,
+    estimatedUsers: audience.estimatedUsers,
+    recipientPhones: audience.recipientPhones.length,
+  });
+  console.log("[announcements] dry-run mode", {
+    id,
+    mode: "DEMO",
+  });
+
   const result = await sendMessage({
     message: announcement.message,
     segment: audience,
@@ -394,6 +421,12 @@ async function simulateAnnouncementSendDb(id: string) {
     },
   });
 
+  console.log("[announcements] sent", {
+    id,
+    mode: "DEMO",
+    deliveredCount: result.deliveredCount,
+  });
+
   return {
     feedback: result.log,
     log: serializeDeliveryLog(log),
@@ -406,13 +439,40 @@ async function sendAnnouncementNowDb(
 ) {
   const announcement = await getAnnouncementOrThrow(id);
 
+  console.log("[announcements] send requested", {
+    id,
+    mode,
+  });
+
   const audience = await resolveAudience(announcement.segmentId);
+
+  console.log("[announcements] recipients loaded", {
+    id,
+    segment: audience.name,
+    estimatedUsers: audience.estimatedUsers,
+    recipientPhones: audience.recipientPhones.length,
+  });
+
+  if (!audience.recipientPhones.length && !process.env.ULTRAMSG_DEFAULT_TO?.trim()) {
+    console.warn("[announcements] no recipients", {
+      id,
+      segment: audience.name,
+    });
+  }
+
   const result = await sendMessage({
     message: announcement.message,
     segment: audience,
     scheduledAt: announcement.scheduledAt,
     mode,
     to: audience.recipientPhones.join(","),
+  }).catch((error) => {
+    console.error("[announcements] failed", {
+      id,
+      mode,
+      error: error instanceof Error ? error.message : "unknown_error",
+    });
+    throw error;
   });
 
   const [updatedAnnouncement, log] = await prisma.$transaction([
@@ -455,6 +515,12 @@ async function sendAnnouncementNowDb(
       },
     }),
   ]);
+
+  console.log("[announcements] sent", {
+    id,
+    mode,
+    deliveredCount: result.deliveredCount,
+  });
 
   return {
     feedback: result.log,

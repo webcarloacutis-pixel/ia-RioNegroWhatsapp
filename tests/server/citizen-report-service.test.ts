@@ -21,6 +21,12 @@ test("no marca preguntas generales de la Alcaldia como reportes", () => {
   assert.equal(intent.isReport, false);
 });
 
+test("no confunde solicitudes de comunicados con denuncias ciudadanas", () => {
+  const intent = detectCitizenReportIntent("Hay un comunicado para enviar");
+
+  assert.equal(intent.isReport, false);
+});
+
 test("pide ubicacion cuando el reporte no trae sector claro", () => {
   const intent = detectCitizenReportIntent("Hay un hueco peligroso");
 
