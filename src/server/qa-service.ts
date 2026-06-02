@@ -27,6 +27,7 @@ export type SimulationSummary = {
   intentDetected: number;
   citizenReportsCreated: number;
   announcementsSimulated: number;
+  responsesGenerated: number;
   avgMs: number;
   p95Ms: number;
   p99Ms: number;
