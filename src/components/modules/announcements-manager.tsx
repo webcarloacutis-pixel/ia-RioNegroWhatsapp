@@ -13,7 +13,12 @@ import { PanelCard } from "@/components/ui/panel-card";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { ANNOUNCEMENT_TYPE_VALUES } from "@/lib/constants";
-import { formatDateTime, formatTypeLabel, toDateTimeLocalValue } from "@/lib/format";
+import {
+  formatDateTime,
+  formatStatusLabel,
+  formatTypeLabel,
+  toDateTimeLocalValue,
+} from "@/lib/format";
 import type { AnnouncementSummary, SegmentSummary } from "@/lib/types";
 
 type AnnouncementsManagerProps = {
@@ -38,6 +43,13 @@ const initialForm: AnnouncementFormState = {
   scheduledAt: "",
   segmentId: "",
 };
+
+function getAnnouncementStatusTone(status: AnnouncementSummary["status"]) {
+  if (status === "SENT" || status === "SENT_REAL") return "success";
+  if (status === "FAILED" || status === "BLOCKED_BY_SAFE_MODE") return "danger";
+  if (status === "SENT_SIMULATED") return "warning";
+  return "warning";
+}
 
 export function AnnouncementsManager({
   announcements,
@@ -312,8 +324,8 @@ export function AnnouncementsManager({
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-lg font-semibold text-foreground">{announcement.title}</p>
                       <Badge tone="info">{formatTypeLabel(announcement.displayType)}</Badge>
-                      <Badge tone={announcement.status === "SENT" ? "success" : "warning"}>
-                        {announcement.status === "SENT" ? "Enviado" : "Programado"}
+                      <Badge tone={getAnnouncementStatusTone(announcement.status)}>
+                        {formatStatusLabel(announcement.status)}
                       </Badge>
                     </div>
                     <p className="mt-3 text-sm leading-7 text-muted">{announcement.message}</p>

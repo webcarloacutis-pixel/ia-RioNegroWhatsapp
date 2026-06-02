@@ -16,6 +16,17 @@ type SendMessageInput = {
   to?: string | null;
 };
 
+type SendMessageResult = {
+  sent: boolean;
+  simulated: boolean;
+  blockedBySafeMode?: boolean;
+  provider: "ultramsg" | "mock";
+  message?: string;
+  error?: string;
+  deliveredCount: number;
+  log: string;
+};
+
 type WhatsAppTextInput = {
   to: string;
   message: string;
@@ -42,7 +53,9 @@ const globalForWhatsAppMessages = globalThis as unknown as {
 };
 
 const DEFAULT_AUDIENCE = 1250;
-const ULTRAMSG_DEFAULT_TO = process.env.ULTRAMSG_DEFAULT_TO?.trim() ?? "";
+function getUltraMsgDefaultTo() {
+  return process.env.ULTRAMSG_DEFAULT_TO?.trim() ?? "";
+}
 
 function isUltraMsgConfigured() {
   return Boolean(process.env.ULTRAMSG_TOKEN?.trim() && canResolveUltraMsgBaseUrl());
@@ -58,6 +71,18 @@ function isWhatsAppDryRunMode() {
     process.env.ULTRAMSG_MOCK === "true" ||
     process.env.SIMULATION_MODE === "true"
   );
+}
+
+function getUltraMsgConfigError() {
+  if (!process.env.ULTRAMSG_TOKEN?.trim()) {
+    return "Falta ULTRAMSG_TOKEN.";
+  }
+
+  if (!canResolveUltraMsgBaseUrl()) {
+    return "Falta ULTRAMSG_BASE_URL, ULTRAMSG_API_URL o ULTRAMSG_INSTANCE_ID.";
+  }
+
+  return "UltraMsg no esta configurado.";
 }
 
 function getSentInboundIds() {
@@ -175,7 +200,7 @@ function normalizeRecipient(value: string) {
 }
 
 function resolveRecipients(to?: string | null) {
-  const rawRecipients = (to?.trim() || ULTRAMSG_DEFAULT_TO)
+  const rawRecipients = (to?.trim() || getUltraMsgDefaultTo())
     .split(/[,\n;]/)
     .map((value) => normalizeRecipient(value.trim()))
     .filter((value): value is string => Boolean(value));
@@ -396,7 +421,7 @@ async function sendMessageMock({
   segment,
   scheduledAt,
   mode,
-}: SendMessageInput) {
+}: SendMessageInput): Promise<SendMessageResult> {
   const deliveredCount = segment?.recipientPhones?.length || segment?.estimatedUsers || DEFAULT_AUDIENCE;
   const targetName = segment?.name ?? "Cobertura general";
   const preview = message.length > 80 ? `${message.slice(0, 80)}...` : message;
@@ -412,6 +437,10 @@ async function sendMessageMock({
   await new Promise((resolve) => setTimeout(resolve, 300));
 
   return {
+    sent: true,
+    simulated: true,
+    provider: "mock",
+    message: "mock ok",
     deliveredCount,
     log: `Enviado a ${new Intl.NumberFormat("es-CO").format(deliveredCount)} usuarios`,
   };
@@ -423,12 +452,16 @@ async function sendMessageUltraMsg({
   scheduledAt,
   mode,
   to,
-}: SendMessageInput) {
+}: SendMessageInput): Promise<SendMessageResult> {
   const targetName = segment?.name ?? "Cobertura general";
   const recipients = resolveRecipients(to || segment?.recipientPhones?.join(",") || null);
 
   if (!recipients.length) {
-    throw new Error("No hay destinatarios configurados para UltraMsg.");
+    console.warn("[announcements] no recipients", {
+      mode,
+      segment: targetName,
+    });
+    throw new Error("Sin destinatarios: configura telefonos en el segmento o ULTRAMSG_DEFAULT_TO.");
   }
 
   const responses: unknown[] = [];
@@ -436,7 +469,7 @@ async function sendMessageUltraMsg({
   const dryRun = isWhatsAppDryRunMode();
 
   if (dryRun) {
-    console.log("[announcements] dry-run mode", {
+    console.log("[announcements] dry-run simulated", {
       mode,
       recipients: recipients.length,
       segment: targetName,
@@ -494,6 +527,10 @@ async function sendMessageUltraMsg({
   });
 
   return {
+    sent: !dryRun,
+    simulated: dryRun,
+    provider: "ultramsg",
+    message: dryRun ? "dry-run ok" : "sent real",
     deliveredCount: responses.length,
     log:
       failures.length > 0
@@ -504,7 +541,7 @@ async function sendMessageUltraMsg({
   };
 }
 
-export async function sendMessage(input: SendMessageInput) {
+export async function sendMessage(input: SendMessageInput): Promise<SendMessageResult> {
   if (input.mode === "DEMO") {
     return sendMessageMock(input);
   }
@@ -518,14 +555,24 @@ export async function sendMessage(input: SendMessageInput) {
       mode: input.mode,
       segment: input.segment?.name ?? "Cobertura general",
     });
-    return sendMessageMock(input);
+    return {
+      sent: false,
+      simulated: true,
+      blockedBySafeMode: true,
+      provider: "mock",
+      message: "blocked_by_safe_mode",
+      deliveredCount: 0,
+      log: "Bloqueado por modo seguro: WHATSAPP_SAFE_MODE=true impide envios proactivos reales.",
+    };
   }
 
   if (!isUltraMsgConfigured()) {
-    console.warn(
-      "[messageService] UltraMsg no esta configurado. Se usa envio mock como respaldo.",
-    );
-    return sendMessageMock(input);
+    const error = getUltraMsgConfigError();
+    console.warn("[announcements] failed", {
+      mode: input.mode,
+      error,
+    });
+    throw new Error(error);
   }
 
   return sendMessageUltraMsg(input);

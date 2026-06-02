@@ -9,7 +9,15 @@ export const DEFAULT_ANNOUNCEMENT_TYPES = [
 
 export const ANNOUNCEMENT_TYPE_VALUES = DEFAULT_ANNOUNCEMENT_TYPES;
 
-export const ANNOUNCEMENT_STATUS_VALUES = ["SCHEDULED", "SENT"] as const;
+export const ANNOUNCEMENT_STATUS_VALUES = [
+  "DRAFT",
+  "SCHEDULED",
+  "SENT",
+  "SENT_REAL",
+  "SENT_SIMULATED",
+  "BLOCKED_BY_SAFE_MODE",
+  "FAILED",
+] as const;
 
 export const DELIVERY_MODE_VALUES = ["DEMO", "MANUAL", "SCHEDULED"] as const;
 
@@ -83,8 +91,13 @@ export const STATUS_LABELS: Record<
   (typeof ANNOUNCEMENT_STATUS_VALUES)[number],
   string
 > = {
+  DRAFT: "Borrador",
   SCHEDULED: "Programado",
   SENT: "Enviado",
+  SENT_REAL: "Enviado real",
+  SENT_SIMULATED: "Simulado",
+  BLOCKED_BY_SAFE_MODE: "Bloqueado por modo seguro",
+  FAILED: "Fallido",
 };
 
 export const DELIVERY_MODE_LABELS: Record<

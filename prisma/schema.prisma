@@ -24,8 +24,13 @@ enum AnnouncementType {
 }
 
 enum AnnouncementStatus {
+  DRAFT
   SCHEDULED
   SENT
+  SENT_REAL
+  SENT_SIMULATED
+  BLOCKED_BY_SAFE_MODE
+  FAILED
 }
 
 enum DeliveryMode {

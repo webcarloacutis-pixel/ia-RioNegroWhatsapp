@@ -15,6 +15,16 @@ test("detecta accidente como reporte ciudadano urgente antes del asistente gener
   assert.match(intent.location ?? "", /Llanogrande/i);
 });
 
+test("detecta accidente en Llanogrande como reporte ciudadano", () => {
+  const intent = detectCitizenReportIntent("Hay un accidente en Llanogrande");
+
+  assert.equal(intent.isReport, true);
+  assert.equal(intent.category, "Accidente");
+  assert.equal(intent.priority, "urgent");
+  assert.equal(intent.needsLocation, false);
+  assert.match(intent.location ?? "", /Llanogrande/i);
+});
+
 test("no marca preguntas generales de la Alcaldia como reportes", () => {
   const intent = detectCitizenReportIntent("Hola, donde queda la Alcaldia?");
 

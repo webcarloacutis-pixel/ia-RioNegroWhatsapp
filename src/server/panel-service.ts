@@ -13,6 +13,7 @@ import {
   normalizeAnnouncementType,
 } from "@/lib/constants";
 import { AppError } from "@/lib/errors";
+import { parseBogotaDateTimeLocalToUtcDate } from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import type {
   AnnouncementSummary,
@@ -36,6 +37,10 @@ type AnnouncementInput = {
   segmentId: string | null;
 };
 
+type DeliveryLoggedError = AppError & {
+  deliveryLog?: DeliveryLogSummary;
+};
+
 type SegmentInput = {
   name: string;
   description: string | null;
@@ -52,13 +57,41 @@ type KnowledgeInput = {
 let fallbackWarningShown = false;
 
 function parseScheduledDate(value: string) {
-  const date = new Date(value);
+  const date = parseBogotaDateTimeLocalToUtcDate(value);
 
   if (Number.isNaN(date.getTime())) {
     throw new AppError("La fecha programada no es valida.");
   }
 
   return date;
+}
+
+function getSendResultStatus(result: Awaited<ReturnType<typeof sendMessage>>) {
+  if (result.blockedBySafeMode) {
+    return AnnouncementStatus.BLOCKED_BY_SAFE_MODE;
+  }
+
+  if (result.simulated) {
+    return AnnouncementStatus.SENT_SIMULATED;
+  }
+
+  if (result.sent) {
+    return AnnouncementStatus.SENT_REAL;
+  }
+
+  return AnnouncementStatus.FAILED;
+}
+
+function getDeliveryStatusForResult(result: Awaited<ReturnType<typeof sendMessage>>) {
+  if (result.blockedBySafeMode) {
+    return DeliveryStatus.FAILED;
+  }
+
+  return result.sent || result.simulated ? DeliveryStatus.SUCCESS : DeliveryStatus.FAILED;
+}
+
+function isDeliveryLoggedError(error: unknown): error is DeliveryLoggedError {
+  return error instanceof AppError && Boolean((error as DeliveryLoggedError).deliveryLog);
 }
 
 function buildFallbackTrend() {
@@ -466,21 +499,77 @@ async function sendAnnouncementNowDb(
     scheduledAt: announcement.scheduledAt,
     mode,
     to: audience.recipientPhones.join(","),
-  }).catch((error) => {
+  }).catch(async (error) => {
+    const message =
+      error instanceof Error ? error.message : "No se pudo enviar el comunicado.";
     console.error("[announcements] failed", {
       id,
       mode,
-      error: error instanceof Error ? error.message : "unknown_error",
+      error: message,
     });
-    throw error;
+
+    const [, log] = await prisma.$transaction([
+      prisma.announcement.update({
+        where: { id: announcement.id },
+        data: {
+          status: AnnouncementStatus.FAILED,
+          sentAt: null,
+        },
+        include: {
+          segment: {
+            select: {
+              id: true,
+              name: true,
+              estimatedUsers: true,
+            },
+          },
+        },
+      }),
+      prisma.deliveryLog.create({
+        data: {
+          announcementId: announcement.id,
+          segmentId: audience.id,
+          mode,
+          status: DeliveryStatus.FAILED,
+          deliveredCount: 0,
+          details: message,
+        },
+        include: {
+          announcement: {
+            select: {
+              id: true,
+              title: true,
+            },
+          },
+          segment: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      }),
+    ]);
+    const loggedError = new AppError(message, 502) as DeliveryLoggedError;
+    loggedError.deliveryLog = serializeDeliveryLog(log);
+    throw loggedError;
   });
+
+  const nextStatus = getSendResultStatus(result);
+  const deliveryStatus = getDeliveryStatusForResult(result);
+  const isRealSend = nextStatus === AnnouncementStatus.SENT_REAL;
+  const details =
+    result.blockedBySafeMode
+      ? `[BLOCKED_BY_SAFE_MODE] ${result.log}`
+      : result.simulated
+        ? `[SENT_SIMULATED] ${result.log}`
+        : `[SENT_REAL] ${result.log}`;
 
   const [updatedAnnouncement, log] = await prisma.$transaction([
     prisma.announcement.update({
       where: { id: announcement.id },
       data: {
-        status: AnnouncementStatus.SENT,
-        sentAt: new Date(),
+        status: nextStatus,
+        sentAt: isRealSend ? new Date() : null,
       },
       include: {
         segment: {
@@ -497,8 +586,9 @@ async function sendAnnouncementNowDb(
         announcementId: announcement.id,
         segmentId: audience.id,
         mode,
+        status: deliveryStatus,
         deliveredCount: result.deliveredCount,
-        details: result.log,
+        details,
       },
       include: {
         announcement: {
@@ -519,8 +609,17 @@ async function sendAnnouncementNowDb(
   console.log("[announcements] sent", {
     id,
     mode,
+    status: nextStatus,
     deliveredCount: result.deliveredCount,
   });
+
+  if (nextStatus === AnnouncementStatus.SENT_REAL) {
+    console.log("[announcements] sent real", {
+      id,
+      mode,
+      deliveredCount: result.deliveredCount,
+    });
+  }
 
   return {
     feedback: result.log,
@@ -883,28 +982,38 @@ async function getMetricsDataDb(): Promise<MetricsData> {
 }
 
 async function createFailedDeliveryLogDb(announcementId: string, error: unknown) {
-  const log = await prisma.deliveryLog.create({
-    data: {
-      announcementId,
-      mode: DeliveryMode.SCHEDULED,
-      status: DeliveryStatus.FAILED,
-      deliveredCount: 0,
-      details: error instanceof Error ? error.message : "No se pudo enviar el comunicado programado.",
-    },
-    include: {
-      announcement: {
-        select: {
-          id: true,
-          title: true,
+  const [, log] = await prisma.$transaction([
+    prisma.announcement.update({
+      where: { id: announcementId },
+      data: {
+        status: AnnouncementStatus.FAILED,
+        sentAt: null,
+      },
+    }),
+    prisma.deliveryLog.create({
+      data: {
+        announcementId,
+        mode: DeliveryMode.SCHEDULED,
+        status: DeliveryStatus.FAILED,
+        deliveredCount: 0,
+        details:
+          error instanceof Error ? error.message : "No se pudo enviar el comunicado programado.",
+      },
+      include: {
+        announcement: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+        segment: {
+          select: {
+            name: true,
+          },
         },
       },
-      segment: {
-        select: {
-          name: true,
-        },
-      },
-    },
-  });
+    }),
+  ]);
 
   return serializeDeliveryLog(log);
 }
@@ -935,7 +1044,11 @@ async function processScheduledAnnouncementsDb() {
         error: error instanceof Error ? error.message : error,
       });
 
-      processed.push(await createFailedDeliveryLogDb(announcement.id, error));
+      processed.push(
+        isDeliveryLoggedError(error) && error.deliveryLog
+          ? error.deliveryLog
+          : await createFailedDeliveryLogDb(announcement.id, error),
+      );
     }
   }
 

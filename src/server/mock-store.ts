@@ -1,8 +1,4 @@
-import {
-  DeliveryStatus,
-  type AnnouncementStatus,
-  type DeliveryMode,
-} from "@prisma/client";
+import { type AnnouncementStatus, type DeliveryMode } from "@prisma/client";
 import { subDays } from "date-fns";
 
 import {
@@ -12,6 +8,7 @@ import {
   normalizeAnnouncementType,
 } from "@/lib/constants";
 import { AppError } from "@/lib/errors";
+import { parseBogotaDateTimeLocalToUtcDate } from "@/lib/format";
 import {
   buildOfficialAnnouncements,
   buildOfficialKnowledgeEntries,
@@ -111,7 +108,7 @@ function createId(prefix: string) {
 }
 
 function parseScheduledDate(value: string) {
-  const date = new Date(value);
+  const date = parseBogotaDateTimeLocalToUtcDate(value);
 
   if (Number.isNaN(date.getTime())) {
     throw new AppError("La fecha programada no es valida.");
@@ -224,7 +221,7 @@ function initializeState(): MockState {
       customTypeLabel: null,
       scheduledAt,
       status: item.status,
-      sentAt: item.status === "SENT" ? scheduledAt : null,
+      sentAt: item.status === "SENT" || item.status === "SENT_REAL" ? scheduledAt : null,
       segmentId,
       createdAt: scheduledAt,
       updatedAt: scheduledAt,
@@ -248,7 +245,7 @@ function initializeState(): MockState {
   );
 
   const deliveryLogs: MockDeliveryLog[] = announcements
-    .filter((announcement) => announcement.status === "SENT")
+    .filter((announcement) => announcement.status === "SENT" || announcement.status === "SENT_REAL")
     .slice(0, 6)
     .map((announcement, index) => {
       const segment = segments.find((item) => item.id === announcement.segmentId);
@@ -422,12 +419,16 @@ async function resolveAudience(segmentId: string | null) {
   };
 }
 
-function createLog(input: Omit<MockDeliveryLog, "id" | "createdAt" | "status">) {
+function createLog(
+  input: Omit<MockDeliveryLog, "id" | "createdAt" | "status"> & {
+    status?: "SUCCESS" | "FAILED";
+  },
+) {
   const state = getState();
   const log: MockDeliveryLog = {
     id: createId("log"),
     createdAt: new Date(),
-    status: "SUCCESS",
+    status: input.status ?? "SUCCESS",
     ...input,
   };
 
@@ -526,18 +527,51 @@ export async function sendAnnouncementNow(
     scheduledAt: announcement.scheduledAt,
     mode,
     to: audience.recipientPhones.join(","),
+  }).catch((error) => {
+    const message =
+      error instanceof Error ? error.message : "No se pudo enviar el comunicado.";
+    announcement.status = "FAILED" as AnnouncementStatus;
+    announcement.sentAt = null;
+    announcement.updatedAt = new Date();
+    createLog({
+      announcementId: announcement.id,
+      segmentId: audience.id,
+      mode,
+      status: "FAILED",
+      deliveredCount: 0,
+      details: message,
+    });
+    throw new AppError(message, 502);
   });
 
-  announcement.status = "SENT";
-  announcement.sentAt = new Date();
+  const nextStatus = result.blockedBySafeMode
+    ? "BLOCKED_BY_SAFE_MODE"
+    : result.simulated
+      ? "SENT_SIMULATED"
+      : result.sent
+        ? "SENT_REAL"
+        : "FAILED";
+  const details = result.blockedBySafeMode
+    ? `[BLOCKED_BY_SAFE_MODE] ${result.log}`
+    : result.simulated
+      ? `[SENT_SIMULATED] ${result.log}`
+      : `[SENT_REAL] ${result.log}`;
+
+  announcement.status = nextStatus as AnnouncementStatus;
+  announcement.sentAt = nextStatus === "SENT_REAL" ? new Date() : null;
   announcement.updatedAt = new Date();
 
   const log = createLog({
     announcementId: announcement.id,
     segmentId: audience.id,
     mode,
+    status: result.blockedBySafeMode
+      ? "FAILED"
+      : result.sent || result.simulated
+        ? "SUCCESS"
+        : "FAILED",
     deliveredCount: result.deliveredCount,
-    details: result.log,
+    details,
   });
 
   return {
@@ -770,10 +804,13 @@ export async function processScheduledAnnouncements() {
         announcementId: announcement.id,
         segmentId: announcement.segmentId,
         mode: "SCHEDULED",
+        status: "FAILED",
         deliveredCount: 0,
         details: error instanceof Error ? error.message : "No se pudo enviar el comunicado programado.",
       });
-      failedLog.status = DeliveryStatus.FAILED;
+      announcement.status = "FAILED" as AnnouncementStatus;
+      announcement.sentAt = null;
+      announcement.updatedAt = new Date();
       processed.push(serializeDeliveryLog(failedLog));
     }
   }

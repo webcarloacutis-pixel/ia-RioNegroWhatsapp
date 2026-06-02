@@ -8,12 +8,24 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PanelCard } from "@/components/ui/panel-card";
-import { formatCompactNumber, formatDateTime, formatDeliveryModeLabel } from "@/lib/format";
+import {
+  formatCompactNumber,
+  formatDateTime,
+  formatDeliveryModeLabel,
+  formatStatusLabel,
+} from "@/lib/format";
 import type { SchedulerData } from "@/lib/types";
 
 type SchedulerManagerProps = {
   data: SchedulerData;
 };
+
+function getStatusTone(status: SchedulerData["scheduledAnnouncements"][number]["status"]) {
+  if (status === "SENT" || status === "SENT_REAL") return "success";
+  if (status === "FAILED" || status === "BLOCKED_BY_SAFE_MODE") return "danger";
+  if (status === "SENT_SIMULATED") return "warning";
+  return "warning";
+}
 
 export function SchedulerManager({ data }: SchedulerManagerProps) {
   const router = useRouter();
@@ -91,7 +103,7 @@ export function SchedulerManager({ data }: SchedulerManagerProps) {
             <PlayCircle className="size-4" />
             Procesar pendientes
           </Button>
-          <Badge tone="warning">Scheduler mock con messageService</Badge>
+          <Badge tone="warning">Worker con validacion UltraMsg</Badge>
         </div>
       </section>
 
@@ -118,8 +130,8 @@ export function SchedulerManager({ data }: SchedulerManagerProps) {
                     <p className="text-lg font-semibold text-foreground">{announcement.title}</p>
                     <p className="mt-2 text-sm leading-7 text-muted">{announcement.message}</p>
                   </div>
-                  <Badge tone="warning">
-                    {announcement.status === "SCHEDULED" ? "Programado" : "Enviado"}
+                  <Badge tone={getStatusTone(announcement.status)}>
+                    {formatStatusLabel(announcement.status)}
                   </Badge>
                 </div>
 

@@ -261,10 +261,24 @@ export async function getAnnouncementsDiagnostics() {
   const startedAt = Date.now();
 
   try {
-    const [scheduled, sent, failedLogs, demoLogs, manualLogs, segmentsWithRecipients, due] =
+    const [
+      scheduled,
+      sent,
+      simulated,
+      blocked,
+      failedAnnouncements,
+      failedLogs,
+      demoLogs,
+      manualLogs,
+      segmentsWithRecipients,
+      due,
+    ] =
       await Promise.all([
         prisma.announcement.count({ where: { status: "SCHEDULED" } }),
-        prisma.announcement.count({ where: { status: "SENT" } }),
+        prisma.announcement.count({ where: { status: { in: ["SENT", "SENT_REAL"] } } }),
+        prisma.announcement.count({ where: { status: "SENT_SIMULATED" } }),
+        prisma.announcement.count({ where: { status: "BLOCKED_BY_SAFE_MODE" } }),
+        prisma.announcement.count({ where: { status: "FAILED" } }),
         prisma.deliveryLog.count({ where: { status: DeliveryStatus.FAILED } }),
         prisma.deliveryLog.count({ where: { mode: DeliveryMode.DEMO } }),
         prisma.deliveryLog.count({ where: { mode: DeliveryMode.MANUAL } }),
@@ -294,6 +308,9 @@ export async function getAnnouncementsDiagnostics() {
       counts: {
         scheduled,
         sent,
+        simulated,
+        blocked,
+        failedAnnouncements,
         due,
         failedLogs,
         demoLogs,

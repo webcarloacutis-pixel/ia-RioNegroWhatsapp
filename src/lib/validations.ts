@@ -69,7 +69,10 @@ export const announcementInputSchema = z.object({
     .min(2, "Selecciona o escribe el tipo de comunicado.")
     .max(60, "El tipo de comunicado es demasiado largo.")
     .transform((value) => normalizeAnnouncementType(value)),
-  scheduledAt: z.string().min(1, "Selecciona fecha y hora de envio."),
+  scheduledAt: z
+    .string()
+    .min(1, "Selecciona fecha y hora de envio.")
+    .regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/, "La fecha y hora no tiene un formato valido."),
   segmentId: z
     .string()
     .trim()

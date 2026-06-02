@@ -45,6 +45,7 @@ type ResolvedIntent = {
   appointmentIntent: boolean;
   hoursIntent: boolean;
   assistantCapabilityIntent: boolean;
+  thanksIntent: boolean;
 };
 
 type QueryResolution = DraftReplyResult & {
@@ -184,8 +185,8 @@ function getCopy(language: AssistantLanguage) {
     return {
       noData: "I do not have the exact detail right now, but I can still guide you.",
       scope: "I can only help with official information about the municipality of Rionegro.",
-      greeting:
-        "Hello, I am the official assistant of Rionegro. I can help you with places, events, procedures, news and municipal services. What would you like to know?",
+      greeting: "Hello! I can help you with Rionegro. What would you like to know?",
+      thanks: "You are very welcome.",
       report:
         "You can report it through the official City Hall channels or the competent authorities. If you want, I can help you find the right office.",
       outOfScope:
@@ -246,8 +247,8 @@ function getCopy(language: AssistantLanguage) {
   return {
     noData: assistantNoDataMessage,
     scope: assistantScopeMessage,
-    greeting:
-      "Hola, soy el asistente oficial de Rionegro. Puedo ayudarte con lugares, eventos, tramites, noticias y servicios del municipio. ¿Que te gustaria saber?",
+      greeting: "¡Hola! Claro, dime en que te puedo ayudar sobre Rionegro.",
+      thanks: "Con mucho gusto.",
     report:
       "Puedes hacerlo por los canales oficiales de la Alcaldia o con la autoridad competente. Si quieres, te ayudo a ubicar la oficina adecuada.",
     outOfScope:
@@ -489,6 +490,12 @@ function isGreeting(text: string) {
   return false;
 }
 
+function hasThanksIntent(text: string) {
+  return /^(gracias|muchas gracias|mil gracias|thank you|thanks|thx)\b/.test(
+    normalizeText(text),
+  );
+}
+
 function isShortFollowUp(text: string) {
   return (
     text.split(/\s+/).length <= 6 &&
@@ -603,6 +610,9 @@ function hasInstitutionalServicesIntent(text: string) {
     "atencion al ciudadano",
     "pqrs",
     "impuestos",
+    "predial",
+    "rentas",
+    "hacienda",
     "catastro",
     "planeacion",
     "licencia",
@@ -1133,7 +1143,7 @@ function buildConversationalFallback(
   }
 
   if (intent.locationIntent && retrieval.placeMatches.length) {
-    return `${buildPlaceReply(retrieval.placeMatches, language)}\n\n${copy.placeFollowUp}`;
+    return buildPlaceReply(retrieval.placeMatches, language);
   }
 
   return copy.genericFallback;
@@ -1283,12 +1293,29 @@ function buildPlaceReply(placeMatches: OfficialPlace[], language: AssistantLangu
   };
 
   const formatPlace = (place: OfficialPlace) => `${place.name}: ${formatPlaceDetails(place)}`;
+  const isCityHall = (place: OfficialPlace) =>
+    normalizeText(place.name).includes("alcaldia") ||
+    place.tags?.some((tag) => tag === "city_hall");
 
   if (placeMatches.length === 1) {
+    const place = placeMatches[0];
+
+    if (isCityHall(place)) {
+      return language === "en"
+        ? [
+            `Sure! Rionegro City Hall is downtown, at ${place.address}.`,
+            "If you are going in person, it is a good idea to check the opening hours first.",
+          ].join("\n\n")
+        : [
+            `¡Claro! La Alcaldia de Rionegro queda en el centro, en ${place.address}.`,
+            "Si vas presencialmente, revisa antes el horario de atencion para que no pierdas la ida.",
+          ].join("\n\n");
+    }
+
     return [
       language === "en"
-        ? `${placeMatches[0].name} is at ${formatPlaceDetails(placeMatches[0])}`
-        : `${placeMatches[0].name} queda en ${formatPlaceDetails(placeMatches[0])}`,
+        ? `${place.name} is at ${formatPlaceDetails(place)}`
+        : `${place.name} queda en ${formatPlaceDetails(place)}`,
       copy.placeFollowUp,
     ].join("\n\n");
   }
@@ -1417,6 +1444,16 @@ function buildInstitutionalServicesReply(message: string, language: AssistantLan
     "mobility",
     "transit",
   ]);
+  const taxesFocused = includesAny(normalizedMessage, [
+    "predial",
+    "impuesto",
+    "impuestos",
+    "rentas",
+    "hacienda",
+    "property tax",
+    "taxes",
+    "treasury",
+  ]);
   const matchedServices = institutionalServices.filter((service) =>
     service.aliases.some((alias) => normalizedMessage.includes(normalizeText(alias))),
   );
@@ -1433,6 +1470,18 @@ function buildInstitutionalServicesReply(message: string, language: AssistantLan
           "Para tramites de movilidad en Rionegro puedes dirigirte a SOMOS (Movilidad y Transito), ubicado en Carrera 48 # 47-19.",
           "Alla puedes consultar licencia de conduccion, comparendos, pagos y tramites relacionados.",
           "Si quieres, tambien te doy el horario.",
+        ].join("\n\n");
+  }
+
+  if (taxesFocused) {
+    return language === "en"
+      ? [
+          `For property tax or municipal revenue questions, Treasury can guide you at City Hall, ${municipalityContact.address}.`,
+          `You can also use the official revenue email: ${municipalityContact.taxesEmail}.`,
+        ].join("\n\n")
+      : [
+          `Para pagar o consultar el predial, te orienta Hacienda o Rentas Municipales en la Alcaldia, ${municipalityContact.address}.`,
+          `Tambien puedes escribir al correo oficial de rentas: ${municipalityContact.taxesEmail}.`,
         ].join("\n\n");
   }
 
@@ -1674,6 +1723,10 @@ async function composeHybridReply(input: {
       "No inventes datos, no respondas temas ajenos a Rionegro, no des opiniones politicas y no actues como una IA generalista.",
       "El tono debe ser cercano, claro, breve y util.",
       "Prioriza utilidad inmediata y respuestas cortas por defecto.",
+      "Escribe para WhatsApp: maximo 2 o 3 parrafos cortos salvo que el usuario pida una lista.",
+      "No uses bullets si la pregunta se resuelve con una respuesta simple.",
+      "No digas 'estimado ciudadano' ni 'a continuacion'.",
+      "No agregues tramites, horarios o dependencias si el usuario solo pregunta una ubicacion.",
       "No uses frases tecnicas ni menciones modelos, motores, OpenAI o detalles internos.",
       "Si falta un dato exacto, ayuda con orientacion parcial o una pregunta aclaratoria corta.",
       "Mantiene continuidad conversacional cuando el mensaje parezca seguir una idea anterior.",
@@ -1787,6 +1840,14 @@ function buildDeterministicReply(
   retrieval: RetrievalBundle,
 ): DraftReplyResult {
   const copy = getCopy(intent.language);
+
+  if (intent.thanksIntent) {
+    return {
+      reply: copy.thanks,
+      route: "RULE_BASED",
+      usedOpenAI: false,
+    };
+  }
 
   if (intent.tourismIntent) {
     return {
@@ -1948,6 +2009,7 @@ function shouldUseOpenAI(
     intent.appointmentIntent ||
     intent.automotiveIntent ||
     intent.hoursIntent ||
+    intent.thanksIntent ||
     intent.institutionalServicesIntent ||
     intent.assistantCapabilityIntent
   ) {
@@ -2079,6 +2141,69 @@ function combineSubReplies(replies: string[], language: AssistantLanguage) {
   return `${getCopy(language).multiIntentIntro}\n\n${formatNumberedList(uniqueReplies)}`;
 }
 
+type WhatsAppReplyIntent =
+  | "LOCATION_SIMPLE"
+  | "HOURS_SIMPLE"
+  | "THANKS"
+  | "GREETING"
+  | "CITIZEN_REPORT"
+  | "PROCEDURE"
+  | "GENERAL";
+
+function getWhatsAppReplyIntent(intent: ResolvedIntent, subQueryCount: number): WhatsAppReplyIntent {
+  if (subQueryCount > 1) return "GENERAL";
+  if (intent.thanksIntent) return "THANKS";
+  if (intent.topic === "GREETING") return "GREETING";
+  if (intent.topic === "DENUNCIAS") return "CITIZEN_REPORT";
+  if (intent.locationIntent) return "LOCATION_SIMPLE";
+  if (intent.hoursIntent) return "HOURS_SIMPLE";
+  if (intent.institutionalServicesIntent || intent.appointmentIntent) return "PROCEDURE";
+  return "GENERAL";
+}
+
+function applyWhatsAppTone(
+  reply: string,
+  context: {
+    intent: ResolvedIntent;
+    subQueryCount: number;
+    language: AssistantLanguage;
+  },
+) {
+  const copy = getCopy(context.language);
+  const replyIntent = getWhatsAppReplyIntent(context.intent, context.subQueryCount);
+
+  if (replyIntent === "THANKS") return copy.thanks;
+  if (replyIntent === "GREETING") return copy.greeting;
+
+  let cleaned = reply
+    .replace(/\bestimad[oa]\s+ciudadan[oa]\b[:,]?\s*/gi, "")
+    .replace(/\ba continuacion\b[:,]?\s*/gi, "")
+    .replace(/\ba continuación\b[:,]?\s*/gi, "")
+    .trim();
+
+  if (
+    replyIntent === "LOCATION_SIMPLE" ||
+    replyIntent === "HOURS_SIMPLE" ||
+    replyIntent === "PROCEDURE"
+  ) {
+    const paragraphs = cleaned
+      .split(/\n{2,}/)
+      .map((paragraph) =>
+        paragraph
+          .split(/\n/)
+          .filter((line) => !/^\s*(?:[-*]|\d+[.)])\s+/.test(line))
+          .join(" ")
+          .trim(),
+      )
+      .filter(Boolean)
+      .slice(0, replyIntent === "PROCEDURE" ? 3 : 2);
+
+    cleaned = paragraphs.join("\n\n") || cleaned;
+  }
+
+  return cleaned || copy.genericFallback;
+}
+
 function splitMultiIntentMessage(message: string, language: AssistantLanguage) {
   const base = stripLeadingConversationalPrefix(message.replace(/\r?\n+/g, " ||| "));
 
@@ -2157,6 +2282,7 @@ async function resolveSingleQuery(input: {
     appointmentIntent: hasAppointmentIntent(input.normalizedMessage),
     hoursIntent: hasHoursIntent(input.normalizedMessage),
     assistantCapabilityIntent: hasAssistantCapabilityIntent(input.normalizedMessage),
+    thanksIntent: hasThanksIntent(input.normalizedMessage),
   };
 
   const retrieval = await retrieveOfficialContext(
@@ -2265,12 +2391,17 @@ export async function chatWithAssistant(
     appointmentIntent: hasAppointmentIntent(normalizedMessage),
     hoursIntent: hasHoursIntent(normalizedMessage),
     assistantCapabilityIntent: hasAssistantCapabilityIntent(normalizedMessage),
+    thanksIntent: hasThanksIntent(normalizedMessage),
   };
   const combinedReply = combineSubReplies(
     resolutions.map((resolution) => resolution.reply.trim()),
     language,
   );
-  const finalReply = finalizeReply(combinedReply, language);
+  const finalReply = applyWhatsAppTone(finalizeReply(combinedReply, language), {
+    intent: finalIntent,
+    subQueryCount: subQueries.length,
+    language,
+  });
   const updated = addAssistantTurn(session.id, "assistant", finalReply);
 
   updateAssistantContext(
@@ -2333,5 +2464,7 @@ export const assistantInternals = {
   hasAppointmentIntent,
   hasHoursIntent,
   hasLocationIntent,
+  hasThanksIntent,
   hasAssistantCapabilityIntent,
+  applyWhatsAppTone,
 };

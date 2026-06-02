@@ -39,6 +39,8 @@ test("sendMessage en modo DEMO devuelve conteo estimado sin depender de UltraMsg
   });
 
   assert.equal(result.deliveredCount, 2);
+  assert.equal(result.simulated, true);
+  assert.equal(result.provider, "mock");
   assert.match(result.log, /Enviado a 2 usuarios/);
 });
 
@@ -83,10 +85,71 @@ test("sendMessage en dry-run simula UltraMsg con destinatarios", async () => {
   });
 
   assert.equal(result.deliveredCount, 1);
+  assert.equal(result.simulated, true);
+  assert.equal(result.sent, false);
   assert.match(result.log, /Dry-run UltraMsg OK/);
 
   process.env.WHATSAPP_DRY_RUN = previousDryRun;
   process.env.WHATSAPP_SAFE_MODE = previousSafeMode;
+});
+
+test("sendMessage con WHATSAPP_SAFE_MODE bloquea envio proactivo real", async () => {
+  const previousDryRun = process.env.WHATSAPP_DRY_RUN;
+  const previousSafeMode = process.env.WHATSAPP_SAFE_MODE;
+
+  process.env.WHATSAPP_DRY_RUN = "false";
+  process.env.WHATSAPP_SAFE_MODE = "true";
+
+  const result = await sendMessage({
+    message: "Comunicado bloqueado",
+    segment: {
+      id: "seg-safe",
+      name: "Prueba safe",
+      estimatedUsers: 1,
+      recipientPhones: ["+573001330213"],
+    },
+    scheduledAt: new Date("2026-04-20T10:00:00.000Z"),
+    mode: "MANUAL",
+  });
+
+  assert.equal(result.sent, false);
+  assert.equal(result.simulated, true);
+  assert.equal(result.blockedBySafeMode, true);
+  assert.equal(result.provider, "mock");
+  assert.match(result.log, /modo seguro/i);
+
+  process.env.WHATSAPP_DRY_RUN = previousDryRun;
+  process.env.WHATSAPP_SAFE_MODE = previousSafeMode;
+});
+
+test("sendMessage falla claramente cuando no hay destinatarios", async () => {
+  const previousDryRun = process.env.WHATSAPP_DRY_RUN;
+  const previousSafeMode = process.env.WHATSAPP_SAFE_MODE;
+  const previousDefaultTo = process.env.ULTRAMSG_DEFAULT_TO;
+
+  process.env.WHATSAPP_DRY_RUN = "true";
+  process.env.WHATSAPP_SAFE_MODE = "false";
+  process.env.ULTRAMSG_DEFAULT_TO = "";
+
+  await assert.rejects(
+    () =>
+      sendMessage({
+        message: "Comunicado sin destinatarios",
+        segment: {
+          id: "seg-empty",
+          name: "Sin telefonos",
+          estimatedUsers: 0,
+          recipientPhones: [],
+        },
+        scheduledAt: new Date("2026-04-20T10:00:00.000Z"),
+        mode: "MANUAL",
+      }),
+    /Sin destinatarios/i,
+  );
+
+  process.env.WHATSAPP_DRY_RUN = previousDryRun;
+  process.env.WHATSAPP_SAFE_MODE = previousSafeMode;
+  process.env.ULTRAMSG_DEFAULT_TO = previousDefaultTo;
 });
 
 test("ULTRAMSG_MOCK bloquea llamadas reales aunque WHATSAPP_DRY_RUN este apagado", async () => {

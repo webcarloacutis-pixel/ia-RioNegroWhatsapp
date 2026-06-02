@@ -178,10 +178,12 @@ export const officialSegments = [
   },
 ] as const;
 
+export const ALCALDIA_RIONEGRO_ADDRESS = "Carrera 50 # 49 - 05";
+
 export const municipalityContact = {
   municipality: "Rionegro",
   nit: "890.907.317-2",
-  address: "Calle 49 No. 50 - 05, Rionegro, Antioquia, Colombia",
+  address: ALCALDIA_RIONEGRO_ADDRESS,
   phone: "+57 (604) 520 4060",
   tollFreeLine: "+57 (604) 520 4060",
   citizenEmail: "atencionalusuario@rionegro.gov.co",

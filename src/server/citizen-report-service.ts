@@ -603,7 +603,7 @@ function buildCitizenReportReply(intent: CitizenReportIntent, hasImage: boolean)
   return [
     "Gracias por reportarlo. Ya registramos la información para revisión.",
     "",
-    "Si puedes, envíanos una foto del lugar para ayudar a identificar mejor el caso.",
+    "Si puedes, envíanos una foto del lugar y una ubicación más exacta para ayudar a identificar mejor el caso.",
   ].join("\n");
 }
 

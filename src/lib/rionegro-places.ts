@@ -1,3 +1,5 @@
+import { ALCALDIA_RIONEGRO_ADDRESS } from "@/lib/rionegro-content";
+
 export type OfficialPlace = {
   name: string;
   category: string;
@@ -13,7 +15,7 @@ export const officialPlaces: OfficialPlace[] = [
   {
     name: "Alcaldia de Rionegro (Palacio Municipal)",
     category: "Gobierno",
-    address: "Carrera 50 # 49 - 05",
+    address: ALCALDIA_RIONEGRO_ADDRESS,
     aliases: ["alcaldia", "palacio municipal", "city hall", "municipal palace", "town hall"],
     tags: ["citizen_services", "institutional_services", "procedures", "city_hall"],
     openingHoursEs: "Lunes a jueves de 7:00 a.m. a 12:00 m. y de 1:00 p.m. a 5:00 p.m.; viernes de 7:00 a.m. a 12:00 m. y de 1:00 p.m. a 4:00 p.m.",
