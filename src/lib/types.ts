@@ -246,3 +246,114 @@ export type AssistantConversationThread = {
   lastActivityAt: string;
   exchanges: AssistantConversationExchange[];
 };
+
+export type QaTestStatus = "PASS" | "FAIL" | "WARNING";
+
+export type QaScenario = {
+  id: string;
+  category: string;
+  title: string;
+  description: string;
+  input: string;
+  expectedBehavior: string;
+  expectedKeywords: string[];
+  forbiddenKeywords: string[];
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type QaHallucinationFinding = {
+  inventedLinks: string[];
+  inventedPhones: string[];
+  inventedAddresses: string[];
+  inventedHours: string[];
+};
+
+export type QaScenarioResult = {
+  id: string;
+  scenarioId: string;
+  runId: string;
+  caseTitle: string;
+  category: string;
+  status: QaTestStatus;
+  score: number;
+  responseTimeMs: number;
+  input: string;
+  botReply: string;
+  expectedBehavior: string;
+  expectedKeywords: string[];
+  forbiddenKeywords: string[];
+  matchedKeywords: string[];
+  missingKeywords: string[];
+  detectedForbiddenKeywords: string[];
+  hallucinations: QaHallucinationFinding;
+  differences: string[];
+  failureReason: string | null;
+  createdAt: string;
+  wasRegression: boolean;
+};
+
+export type QaCategoryMetric = {
+  category: string;
+  total: number;
+  pass: number;
+  fail: number;
+  warning: number;
+  percentage: number;
+};
+
+export type QaRunSummary = {
+  runId: string;
+  totalTests: number;
+  passed: number;
+  failed: number;
+  warnings: number;
+  passRate: number;
+  confidenceScore: number;
+  averageResponseTimeMs: number;
+  lastRun: string | null;
+  hallucinationCount: number;
+  regressionCount: number;
+};
+
+export type QaRunRecord = {
+  id: string;
+  createdAt: string;
+  durationMs: number;
+  summary: QaRunSummary;
+  categoryMetrics: QaCategoryMetric[];
+  results: QaScenarioResult[];
+};
+
+export type QaChartPoint = {
+  label: string;
+  value: number;
+  pass?: number;
+  fail?: number;
+  warning?: number;
+  responseMs?: number;
+};
+
+export type QaDashboardData = {
+  scenarios: QaScenario[];
+  summary: QaRunSummary;
+  categoryMetrics: QaCategoryMetric[];
+  latestResults: QaScenarioResult[];
+  history: QaRunRecord[];
+  regressions: QaScenarioResult[];
+  hallucinations: {
+    total: number;
+    links: number;
+    phones: number;
+    addresses: number;
+    hours: number;
+  };
+  charts: {
+    passRateByCategory: QaChartPoint[];
+    historicalEvolution: QaChartPoint[];
+    responseTimeTrend: QaChartPoint[];
+    errorDistribution: QaChartPoint[];
+    weeklyTrend: QaChartPoint[];
+  };
+};

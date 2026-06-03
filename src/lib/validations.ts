@@ -163,3 +163,62 @@ export const knowledgeInputSchema = z.object({
     .max(60, "La categoria es demasiado larga.")
     .default(KNOWLEDGE_CATEGORY_SUGGESTIONS[0]),
 });
+
+const qaKeywordListSchema = z
+  .array(
+    z
+      .string()
+      .trim()
+      .min(1, "Cada palabra clave debe tener contenido.")
+      .max(80, "La palabra clave es demasiado larga."),
+  )
+  .max(12, "Maximo 12 palabras clave por escenario.")
+  .default([])
+  .transform((items) => Array.from(new Set(items.filter(Boolean))));
+
+export const qaScenarioInputSchema = z.object({
+  category: z
+    .string()
+    .trim()
+    .min(2, "La categoria es obligatoria.")
+    .max(80, "La categoria es demasiado larga."),
+  title: z
+    .string()
+    .trim()
+    .min(3, "El titulo debe tener al menos 3 caracteres.")
+    .max(120, "El titulo no puede superar 120 caracteres."),
+  description: z
+    .string()
+    .trim()
+    .max(500, "La descripcion no puede superar 500 caracteres.")
+    .default(""),
+  input: z
+    .string()
+    .trim()
+    .min(1, "El mensaje de prueba es obligatorio.")
+    .max(3000, "El mensaje de prueba es demasiado largo."),
+  expectedBehavior: z
+    .string()
+    .trim()
+    .min(5, "Describe el comportamiento esperado.")
+    .max(1000, "El comportamiento esperado es demasiado largo."),
+  expectedKeywords: qaKeywordListSchema,
+  forbiddenKeywords: qaKeywordListSchema,
+  active: z.boolean().default(true),
+});
+
+export const qaScenarioPatchSchema = qaScenarioInputSchema.partial().refine(
+  (value) => Object.keys(value).length > 0,
+  "Debes enviar al menos un campo para actualizar.",
+);
+
+export const qaRunInputSchema = z
+  .object({
+    scenarioIds: z.array(z.string().trim().min(1)).max(200).optional(),
+    includeInactive: z.boolean().default(false),
+    evaluatorMode: z.enum(["rules", "gpt"]).default("rules"),
+  })
+  .default({
+    includeInactive: false,
+    evaluatorMode: "rules",
+  });

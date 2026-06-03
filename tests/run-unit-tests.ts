@@ -13,6 +13,7 @@ import "./server/message-service.test";
 import "./server/intent-classifier.test";
 import "./server/conversation-router.test";
 import "./server/whatsapp-reply-style.test";
+import "./server/qa-dashboard-service.test";
 import "./server/citizen-report-service.test";
 import "./server/debug-api-routes.test";
 import "./server/external-mock-services.test";

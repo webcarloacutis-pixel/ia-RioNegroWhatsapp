@@ -58,6 +58,11 @@ const ROUTES = [
   { path: "/api/admin/citizen-reports", method: "GET", module: "Denuncias", auth: true },
   { path: "/api/assistant/chat", method: "POST", module: "Asistente IA", auth: true },
   { path: "/api/assistant/reset", method: "POST", module: "Asistente IA", auth: true },
+  { path: "/api/qa-dashboard", method: "GET", module: "QA Dashboard", auth: true },
+  { path: "/api/qa-dashboard/scenarios", method: "GET/POST", module: "QA Dashboard", auth: true },
+  { path: "/api/qa-dashboard/scenarios/[id]", method: "PATCH/DELETE", module: "QA Dashboard", auth: true },
+  { path: "/api/qa-dashboard/run", method: "POST", module: "QA Dashboard", auth: true },
+  { path: "/api/qa-dashboard/export", method: "GET", module: "QA Dashboard", auth: true },
   { path: "/api/webhook", method: "GET/POST", module: "UltraMsg webhook", auth: false },
   { path: "/api/ultramsg/webhook", method: "GET/POST", module: "UltraMsg webhook", auth: false },
 ];
