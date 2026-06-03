@@ -29,6 +29,14 @@ function wordCount(value: string) {
   return value.split(/\s+/).filter(Boolean).length;
 }
 
+function regexWithoutGlobal(pattern: RegExp) {
+  return new RegExp(pattern.source, pattern.flags.replace("g", ""));
+}
+
+function hasProhibitedPhrase(reply: string) {
+  return PROHIBITED_PHRASE_PATTERNS.some((pattern) => regexWithoutGlobal(pattern).test(reply));
+}
+
 function userAskedForList(userMessage: string) {
   const normalized = normalizeText(userMessage);
 
@@ -72,6 +80,114 @@ function capParagraphs(reply: string, maxParagraphs: number) {
   return paragraphs.slice(0, maxParagraphs).join("\n\n");
 }
 
+function hasKnowledgeEvidence(retrievedKnowledge?: Array<{ title?: string } | string>) {
+  return Boolean(retrievedKnowledge?.length);
+}
+
+function containsUnrequestedDependencies(userMessage: string, answer: string) {
+  const normalizedUserMessage = normalizeText(userMessage);
+  const normalizedAnswer = normalizeText(answer);
+
+  return (
+    /(secretaria|secretarias|dependencia|dependencias|oficina|oficinas)/.test(normalizedAnswer) &&
+    !/(secretaria|secretarias|dependencia|dependencias|oficina|oficinas)/.test(normalizedUserMessage)
+  );
+}
+
+function isUnknownOfficialReply(answer: string) {
+  return normalizeText(answer).startsWith(normalizeText(UNKNOWN_OFFICIAL_DATA_REPLY));
+}
+
+function answerLooksAlignedWithUserQuestion(input: {
+  userMessage: string;
+  answer: string;
+  intent: ConversationalIntent;
+}) {
+  const normalizedUserMessage = normalizeText(input.userMessage);
+  const normalizedAnswer = normalizeText(input.answer);
+
+  if (!normalizedAnswer) return false;
+  if (input.intent === "THANKS") return normalizedAnswer === "con mucho gusto.";
+  if (input.intent === "GREETING") return normalizedAnswer.includes("hola");
+  if (input.intent === "OUT_OF_SCOPE" || input.intent === "ABSURD_OR_UNKNOWN") {
+    return normalizedAnswer.includes("no tengo informacion oficial");
+  }
+  if (/(donde|direccion|ubicacion|queda)/.test(normalizedUserMessage)) {
+    return /(queda|direccion|ubicacion|carrera|calle|sede|rionegro|alcaldia)/.test(normalizedAnswer);
+  }
+  if (/(impuesto|impuestos|predial|industria y comercio|pago|pagos)/.test(normalizedUserMessage)) {
+    return /(impuesto|predial|industria y comercio|pago|hacienda|rentas|no tengo informacion oficial)/.test(
+      normalizedAnswer,
+    );
+  }
+
+  return true;
+}
+
+export function validateFinalAnswer(input: {
+  userMessage: string;
+  answer: string;
+  intent: ConversationalIntent;
+  retrievedKnowledge?: Array<{ title?: string } | string>;
+  officialDataRequested?: boolean;
+}) {
+  const paragraphs = input.answer
+    .split(/\n{2,}/)
+    .map((paragraph) => paragraph.trim())
+    .filter(Boolean);
+  const simple = isSimpleIntent(input.intent, input.userMessage);
+  const isTooLong =
+    (simple && (paragraphs.length > 2 || wordCount(input.answer) > 90)) ||
+    wordCount(input.answer) > 180;
+  const usesForbiddenPhrases = hasProhibitedPhrase(input.answer);
+  const unrequestedDependencies = containsUnrequestedDependencies(input.userMessage, input.answer);
+  const containsUnsupportedOfficialFacts =
+    Boolean(input.officialDataRequested) &&
+    !hasKnowledgeEvidence(input.retrievedKnowledge) &&
+    !isUnknownOfficialReply(input.answer);
+  const answersUserQuestion = answerLooksAlignedWithUserQuestion(input);
+  const shouldRewrite =
+    !answersUserQuestion ||
+    isTooLong ||
+    usesForbiddenPhrases ||
+    unrequestedDependencies ||
+    containsUnsupportedOfficialFacts;
+  const reason = [
+    !answersUserQuestion ? "No contesta exactamente la pregunta." : "",
+    isTooLong ? "Respuesta demasiado larga." : "",
+    usesForbiddenPhrases ? "Usa frases prohibidas." : "",
+    unrequestedDependencies ? "Incluye dependencias no solicitadas." : "",
+    containsUnsupportedOfficialFacts ? "Contiene dato oficial sin evidencia recuperada." : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  console.log("[conversation] final answer validated", {
+    answersUserQuestion,
+    isTooLong,
+    usesForbiddenPhrases,
+    containsUnrequestedDependencies: unrequestedDependencies,
+    containsUnsupportedOfficialFacts,
+    shouldRewrite,
+  });
+
+  if (shouldRewrite) {
+    console.log("[conversation] final answer rewritten", {
+      reason,
+    });
+  }
+
+  return {
+    answersUserQuestion,
+    isTooLong,
+    usesForbiddenPhrases,
+    containsUnrequestedDependencies: unrequestedDependencies,
+    containsUnsupportedOfficialFacts,
+    shouldRewrite,
+    reason: reason || "Respuesta valida.",
+  };
+}
+
 export function formatWhatsAppReply(input: {
   reply: string;
   intent: ConversationalIntent;
@@ -101,6 +217,20 @@ export function formatWhatsAppReply(input: {
   }
 
   if (input.sourceConfidence !== undefined && input.sourceConfidence < 0.45) {
+    return UNKNOWN_OFFICIAL_DATA_REPLY;
+  }
+
+  const validation = validateFinalAnswer({
+    userMessage: input.userMessage,
+    answer: cleaned,
+    intent: input.intent,
+  });
+
+  if (validation.containsUnrequestedDependencies || validation.containsUnsupportedOfficialFacts) {
+    return UNKNOWN_OFFICIAL_DATA_REPLY;
+  }
+
+  if (!validation.answersUserQuestion) {
     return UNKNOWN_OFFICIAL_DATA_REPLY;
   }
 
@@ -164,4 +294,6 @@ export const whatsappReplyStyleInternals = {
   stripUnneededBullets,
   capParagraphs,
   userAskedForList,
+  containsUnrequestedDependencies,
+  hasProhibitedPhrase,
 };

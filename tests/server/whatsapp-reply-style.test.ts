@@ -5,6 +5,7 @@ import {
   formatWhatsAppReply,
   UNKNOWN_OFFICIAL_REPLY,
   validateAnswerGrounding,
+  validateFinalAnswer,
 } from "@/server/whatsapp-reply-style";
 
 test("formatWhatsAppReply corta absurdos con respuesta oficial de no informacion", () => {
@@ -45,4 +46,32 @@ test("validateAnswerGrounding bloquea datos oficiales sin fuente recuperada", ()
 
   assert.equal(result.blocked, true);
   assert.equal(result.answer, "No tengo informacion oficial sobre eso en este momento.");
+});
+
+test("validateFinalAnswer detecta relleno, dependencias no pedidas y frases prohibidas", () => {
+  const result = validateFinalAnswer({
+    userMessage: "Donde queda la Alcaldia?",
+    answer:
+      "A continuacion te presento las dependencias: Secretaria de Hacienda, Secretaria de Gobierno y otras oficinas.",
+    intent: "KNOWLEDGE_BASE_QUERY",
+    retrievedKnowledge: [{ title: "Alcaldia" }],
+    officialDataRequested: true,
+  });
+
+  assert.equal(result.usesForbiddenPhrases, true);
+  assert.equal(result.containsUnrequestedDependencies, true);
+  assert.equal(result.shouldRewrite, true);
+});
+
+test("validateFinalAnswer detecta datos oficiales sin evidencia recuperada", () => {
+  const result = validateFinalAnswer({
+    userMessage: "Cual es el telefono de una oficina?",
+    answer: "El telefono es 604 000 0000.",
+    intent: "KNOWLEDGE_BASE_QUERY",
+    retrievedKnowledge: [],
+    officialDataRequested: true,
+  });
+
+  assert.equal(result.containsUnsupportedOfficialFacts, true);
+  assert.equal(result.shouldRewrite, true);
 });

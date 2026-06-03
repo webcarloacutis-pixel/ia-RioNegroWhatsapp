@@ -114,6 +114,14 @@ test("rechaza preguntas absurdas sin devolver dependencias", async () => {
   assert.doesNotMatch(pelea.reply, /dependencias|Secretaria|tramites relacionados/i);
 });
 
+test("pregunta fuera de alcance responde que no tiene informacion oficial", async () => {
+  resetConversation("unit-out-of-scope");
+  const result = await chatWithAssistant("unit-out-of-scope", "Quien es Taylor Swift?");
+
+  assert.match(result.reply, /No tengo informacion oficial sobre eso/i);
+  assert.doesNotMatch(result.reply, /dependencias|Secretaria|tramites relacionados/i);
+});
+
 test("pide aclaracion unica cuando la consulta municipal es ambigua", async () => {
   resetConversation("unit-ambiguous-taxes");
   const result = await chatWithAssistant(
@@ -125,6 +133,17 @@ test("pide aclaracion unica cuando la consulta municipal es ambigua", async () =
     result.reply,
     "Claro. Te refieres al impuesto predial, industria y comercio u otro pago?",
   );
+});
+
+test("como poner una denuncia orienta sin crear reporte automatico", async () => {
+  resetConversation("unit-denuncia-info");
+  const result = await chatWithAssistant("unit-denuncia-info", "Como pongo una denuncia?");
+
+  assert.equal(
+    result.reply,
+    "Claro. Cuentame que paso y en que sector para poder registrar el reporte.",
+  );
+  assert.equal(result.meta.usedOpenAI, false);
 });
 
 test("responde predial con orientacion especifica y sin lista generica", async () => {

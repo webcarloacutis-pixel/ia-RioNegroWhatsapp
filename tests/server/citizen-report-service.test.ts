@@ -110,6 +110,41 @@ test("handleCitizenReport registra emergencia y usa telefono configurado si exis
   }
 });
 
+test("handleCitizenReport pide ubicacion y foto cuando accidente solo dice Rionegro", async () => {
+  const result = await handleCitizenReport({
+    text: "Hay un accidente en Rionegro",
+    messageType: "chat",
+    recipient: "+573001112245",
+    whatsappMessageId: `unit-accident-location-${Date.now()}`,
+  });
+
+  assert.equal(result.handled, true);
+
+  if (result.handled) {
+    assert.equal(result.needsMoreInfo, true);
+    assert.match(result.reply, /ubicaci[oó]n exacta|sector/i);
+    assert.match(result.reply, /foto/i);
+  }
+});
+
+test("handleCitizenReport registra accidente con sector y pide foto o referencia", async () => {
+  const result = await handleCitizenReport({
+    text: "Hay un accidente en Llanogrande",
+    messageType: "chat",
+    recipient: "+573001112246",
+    whatsappMessageId: `unit-accident-llanogrande-${Date.now()}`,
+  });
+
+  assert.equal(result.handled, true);
+
+  if (result.handled) {
+    assert.equal(result.report?.category, "Accidente");
+    assert.equal(result.report?.location, "Llanogrande");
+    assert.match(result.reply, /registramos la informaci[oó]n/i);
+    assert.match(result.reply, /foto|referencia/i);
+  }
+});
+
 test("handleCitizenReport no guarda imagenes con URL privada o MIME no permitido", async () => {
   const result = await handleCitizenReport({
     text: "Hay un hueco peligroso en Llanogrande",

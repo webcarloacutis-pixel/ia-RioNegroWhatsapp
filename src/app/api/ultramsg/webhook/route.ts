@@ -926,6 +926,14 @@ async function processCitizenReportMessage(input: {
     return null;
   }
 
+  console.log("[citizen-reports] report flow activated", {
+    type: input.type,
+    reporter: maskRecipient(input.recipient),
+    intent: intentAnalysis.intent,
+    category: reportIntent.category,
+    priority: reportIntent.priority,
+  });
+
   const result = await handleCitizenReport({
     text: description,
     messageType: input.type,
