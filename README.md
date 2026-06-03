@@ -151,6 +151,8 @@ docker-compose.yml
 
 Usa `.env.example` como base.
 
+Para las variables y controles de seguridad nuevos, revisa [docs/SECURITY_HARDENING.md](docs/SECURITY_HARDENING.md).
+
 ### Opcion 1: PostgreSQL local
 
 ```env

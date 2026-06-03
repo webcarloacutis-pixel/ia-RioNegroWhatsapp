@@ -2,12 +2,30 @@ import { NextResponse } from "next/server";
 import { ZodError, type ZodType } from "zod";
 
 import { AppError } from "@/lib/errors";
+import {
+  JSON_BODY_LIMIT_BYTES,
+  assertRequestBodyPolicy,
+  readRequestTextWithLimit,
+} from "@/lib/request-security";
 
 export async function parseRequestBody<T>(
   request: Request,
   schema: ZodType<T>,
 ) {
-  const payload = await request.json();
+  assertRequestBodyPolicy(request, {
+    allowedContentTypes: ["application/json"],
+    maxBytes: JSON_BODY_LIMIT_BYTES,
+  });
+
+  const rawText = await readRequestTextWithLimit(request, JSON_BODY_LIMIT_BYTES);
+  let payload: unknown;
+
+  try {
+    payload = JSON.parse(rawText);
+  } catch {
+    throw new AppError("JSON invalido.", 400);
+  }
+
   return schema.parse(payload);
 }
 

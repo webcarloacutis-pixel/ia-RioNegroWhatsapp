@@ -152,6 +152,82 @@ test("sendMessage falla claramente cuando no hay destinatarios", async () => {
   process.env.ULTRAMSG_DEFAULT_TO = previousDefaultTo;
 });
 
+test("sendMessage bloquea envio real que supera maximo de destinatarios", async () => {
+  const previousDryRun = process.env.WHATSAPP_DRY_RUN;
+  const previousSafeMode = process.env.WHATSAPP_SAFE_MODE;
+  const previousToken = process.env.ULTRAMSG_TOKEN;
+  const previousBaseUrl = process.env.ULTRAMSG_BASE_URL;
+  const previousMax = process.env.MASS_MESSAGE_MAX_RECIPIENTS;
+
+  process.env.WHATSAPP_DRY_RUN = "false";
+  process.env.WHATSAPP_SAFE_MODE = "false";
+  process.env.ULTRAMSG_TOKEN = "token-test";
+  process.env.ULTRAMSG_BASE_URL = "https://api.ultramsg.com/instance-test";
+  process.env.MASS_MESSAGE_MAX_RECIPIENTS = "2";
+
+  try {
+    await assert.rejects(
+      () =>
+        sendMessage({
+          message: "Comunicado real grande",
+          segment: {
+            id: "seg-large",
+            name: "Segmento grande",
+            estimatedUsers: 3,
+            recipientPhones: ["+573001111111", "+573002222222", "+573003333333"],
+          },
+          scheduledAt: new Date("2026-04-20T10:00:00.000Z"),
+          mode: "MANUAL",
+        }),
+      /supera el maximo/i,
+    );
+  } finally {
+    process.env.WHATSAPP_DRY_RUN = previousDryRun;
+    process.env.WHATSAPP_SAFE_MODE = previousSafeMode;
+    process.env.ULTRAMSG_TOKEN = previousToken;
+    process.env.ULTRAMSG_BASE_URL = previousBaseUrl;
+    process.env.MASS_MESSAGE_MAX_RECIPIENTS = previousMax;
+  }
+});
+
+test("sendMessage bloquea envio real basado solo en ULTRAMSG_DEFAULT_TO", async () => {
+  const previousDryRun = process.env.WHATSAPP_DRY_RUN;
+  const previousSafeMode = process.env.WHATSAPP_SAFE_MODE;
+  const previousToken = process.env.ULTRAMSG_TOKEN;
+  const previousBaseUrl = process.env.ULTRAMSG_BASE_URL;
+  const previousDefaultTo = process.env.ULTRAMSG_DEFAULT_TO;
+
+  process.env.WHATSAPP_DRY_RUN = "false";
+  process.env.WHATSAPP_SAFE_MODE = "false";
+  process.env.ULTRAMSG_TOKEN = "token-test";
+  process.env.ULTRAMSG_BASE_URL = "https://api.ultramsg.com/instance-test";
+  process.env.ULTRAMSG_DEFAULT_TO = "+573001111111";
+
+  try {
+    await assert.rejects(
+      () =>
+        sendMessage({
+          message: "Comunicado real sin destinatarios explicitos",
+          segment: {
+            id: "seg-default",
+            name: "Segmento sin telefonos",
+            estimatedUsers: 1,
+            recipientPhones: [],
+          },
+          scheduledAt: new Date("2026-04-20T10:00:00.000Z"),
+          mode: "MANUAL",
+        }),
+      /destinatarios explicitos/i,
+    );
+  } finally {
+    process.env.WHATSAPP_DRY_RUN = previousDryRun;
+    process.env.WHATSAPP_SAFE_MODE = previousSafeMode;
+    process.env.ULTRAMSG_TOKEN = previousToken;
+    process.env.ULTRAMSG_BASE_URL = previousBaseUrl;
+    process.env.ULTRAMSG_DEFAULT_TO = previousDefaultTo;
+  }
+});
+
 test("ULTRAMSG_MOCK bloquea llamadas reales aunque WHATSAPP_DRY_RUN este apagado", async () => {
   const previousDryRun = process.env.WHATSAPP_DRY_RUN;
   const previousUltraMsgMock = process.env.ULTRAMSG_MOCK;

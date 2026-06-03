@@ -1,5 +1,15 @@
 import type { AnnouncementStatus } from "@prisma/client";
 
+import citizenKnowledgeEntries from "./data/rionegro-citizen-knowledge.json";
+
+type OfficialKnowledgeEntry = {
+  question: string;
+  answer: string;
+  category: string;
+};
+
+const citizenKnowledgeBaseEntries: OfficialKnowledgeEntry[] = citizenKnowledgeEntries;
+
 export const officialEvents = [
   {
     title: "Jornada de desparasitacion gratuita",
@@ -468,6 +478,7 @@ const officialFaqEntriesEn = [
 export function buildOfficialKnowledgeEntries() {
   return [
     ...officialFaqEntries,
+    ...citizenKnowledgeBaseEntries,
     ...officialFaqEntriesEn,
     {
       question: "Datos de contacto de la Alcaldia de Rionegro",

@@ -1,5 +1,14 @@
 import { NextResponse } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 
+import { AppError } from "@/lib/errors";
+import {
+  WEBHOOK_BODY_LIMIT_BYTES,
+  assertRequestBodyPolicy,
+  readRequestTextWithLimit,
+} from "@/lib/request-security";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { isPublicHttpUrl } from "@/lib/url-security";
 import {
   generateElevenLabsSpeech,
   isElevenLabsConfigured,
@@ -15,6 +24,7 @@ import {
   detectCitizenReportIntent,
   handleCitizenReport,
 } from "@/server/citizen-report-service";
+import { analyzeUserMessageIntent } from "@/server/intent-classifier";
 
 export const runtime = "nodejs";
 
@@ -80,6 +90,17 @@ const MEDIA_SOURCE_KEYS = [
 ];
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const RATE_LIMIT_MAX_MESSAGES = 20;
+const WEBHOOK_IP_RATE_LIMIT = {
+  limit: 60,
+  windowMs: 60_000,
+};
+const MAX_MEDIA_DOWNLOAD_BYTES = 10 * 1024 * 1024;
+const ALLOWED_REPORT_IMAGE_MIME_TYPES = new Set([
+  "image/jpeg",
+  "image/jpg",
+  "image/png",
+  "image/webp",
+]);
 const ASSISTANT_FALLBACK_REPLY =
   "Recibi tu mensaje, pero en este momento no pude consultar toda la informacion. Por favor intenta de nuevo en unos minutos o escribenos por los canales oficiales de la Alcaldia de Rionegro.";
 
@@ -130,6 +151,53 @@ function parseJsonObject(value: string) {
   }
 }
 
+function safeCompareSecret(left: string, right: string) {
+  const leftBuffer = Buffer.from(left);
+  const rightBuffer = Buffer.from(right);
+
+  return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
+}
+
+function getProvidedWebhookSecret(request: Request) {
+  const authorization = request.headers.get("authorization")?.trim();
+
+  if (authorization?.toLowerCase().startsWith("bearer ")) {
+    return authorization.slice(7).trim();
+  }
+
+  const headerSecret =
+    request.headers.get("x-ultramsg-webhook-secret") ??
+    request.headers.get("x-webhook-secret");
+
+  if (headerSecret?.trim()) {
+    return headerSecret.trim();
+  }
+
+  try {
+    const url = new URL(request.url);
+    return (
+      url.searchParams.get("secret") ??
+      url.searchParams.get("webhook_secret") ??
+      url.searchParams.get("token") ??
+      ""
+    ).trim();
+  } catch {
+    return "";
+  }
+}
+
+function isWebhookSecretAllowed(request: Request) {
+  const expected = process.env.ULTRAMSG_WEBHOOK_SECRET?.trim();
+
+  if (!expected) {
+    return true;
+  }
+
+  const provided = getProvidedWebhookSecret(request);
+
+  return Boolean(provided) && safeCompareSecret(provided, expected);
+}
+
 function coerceWebhookPayload(value: unknown): UltraMsgWebhookPayload {
   if (!isPlainObject(value)) {
     return {};
@@ -174,17 +242,26 @@ function formValue(params: URLSearchParams, ...keys: string[]) {
 }
 
 async function parseWebhookPayload(request: Request): Promise<UltraMsgWebhookPayload> {
+  assertRequestBodyPolicy(request, {
+    allowedContentTypes: [
+      "application/json",
+      "application/x-www-form-urlencoded",
+      "text/plain",
+    ],
+    allowMissingContentType: true,
+    maxBytes: WEBHOOK_BODY_LIMIT_BYTES,
+  });
+
   const contentType = request.headers.get("content-type") ?? "";
+  const rawText = await readRequestTextWithLimit(request, WEBHOOK_BODY_LIMIT_BYTES);
 
   if (contentType.includes("application/json")) {
     try {
-      return coerceWebhookPayload(await request.json());
+      return coerceWebhookPayload(JSON.parse(rawText));
     } catch {
       return {};
     }
   }
-
-  const rawText = await request.text();
 
   if (!rawText.trim()) {
     return {};
@@ -564,12 +641,36 @@ function sanitizeFilename(value: string, mimeType: string) {
   return /\.[a-z0-9]+$/i.test(cleaned) ? cleaned : `${cleaned}.${extension}`;
 }
 
+function isReportImageAttachmentAllowed(url: string, mimeType?: string) {
+  if (!isPublicHttpUrl(url)) {
+    return false;
+  }
+
+  const normalizedMimeType = mimeType?.split(";")[0]?.trim().toLowerCase();
+
+  if (normalizedMimeType) {
+    return ALLOWED_REPORT_IMAGE_MIME_TYPES.has(normalizedMimeType);
+  }
+
+  return /\.(jpe?g|png|webp)(?:\?|$)/i.test(url);
+}
+
 async function downloadMedia(mediaSource: MediaSource): Promise<DownloadedMedia> {
   if (mediaSource.kind === "url") {
+    if (!isPublicHttpUrl(mediaSource.value)) {
+      throw new Error("URL de medio no permitida.");
+    }
+
     const response = await fetch(mediaSource.value);
 
     if (!response.ok) {
       throw new Error(`No se pudo descargar el medio (${response.status}).`);
+    }
+
+    const contentLength = Number(response.headers.get("content-length") ?? 0);
+
+    if (Number.isFinite(contentLength) && contentLength > MAX_MEDIA_DOWNLOAD_BYTES) {
+      throw new Error("El medio excede el tamano permitido.");
     }
 
     const responseMimeType = response.headers.get("content-type")?.split(";")[0];
@@ -579,9 +680,14 @@ async function downloadMedia(mediaSource: MediaSource): Promise<DownloadedMedia>
       mediaSource.filename || getFilenameFromUrl(mediaSource.value) || "nota-voz",
       mimeType,
     );
+    const bytes = Buffer.from(await response.arrayBuffer());
+
+    if (bytes.byteLength > MAX_MEDIA_DOWNLOAD_BYTES) {
+      throw new Error("El medio excede el tamano permitido.");
+    }
 
     return {
-      bytes: Buffer.from(await response.arrayBuffer()),
+      bytes,
       mimeType,
       filename,
     };
@@ -596,17 +702,28 @@ async function downloadMedia(mediaSource: MediaSource): Promise<DownloadedMedia>
 
     const mimeType = mediaSource.mimeType || match[1] || "audio/ogg";
 
+    const bytes = Buffer.from(match[2], "base64");
+
+    if (bytes.byteLength > MAX_MEDIA_DOWNLOAD_BYTES) {
+      throw new Error("El medio excede el tamano permitido.");
+    }
+
     return {
-      bytes: Buffer.from(match[2], "base64"),
+      bytes,
       mimeType,
       filename: sanitizeFilename(mediaSource.filename || "nota-voz", mimeType),
     };
   }
 
   const mimeType = mediaSource.mimeType || "audio/ogg";
+  const bytes = Buffer.from(mediaSource.value.replace(/\s+/g, ""), "base64");
+
+  if (bytes.byteLength > MAX_MEDIA_DOWNLOAD_BYTES) {
+    throw new Error("El medio excede el tamano permitido.");
+  }
 
   return {
-    bytes: Buffer.from(mediaSource.value.replace(/\s+/g, ""), "base64"),
+    bytes,
     mimeType,
     filename: sanitizeFilename(mediaSource.filename || "nota-voz", mimeType),
   };
@@ -759,6 +876,14 @@ function getImageAttachment(payload: UltraMsgWebhookPayload) {
         ? data.mimeType
         : undefined;
 
+  if (!isReportImageAttachmentAllowed(mediaSource.value, mimeType)) {
+    console.log("[citizen-reports] image received", {
+      stored: false,
+      reason: "image_not_allowed",
+    });
+    return null;
+  }
+
   console.log("[citizen-reports] image received", {
     stored: true,
     mimeType,
@@ -785,12 +910,18 @@ async function processCitizenReportMessage(input: {
   const image = hasImage ? getImageAttachment(input.payload) : null;
   const data = input.payload.data;
   const description = input.incomingText.trim();
+  const intentAnalysis = analyzeUserMessageIntent(description, {
+    messageType: input.type,
+    hasImage,
+  });
   const reportIntent = detectCitizenReportIntent(description, input.type);
 
-  if (!reportIntent.isReport && !hasImage) {
+  if (!intentAnalysis.shouldCreateCitizenReport && !(hasImage && !description)) {
     console.log("[citizen-reports] routed to general assistant", {
       type: input.type,
       reporter: maskRecipient(input.recipient),
+      intent: intentAnalysis.intent,
+      reason: intentAnalysis.reason,
     });
     return null;
   }
@@ -958,6 +1089,41 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
+    if (!isWebhookSecretAllowed(request)) {
+      console.warn("[security] ultramsg webhook rejected: invalid secret");
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Webhook no autorizado.",
+        },
+        { status: 401 },
+      );
+    }
+
+    const clientIp = getClientIp(request);
+    const ipRateLimit = checkRateLimit(`ultramsg-webhook:${clientIp}`, WEBHOOK_IP_RATE_LIMIT);
+
+    if (!ipRateLimit.allowed) {
+      console.warn("[security] ultramsg webhook IP rate limited", {
+        ip: clientIp,
+        retryAfterMs: ipRateLimit.retryAfterMs,
+      });
+
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Demasiadas solicitudes.",
+        },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(Math.ceil(ipRateLimit.retryAfterMs / 1000)),
+          },
+        },
+      );
+    }
+
     console.log("[whatsapp] webhook received", {
       contentType: request.headers.get("content-type") ?? "unknown",
     });
@@ -1061,6 +1227,16 @@ export async function POST(request: Request) {
       reply: replyStatus,
     });
   } catch (error) {
+    if (error instanceof AppError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: error.message,
+        },
+        { status: error.status },
+      );
+    }
+
     console.error("[whatsapp] webhook error", {
       error: error instanceof Error ? error.message : "unknown_error",
     });

@@ -1,7 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { detectCitizenReportIntent } from "@/server/citizen-report-service";
+import {
+  detectCitizenReportIntent,
+  handleCitizenReport,
+} from "@/server/citizen-report-service";
 
 test("detecta accidente como reporte ciudadano urgente antes del asistente general", () => {
   const intent = detectCitizenReportIntent(
@@ -67,4 +70,70 @@ test("clasifica situaciones graves como urgentes", () => {
   assert.equal(incendio.isUrgentSituation, true);
   assert.equal(disparos.category, "Seguridad");
   assert.equal(disparos.priority, "urgent");
+});
+
+test("no crea intencion de reporte para preguntas sobre como reportar", () => {
+  const reportarHueco = detectCitizenReportIntent("Que hago para reportar un hueco?");
+  const denuncia = detectCitizenReportIntent("Como pongo una denuncia?");
+  const transito = detectCitizenReportIntent("Donde queda transito?");
+
+  assert.equal(reportarHueco.isReport, false);
+  assert.equal(denuncia.isReport, false);
+  assert.equal(transito.isReport, false);
+});
+
+test("handleCitizenReport registra emergencia y usa telefono configurado si existe", async () => {
+  const previousGeneral = process.env.EMERGENCY_PHONE_GENERAL;
+  process.env.EMERGENCY_PHONE_GENERAL = "123";
+
+  try {
+    const result = await handleCitizenReport({
+      text: "Escuche disparos cerca al parque",
+      messageType: "chat",
+      recipient: "+573001112233",
+      whatsappMessageId: `unit-emergency-${Date.now()}`,
+    });
+
+    assert.equal(result.handled, true);
+
+    if (result.handled) {
+      assert.match(result.reply, /123/);
+      assert.equal(result.report?.category, "Seguridad");
+      assert.equal(result.report?.priority, "urgent");
+    }
+  } finally {
+    if (previousGeneral === undefined) {
+      delete process.env.EMERGENCY_PHONE_GENERAL;
+    } else {
+      process.env.EMERGENCY_PHONE_GENERAL = previousGeneral;
+    }
+  }
+});
+
+test("handleCitizenReport no guarda imagenes con URL privada o MIME no permitido", async () => {
+  const result = await handleCitizenReport({
+    text: "Hay un hueco peligroso en Llanogrande",
+    messageType: "image",
+    recipient: "+573001112244",
+    whatsappMessageId: `unit-private-image-${Date.now()}`,
+    images: [
+      {
+        url: "http://127.0.0.1/private.jpg",
+        filename: "private.jpg",
+        mimeType: "image/jpeg",
+      },
+      {
+        url: "https://cdn.example.com/report.svg",
+        filename: "report.svg",
+        mimeType: "image/svg+xml",
+      },
+    ],
+    hasImage: true,
+  });
+
+  assert.equal(result.handled, true);
+
+  if (result.handled) {
+    assert.equal(result.report?.images.length, 0);
+  }
 });

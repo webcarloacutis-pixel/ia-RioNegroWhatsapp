@@ -1,0 +1,1127 @@
+[
+  {
+    "question": "Contacto de emergencia: Alcanos de Colombia",
+    "answer": "Titulo: Alcanos de Colombia. Telefono: 164 / Linea de atencion: 601 580 6041.",
+    "category": "Emergencias"
+  },
+  {
+    "question": "Contacto de emergencia: Bomberos Rionegro",
+    "answer": "Titulo: Bomberos Rionegro. Direccion: Cra. 44 #59-163. Telefono: 604 444 3139 / 310 831 7797.",
+    "category": "Emergencias"
+  },
+  {
+    "question": "Contacto de emergencia: EPM",
+    "answer": "Titulo: EPM. Telefono: 604 444 4115 / Linea nacional: 018000 415 115.",
+    "category": "Emergencias"
+  },
+  {
+    "question": "Contacto de emergencia: Estacion de Policia Rionegro",
+    "answer": "Titulo: Estacion de Policia Rionegro. Direccion: Cra. 70 #44-25. Telefono: 604 520 6310 / 123.",
+    "category": "Emergencias"
+  },
+  {
+    "question": "Evento del calendario: Conferencia (Jueves 4 de julio de 2024 02:00 pm)",
+    "answer": "Titulo: Conferencia. Inicia: Jueves 4 de julio de 2024 02:00 pm. Finaliza: Jueves 4 de julio de 2024 03:00 pm. Detalle: Anadir a Google Calendar Anadir a Google Calendar FECHA Y HORA Inicia: Jueves 4 de julio de 2024 02:00 pm Finaliza: Jueves 4 de julio de 2024 03:00 pm. Fuente: https://rionegro.gov.co/calendario/4/conferencia/.",
+    "category": "Eventos"
+  },
+  {
+    "question": "Evento del calendario: Conferencia (Jueves 4 de julio de 2024 11:30 am)",
+    "answer": "Titulo: Conferencia. Inicia: Jueves 4 de julio de 2024 11:30 am. Finaliza: Jueves 4 de julio de 2024 01:00 pm. Detalle: Anadir a Google Calendar Anadir a Google Calendar FECHA Y HORA Inicia: Jueves 4 de julio de 2024 11:30 am Finaliza: Jueves 4 de julio de 2024 01:00 pm. Fuente: https://rionegro.gov.co/calendario/3/conferencia/.",
+    "category": "Eventos"
+  },
+  {
+    "question": "Evento del calendario: Exposicion (Lunes 8 de julio de 2024 06:00 pm)",
+    "answer": "Titulo: Exposicion. Inicia: Lunes 8 de julio de 2024 06:00 pm. Finaliza: Lunes 8 de julio de 2024 08:00 pm. Detalle: Anadir a Google Calendar Anadir a Google Calendar FECHA Y HORA Inicia: Lunes 8 de julio de 2024 06:00 pm Finaliza: Lunes 8 de julio de 2024 08:00 pm. Fuente: https://rionegro.gov.co/calendario/6/exposicion/.",
+    "category": "Eventos"
+  },
+  {
+    "question": "Evento del calendario: Feria de Empleo (Viernes 12 de julio de 2024 01:00 pm)",
+    "answer": "Titulo: Feria de Empleo. Inicia: Viernes 12 de julio de 2024 01:00 pm. Finaliza: Viernes 12 de julio de 2024 05:00 pm. Detalle: Anadir a Google Calendar Anadir a Google Calendar FECHA Y HORA Inicia: Viernes 12 de julio de 2024 01:00 pm Finaliza: Viernes 12 de julio de 2024 05:00 pm. Fuente: https://rionegro.gov.co/calendario/9/feria-de-empleo/.",
+    "category": "Eventos"
+  },
+  {
+    "question": "Evento del calendario: Marcha PRIDE Oriente (Domingo 7 de julio de 2024 03:00 pm)",
+    "answer": "Titulo: Marcha PRIDE Oriente. Inicia: Domingo 7 de julio de 2024 03:00 pm. Finaliza: Domingo 7 de julio de 2024 08:00 pm. Detalle: Anadir a Google Calendar Anadir a Google Calendar FECHA Y HORA Inicia: Domingo 7 de julio de 2024 03:00 pm Finaliza: Domingo 7 de julio de 2024 08:00 pm. Fuente: https://rionegro.gov.co/calendario/5/marcha-pride-oriente/.",
+    "category": "Eventos"
+  },
+  {
+    "question": "Evento del calendario: Megarumba (Martes 9 de julio de 2024 06:00 pm)",
+    "answer": "Titulo: Megarumba. Inicia: Martes 9 de julio de 2024 06:00 pm. Finaliza: Martes 9 de julio de 2024 07:00 pm. Detalle: Anadir a Google Calendar Anadir a Google Calendar FECHA Y HORA Inicia: Martes 9 de julio de 2024 06:00 pm Finaliza: Martes 9 de julio de 2024 07:00 pm. Fuente: https://rionegro.gov.co/calendario/7/megarumba/.",
+    "category": "Eventos"
+  },
+  {
+    "question": "Evento del calendario: MIAFF (Martes 16 de julio de 2024 02:00 pm)",
+    "answer": "Titulo: MIAFF. Inicia: Martes 16 de julio de 2024 02:00 pm. Finaliza: Martes 16 de julio de 2024 05:00 pm. Detalle: Anadir a Google Calendar Anadir a Google Calendar FECHA Y HORA Inicia: Martes 16 de julio de 2024 02:00 pm Finaliza: Martes 16 de julio de 2024 05:00 pm. Fuente: https://rionegro.gov.co/calendario/12/miaff/.",
+    "category": "Eventos"
+  },
+  {
+    "question": "Evento del calendario: Parada Militar (Sabado 20 de julio de 2024 04:00 pm)",
+    "answer": "Titulo: Parada Militar. Inicia: Sabado 20 de julio de 2024 04:00 pm. Finaliza: Sabado 20 de julio de 2024 06:00 pm. Detalle: Anadir a Google Calendar Anadir a Google Calendar FECHA Y HORA Inicia: Sabado 20 de julio de 2024 04:00 pm Finaliza: Sabado 20 de julio de 2024 06:00 pm. Fuente: https://rionegro.gov.co/calendario/14/parada-militar/.",
+    "category": "Eventos"
+  },
+  {
+    "question": "Evento del calendario: Parche Juvenil y Cultural (Viernes 12 de julio de 2024 05:00 pm)",
+    "answer": "Titulo: Parche Juvenil y Cultural. Inicia: Viernes 12 de julio de 2024 05:00 pm. Finaliza: Viernes 12 de julio de 2024 09:00 pm. Detalle: Anadir a Google Calendar Anadir a Google Calendar FECHA Y HORA Inicia: Viernes 12 de julio de 2024 05:00 pm Finaliza: Viernes 12 de julio de 2024 09:00 pm. Fuente: https://rionegro.gov.co/calendario/11/parche-juvenil-y-cultural/.",
+    "category": "Eventos"
+  },
+  {
+    "question": "Evento del calendario: Picnic Literario (Viernes 12 de julio de 2024 04:00 pm)",
+    "answer": "Titulo: Picnic Literario. Inicia: Viernes 12 de julio de 2024 04:00 pm. Finaliza: Viernes 12 de julio de 2024 06:00 pm. Detalle: Anadir a Google Calendar Anadir a Google Calendar FECHA Y HORA Inicia: Viernes 12 de julio de 2024 04:00 pm Finaliza: Viernes 12 de julio de 2024 06:00 pm. Fuente: https://rionegro.gov.co/calendario/10/picnic-literario/.",
+    "category": "Eventos"
+  },
+  {
+    "question": "Evento del calendario: Rionegro (Jueves 11 de julio de 2024 04:00 pm)",
+    "answer": "Titulo: Rionegro. Inicia: Jueves 11 de julio de 2024 04:00 pm. Finaliza: Jueves 11 de julio de 2024 06:00 pm. Detalle: Anadir a Google Calendar Anadir a Google Calendar FECHA Y HORA Inicia: Jueves 11 de julio de 2024 04:00 pm Finaliza: Jueves 11 de julio de 2024 06:00 pm. Fuente: https://rionegro.gov.co/calendario/8/rionegro/.",
+    "category": "Eventos"
+  },
+  {
+    "question": "Evento del calendario: Semana de la Movilidad Sostenible (Miercoles 17 de julio de 2024 12:00 am)",
+    "answer": "Titulo: Semana de la Movilidad Sostenible. Inicia: Miercoles 17 de julio de 2024 12:00 am. Finaliza: Domingo 21 de julio de 2024 11:59 pm. Detalle: Anadir a Google Calendar Anadir a Google Calendar FECHA Y HORA Inicia: Miercoles 17 de julio de 2024 12:00 am Finaliza: Domingo 21 de julio de 2024 11:59 pm. Fuente: https://rionegro.gov.co/calendario/13/semana-de-la-movilidad-sostenible/.",
+    "category": "Eventos"
+  },
+  {
+    "question": "Noticia o comunicado: 38 lideres se graduaron hoy del Diplomado Internacional Estrategias Territoriales y Ambientales para los Objetivos de Desarrollo Sostenible y...",
+    "answer": "Titulo: 38 lideres se graduaron hoy del Diplomado Internacional Estrategias Territoriales y Ambientales para los Objetivos de Desarrollo Sostenible y Agenda 2030. Fecha: 2023-10-20. Resumen: Hoy en la ciudad espanola de Huelva, 38 lideres comunales estan recibiendo sus grados del Diplomado Internacional Estrategias Territoriales y Ambient. Fuente: https://rionegro.gov.co/publicaciones/551/38-lideres-se-graduaron-hoy-del-diplomado-internacional-estrategias-territoriales-y-ambientales-para-los-objetivos-de-desarrollo-sostenible-y-agenda-2030/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Asi avanza Paisajes del Agua",
+    "answer": "Titulo: Asi avanza Paisajes del Agua. Fecha: 2024-05-20. Resumen: Este fin de semana el Alcalde de Rionegro, Jorge Rivas, recorrio el proyecto Paisajes del Agua en compania de Horacio Gallon, Secretario de Infraestruc. Fuente: https://rionegro.gov.co/publicaciones/420/asi-avanza-paisajes-del-agua/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Carta de trato digno al ciudadano",
+    "answer": "Titulo: Carta de trato digno al ciudadano. Fecha: 2024-05-02. Resumen: Carta de trato digno al ciudadano | Alcaldia de Rionegro. Fuente: https://rionegro.gov.co/publicaciones/332/carta-de-trato-digno-al-ciudadano-alcaldia-de-rionegro/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Con masiva asistencia se realizo la clausura del mes de la infancia y la adolescencia de Rionegro",
+    "answer": "Titulo: Con masiva asistencia se realizo la clausura del mes de la infancia y la adolescencia de Rionegro. Fecha: 2024-04-30. Resumen: Con un evento de masiva asistencia en el que asistieron mas de dos mil personas entre ninos, ninas, adolescentes y sus padres, se dio cierre, este saba. Fuente: https://rionegro.gov.co/publicaciones/561/con-masiva-asistencia-se-realizo-la-clausura-del-mes-de-la-infancia-y-la-adolescencia-de-rionegro/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Con un homenaje en el parque principal de Rionegro, se conmemoro el Natalicio del Procer Juan del Corral",
+    "answer": "Titulo: Con un homenaje en el parque principal de Rionegro, se conmemoro el Natalicio del Procer Juan del Corral. Fecha: 2024-06-24. Resumen: A traves de un homenaje, mediante una ceremonia militar, se destaco la vida y obra de Juan del Corral, quien nacio el 24 de junio de 1778 y se convirti. Fuente: https://rionegro.gov.co/publicaciones/598/con-un-homenaje-en-el-parque-principal-de-rionegro-se-conmemoro-el-natalicio-del-procer-juan-del-corral/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Continua la atencion a la temporada de lluvias en Rionegro",
+    "answer": "Titulo: Continua la atencion a la temporada de lluvias en Rionegro. Fecha: 2024-05-24. Resumen: En la noche de este jueves 23 de mayo se presento en Rionegro un fuerte aguacero que genero algunas afectaciones de vias y estructuras menores, fue asi. Fuente: https://rionegro.gov.co/publicaciones/425/continua-la-atencion-a-la-temporada-de-lluvias-en-rionegro/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Delegacion de Diputados de la Provincia de Maldonado, Uruguay visitan a Rionegro para conocer sus avances como Ciudad Inteligente e Innovadora",
+    "answer": "Titulo: Delegacion de Diputados de la Provincia de Maldonado, Uruguay visitan a Rionegro para conocer sus avances como Ciudad Inteligente e Innovadora. Fecha: 2022-07-22. Resumen: Desde la Provincia de Maldonado, Uruguay, el Municipio de Rionegro recibio la visita de doce (12) Diputados y a dos (2) miembros de la Fundacion para la. Fuente: https://rionegro.gov.co/publicaciones/576/delegacion-de-diputados-de-la-provincia-de-maldonado-uruguay-visitan-a-rionegro-para-conocer-sus-avances-como-ciudad-inteligente-e-innovadora/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: En Rionegro se creo el Sistema Local de Areas Protegidas, SILAP",
+    "answer": "Titulo: En Rionegro se creo el Sistema Local de Areas Protegidas, SILAP. Fecha: 2023-12-14. Resumen: Con el fin de orientar las decisiones municipales en el manejo de areas estrategicas a nivel ambiental, la Administracion Municipal Juntos Avanzamos. Fuente: https://rionegro.gov.co/publicaciones/484/en-rionegro-se-creo-el-sistema-local-de-areas-protegidas-silap/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: En San Antonio la Seguridad y el Espacio Publico siguen siendo una prioridad",
+    "answer": "Titulo: En San Antonio la Seguridad y el Espacio Publico siguen siendo una prioridad. Fecha: 2024-05-11. Resumen: En beneficio de toda la comunidad del barrio San Antonio de Pereira, el pasado jueves nueve de mayo, el Alcalde de Rionegro, Jorge Humberto Rivas; la Secre. Fuente: https://rionegro.gov.co/publicaciones/416/en-san-antonio-la-seguridad-y-el-espacio-publico-siguen-siendo-una-prioridad/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Habra mas operativos de recuperacion del espacio publico en Rionegro",
+    "answer": "Titulo: Habra mas operativos de recuperacion del espacio publico en Rionegro. Fecha: 2024-05-24. Resumen: La Subsecretaria de Convivencia y Control Territorial seguira adelantando, con su equipo de trabajo, y con el acompanamiento de la Fuerza Publica, los. Fuente: https://rionegro.gov.co/publicaciones/424/habra-mas-operativos-de-recuperacion-del-espacio-publico-en-rionegro/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Inauguracion Encuentro Departamental Folclorico y Cultural del Magisterio Antioqueno",
+    "answer": "Titulo: Inauguracion Encuentro Departamental Folclorico y Cultural del Magisterio Antioqueno. Fecha: 2024-06-07. Resumen: Con un multitudinario desfile de mas de seiscientas personas que recorreran las calles de Rionegro (con salida desde el Hospital San Juan de Dios y con l. Fuente: https://rionegro.gov.co/publicaciones/476/inauguracion-encuentro-departamental-folclorico-y-cultural-del-magisterio-antioqueno/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Infraccion de motociclista desencadeno una rina entre agentes e infractor",
+    "answer": "Titulo: Infraccion de motociclista desencadeno una rina entre agentes e infractor. Fecha: 2024-05-21. Resumen: En la manana de este martes 21 de mayo, varios agentes de transito, adscritos a la Subsecretaria de Movilidad de Rionegro, se encontraban realizando un. Fuente: https://rionegro.gov.co/publicaciones/421/infraccion-de-motociclista-desencadeno-una-rina-entre-agentes-e-infractor/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: La Alcaldia de Rionegro garantiza los derechos de los comerciantes",
+    "answer": "Titulo: La Alcaldia de Rionegro garantiza los derechos de los comerciantes. Fecha: 2023-06-28. Resumen: La Administracion Municipal de Rionegro informa a la comunidad en general que el gremio de comerciantes puede contar con todas las garantias para ejercer. Fuente: https://rionegro.gov.co/publicaciones/471/la-alcaldia-de-rionegro-garantiza-los-derechos-de-los-comerciantes/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: La Seguridad de los rionegreros es una prioridad",
+    "answer": "Titulo: La Seguridad de los rionegreros es una prioridad. Fecha: 2024-05-14. Resumen: El pasado fin de semana la Secretaria de Gobierno, la Subsecretaria de Convivencia y Control Territorial; la Subsecretaria de Movilidad, en compania d. Fuente: https://rionegro.gov.co/publicaciones/417/la-seguridad-de-los-rionegreros-es-una-prioridad/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Otro Premio para Rodrigo Hernandez!",
+    "answer": "Titulo: Otro Premio para Rodrigo Hernandez!. Fecha: 2023-12-20. Resumen: El Departamento Administrativo de la Funcion Publica, reconociendo el esfuerzo y dedicacion de Rionegro por destacarse en los resultados del Indice de. Fuente: https://rionegro.gov.co/publicaciones/572/otro-premio-para-rodrigo-hernandez/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Pagar los impuestos en Rionegro, si paga. Aprovecha el 20% de descuento en el Impuesto Predial",
+    "answer": "Titulo: Pagar los impuestos en Rionegro, si paga. Aprovecha el 20% de descuento en el Impuesto Predial. Fecha: 2024-06-11. Resumen: Desde la Secretaria de Hacienda de Rionegro actualmente se promueve una campana para incentivar la cultura del pronto pago del impuesto predial, con el b. Fuente: https://rionegro.gov.co/publicaciones/454/pagar-los-impuestos-en-rionegro-si-paga-aprovecha-el-20-de-descuento-en-el-impuesto-predial/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Primer Consejo Municipal de Politica Social, Compos 2024",
+    "answer": "Titulo: Primer Consejo Municipal de Politica Social, Compos 2024. Fecha: 2024-04-22. Resumen: Con la asistencia de los actores que por Ley deben asumir la responsabilidad de llevar a cabo las Politicas Publicas de Rionegro, se realizo la primera. Fuente: https://rionegro.gov.co/publicaciones/506/primer-consejo-municipal-de-politica-social-compos-2024/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Resolucion 0811 del 18 de Octubre de 2024",
+    "answer": "Titulo: Resolucion 0811 del 18 de Octubre de 2024. Fecha: 2024-06-05. Resumen: Vivienda nueva. Fuente: https://rionegro.gov.co/publicaciones/438/vivienda-nueva/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Rionegro brillo en el Encuentro Folclorico y Cultural del Magisterio Antioqueno 2024",
+    "answer": "Titulo: Rionegro brillo en el Encuentro Folclorico y Cultural del Magisterio Antioqueno 2024. Fecha: 2024-06-14. Resumen: 627 maestros y maestras de 56 municipios pasaron por diferentes escenarios, dejando su alma y su corazon en cada una de las muestras artisticas que pudie. Fuente: https://rionegro.gov.co/publicaciones/477/rionegro-brillo-en-el-encuentro-folclorico-y-cultural-del-magisterio-antioqueno-2024/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Rionegro es el primer municipio de Antioquia en recibir recursos de la ANI como contraprestacion aeroportuaria",
+    "answer": "Titulo: Rionegro es el primer municipio de Antioquia en recibir recursos de la ANI como contraprestacion aeroportuaria. Fecha: 2024-05-30. Resumen: El municipio recibio $46.899 millones de la ANI como contraprestacion aeroportuaria. Fuente: https://rionegro.gov.co/publicaciones/505/rionegro-es-el-primer-municipio-de-antioquia-en-recibir-recursos-de-la-ani-como-contraprestacion-aeroportuaria/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Rionegro se sigue fortaleciendo internacionalmente. Ahora trabaja en el hermanamiento con Acapulco",
+    "answer": "Titulo: Rionegro se sigue fortaleciendo internacionalmente. Ahora trabaja en el hermanamiento con Acapulco. Fecha: 2022-10-05. Resumen: Varias comitivas de Mexico, Estados Unidos y empresarios de nuestro pais, se reunieron con el Alcalde de Rionegro Rodrigo Hernandez, el Presidente del C. Fuente: https://rionegro.gov.co/publicaciones/577/rionegro-se-sigue-fortaleciendo-internacionalmente-ahora-trabaja-en-el-hermanamiento-con-acapulco/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Rionegro sigue mejorando su Sistema Integrado de Gestion de la Calidad",
+    "answer": "Titulo: Rionegro sigue mejorando su Sistema Integrado de Gestion de la Calidad. Fecha: 2024-02-23. Resumen: El pasado miercoles 21 de febrero se llevo a cabo la primera jornada del equipo de lideres de mejoramiento del Sistema Integrado de Gestion de la Calid. Fuente: https://rionegro.gov.co/publicaciones/573/rionegro-sigue-mejorando-su-sistema-integrado-de-gestion-de-la-calidad/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Se realizo con exito la tercera version de Rionegro es una Arepa",
+    "answer": "Titulo: Se realizo con exito la tercera version de Rionegro es una Arepa. Fecha: 2023-10-10. Resumen: Desde la Administracion Municipal de Rionegro, Juntos Avanzamos Mas, en cabeza del Alcalde Rodrigo Hernandez Alzate, y a traves de la Secretaria de De. Fuente: https://rionegro.gov.co/publicaciones/544/se-realizo-con-exito-la-tercera-version-de-rionegro-es-una-arepa/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Sistema de Alerta Temprana advierte un lunes con fuerte lluvias en Rionegro",
+    "answer": "Titulo: Sistema de Alerta Temprana advierte un lunes con fuerte lluvias en Rionegro. Fecha: 2024-05-20. Resumen: Aunque dentro del informe entregado por el IDEAM, se habla de una disminucion en las lluvias durante el fin de semana en el territorio rionegrero, son pro. Fuente: https://rionegro.gov.co/publicaciones/419/sistema-de-alerta-temprana-advierte-un-lunes-con-fuerte-lluvias-en-rionegro/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "Noticia o comunicado: Tendremos los mejores entrenadores del Oriente antioqueno: Imer",
+    "answer": "Titulo: Tendremos los mejores entrenadores del Oriente antioqueno: Imer. Fecha: 2024-05-08. Resumen: A raiz de las exigencias que viene realizando a Ley del Deporte para el ano 2025 en la cual se pretende que todos los entrenadores esten formados profes. Fuente: https://rionegro.gov.co/publicaciones/415/tendremos-los-mejores-entrenadores-del-oriente-antioqueno-imer/.",
+    "category": "Noticias"
+  },
+  {
+    "question": "CERTIFICADO CATASTRAL Valido para declaracion de renta",
+    "answer": "Titulo: CERTIFICADO CATASTRAL Valido para declaracion de renta. Respuesta: Se emite solo al propietario un tercero debe presentar autorizacion. El contribuyente NO debe estar a paz y salvo para este tramite. Tiene un costo de $6.652, si se cancela en Banco se entregara al dia siguiente habil si se realiza el pago por PSE o Datafono se entregara el mismo dia.. Fuente: https://rionegro.gov.co/preguntas-frecuentes/2/instructivo-tramites-de-taquilla-subsecretaria-de-rentas/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Cmo accedo a nuevas plazas como docente\"",
+    "answer": "Titulo: Cmo accedo a nuevas plazas como docente\". Respuesta: Los requisitos y procedimientos para ingresar al servicio educativo estatal estan contemplados en el Articulo 7 del Decreto 1278 de 2002 que establece: Ingreso al servicio educativo estatal. A partir de la vigencia de este decreto, para ingresar al servicio educativo estatal se requiere poseer titulo de licenciado o profesional expedido por una institucion de educacion superior debidamente reconocida por el Estado o titulo de normalista superior y, en ambos casos, superar el concurso de merito.... Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Cmo hago para inscribirme al programa del adulto mayor\"",
+    "answer": "Titulo: Cmo hago para inscribirme al programa del adulto mayor\". Respuesta: Hacer una Solicitud por medio de un Oficio dirigido a la Coordinadora del Programa Adulto Mayor Anexar Copia de Cedula de Ciudadania Ampliada Anexar Copia del Recibo de Luz Anexar Copia del SISBEN Individual. Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Cmo obtengo los servicios del rgimen subsidiado\"",
+    "answer": "Titulo: Cmo obtengo los servicios del rgimen subsidiado\". Respuesta: Para afiliarse debe estar clasificado en una base de datos como poblacion elegible mediante la aplicacion de la encuesta SISBEN . Que es un sistema de identificacion de potenciales beneficiarios de programas sociales, en nuestro caso de salud. Posteriormente usted elige la EPS en la que desea estar afiliado, Aporta fotocopia del documento de identidad y el certificado del SISBEN del municipio donde resida. Nota: no debe estar afiliado al Regimen contributivo. Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Cmo puedo expedir el certificado judicial en lnea\"",
+    "answer": "Titulo: Cmo puedo expedir el certificado judicial en lnea\". Respuesta: Para que usted pueda realizar el tramite de expedicion del certificado judicial en linea debe contar con una cuenta debito, la cual debe tener activo el servicio de pagos en linea. Tenga en cuenta que no deben de haber transcurrido mas de 5 anos sin generarlo y no debe ser por primera vez. Ingrese a la pagina del Das https://www.das.gov.co , busque la opcion -certificado judicial en linea- y siga las instrucciones.. Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Cmo se clasifican los contribuyentes del Impuesto de Industria y Comercio\"",
+    "answer": "Titulo: Cmo se clasifican los contribuyentes del Impuesto de Industria y Comercio\". Respuesta: Los contribuyentes del Impuesto de Industria y Comercio se clasifican en regimen comun o regimen simplificado.. Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Cmo tramito mi cdula de extranjera\"",
+    "answer": "Titulo: Cmo tramito mi cdula de extranjera\". Respuesta: Para realizar este tramite es necesario que el ciudadano extranjero tenga una visa con vigencia superior a los tres meses; para poder tramitar la cedula de extranjeria se debe realizar una consignacion en el banco determinado para la ciudad en la que se encuentre, posteriormente se debe acercar con los siguientes documentos: Pasaporte vigente Fotocopia de la visa y de los datos biograficos del pasaporte 3 fotos de 3 x 4 fondo azul de frente, recientes, Recibo de consignacion de los derechos de c.... Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Cul es el objetivo de la Estrategia de Gobierno Digital\"",
+    "answer": "Titulo: Cul es el objetivo de la Estrategia de Gobierno Digital\". Respuesta: El objetivo de esta estrategia es contribuir mediante el aprovechamiento de las TICs, a la construccion de un Estado mas transparente, mas eficiente, mas participativo y que preste mejores servicios a la comunidad y las empresas, lo cual redunda en un sector productivo mas competitivo, un Estado mas moderno y una comunidad mas informada y con mejores instrumentos para la participacion.. Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Cules son los requisitos para solicitar el subsidio familiar de vivienda\"",
+    "answer": "Titulo: Cules son los requisitos para solicitar el subsidio familiar de vivienda\". Respuesta: Los criterios mas importantes que un hogar debe cumplir para solicitar el subsidio son: * Tener conformado un grupo familiar igual o superior a dos personas. * Contar con ingresos totales mensuales del grupo familiar no superiores a 4 salarios minimos mensuales provenientes de una actividad informal o independiente. * Que sus miembros no esten afiliados a una Caja De Compensacion Familiar. * No ser propietario de una vivienda (excepto para solicitar subsidios de mejoramiento de vivienda). * Tene.... Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Cundo se debe pagar el Impuesto Predial Unificado\"",
+    "answer": "Titulo: Cundo se debe pagar el Impuesto Predial Unificado\". Respuesta: El pago del Impuesto Predial Unificado se hara por semestres anticipados. La Administracion Municipal podra establecer mediante Decreto, periodos diferentes, asi como descuentos de acuerdo con las condiciones socioeconomicas del Municipio y capacidad de pago de los contribuyentes.. Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "NO PRESENTA ULTIMO PAGO EN EL SISTEMA Resolucion de catastro",
+    "answer": "Titulo: NO PRESENTA ULTIMO PAGO EN EL SISTEMA Resolucion de catastro. Respuesta: El contribuyente debe de solicitar ante la oficina catastro la resolucion con los cambios en el predio y radicar la solicitud en el centro documental, indicando el medio para recibir la respuesta. (direccion, correo electronico, numero de telefono). Fuente: https://rionegro.gov.co/preguntas-frecuentes/2/instructivo-tramites-de-taquilla-subsecretaria-de-rentas/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "OTROS TRAMITES",
+    "answer": "Titulo: OTROS TRAMITES. Respuesta: En la Subsecretaria de Rentas se pueden expedir facturas para realizar tramites de inspeccion (denuncias, declaraciones extra-juicio, solicitar un permiso de trasteo, certificado de vecindad y/o de residencia), Representacion Legal, Certificados de Educacion y apostillaje.. Fuente: https://rionegro.gov.co/preguntas-frecuentes/2/instructivo-tramites-de-taquilla-subsecretaria-de-rentas/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Qu actividades estn sujetas de la declaracin y pago del Impuesto de Industria y Comercio\"",
+    "answer": "Titulo: Qu actividades estn sujetas de la declaracin y pago del Impuesto de Industria y Comercio\". Respuesta: Actividad Comercial Es la destinada al expendio, compraventa o distribucion de bienes y mercancias, tanto al por mayor como al por menor y las demas actividades definidas como tales por el Codigo de Comercio, siempre y cuando no esten consideradas por la Ley como actividades industriales o de servicios. Actividad de servicio Es toda tarea, labor o trabajo ejecutado por persona natural, juridica o por sociedad de hecho, sin que medie relacion laboral con quien lo contrata, que genere una contrap.... Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Qu entiende por actividad de servicios\"",
+    "answer": "Titulo: Qu entiende por actividad de servicios\". Respuesta: Las dedicadas a satisfacer las necesidades de la comunidad mediante la realizacion de una o varias de las siguientes o analogas actividades: Expendio de comida y bebida, servicio de restaurante, cafes, hoteles, casas de huespedes, moteles, amoblados, transporte y aparcaderos, formas de intermediacion comercial, tales como: el corretaje, la comision, los mandatos, y la compra-venta y la administracion de inmuebles, servicio de publicidad, interventoria, construccion y urbanizacion, radio y telev.... Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Qu es el impuesto de industria y comercio\"",
+    "answer": "Titulo: Qu es el impuesto de industria y comercio\". Respuesta: El Impuesto de Industria y Comercio es un gravamen de caracter obligatorio, el cual recaera, en cuanto a materia imponible, sobre todas las actividades industriales, comerciales, de servicios y financieras, que se ejerzan o realicen dentro de la jurisdiccion del Municipio de Sincelejo, que se cumplan en forma permanente u ocasional, en inmuebles determinados, con establecimiento de comercio o sin ellos.. Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Qu es el impuesto predial unificado y quines estn obligados a pagarlo\"",
+    "answer": "Titulo: Qu es el impuesto predial unificado y quines estn obligados a pagarlo\". Respuesta: El Impuesto Predial Unificado es un gravamen real que recae sobre los bienes inmuebles ubicados en la jurisdiccion del municipio; el cual es generado por la existencia de un predio, independientemente de quien sea su propietario. Este tipo de impuesto se genera el primero de enero, del respectivo periodo gravable. Recae sobre persona natural o juridica, propietaria, poseedora o usufructuaria de predios ubicados en la jurisdiccion del municipio. Tambien recae sobre los administradores de patrimon.... Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Qu es el subsidio familiar de vivienda\"",
+    "answer": "Titulo: Qu es el subsidio familiar de vivienda\". Respuesta: Es un aporte en dinero o en especie (terreno), que otorga el Gobierno Nacional por una sola vez al beneficiario y que constituye un complemento de su ahorro o credito, u otros aportes, para facilitarle la adquisicion de una vivienda nueva, la construccion de una vivienda en sitio propio o el mejoramiento de una vivienda de interes social de su propiedad. Tambien recae sobre los administradores de patrimonios autonomos por los bienes inmuebles que de el hagan parte y las entidades oficiales de to.... Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Qu es el SUIT\"",
+    "answer": "Titulo: Qu es el SUIT\". Respuesta: Es el Sistema Unico de Informacion de Tramites, por medio del cual los ciudadanos pueden consultar informacion, pasos y requisitos sobre tramites y servicios. Accediendo desde el Portal del Estado Colombiano: www.gobiernoenlinea.gov.co Tambien recae sobre los administradores de patrimonios autonomos por los bienes inmuebles que de el hagan parte y las entidades oficiales de todo orden.. Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Qu es la Ley Antitrmites\"",
+    "answer": "Titulo: Qu es la Ley Antitrmites\". Respuesta: Es una iniciativa del Gobierno Nacional para facilitar las relaciones de los particulares con la Administracion Publica, mediante la optimizacion de los tramites y servicios que las personas juridicas y naturales deben hacer ante diferentes entidades. Tambien recae sobre los administradores de patrimonios autonomos por los bienes inmuebles que de el hagan parte y las entidades oficiales de todo orden.. Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Qu es un servicio\"",
+    "answer": "Titulo: Qu es un servicio\". Respuesta: Es un conjunto de acciones o actividades disenadas para aumentar la satisfaccion de los ciudadanos, lo que anadira valor a las funciones de la entidad. Los servicios hacen parte del plan de accion de la alcaldia. Tambien recae sobre los administradores de patrimonios autonomos por los bienes inmuebles que de el hagan parte y las entidades oficiales de todo orden.. Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Qu es una hoja de vida de un trmite o servicio\"",
+    "answer": "Titulo: Qu es una hoja de vida de un trmite o servicio\". Respuesta: Una Hoja de Vida, es un formato donde aparece la informacion detallada de tramites y servicios existentes en la entidad. Para obtener mas informacion sobre los procedimientos haga clic en el nombre del tramite o servicio que desea realizar de esta manera usted tendra acceso a las Hojas de Vida.. Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Qu necesito para acceder a Familias en Accin\"",
+    "answer": "Titulo: Qu necesito para acceder a Familias en Accin\". Respuesta: Requisitos: Familias con hijos menores de 18 aos, pertenecientes al nivel 1 del SISBN Familias en condicin de desplazamiento incluidas en el Registro nico de Poblacin Desplazada (RUPD). Familias indgenas registradas en los censos indgenas avalados por el Ministerio del Interior y Justicia. Documentos: Documento de identidad (en original y fotocopia) de la madre del hogar. En caso de que sta haya fallecido o se est ausente, puede inscribirse el padre de familia. Registros civil.... Fuente: https://rionegro.gov.co/preguntas-frecuentes/1/tramites/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "REGISTRO EN ENTIDADES INTEGRADAS",
+    "answer": "Titulo: REGISTRO EN ENTIDADES INTEGRADAS. Respuesta: Es posible conocer, descargar y realizar el pago por medio PSE de las facturas generadas en el Municipio de Rionegro, siguiendo estos pasos: 1. Ingresar a la pagina web del municipio https://rionegro.gov.co/ Seleccionar la opcion Paga Aqui tus Impuestos que se encuentra en la parte superior derecha de la pagina principal 2. Sera redireccionado al enlace de Entidades Integradas, donde debe seleccionar Municipio de Rionegro e Ingresar. 3. Si ya esta registrado ingresar con usuario y contrasena; en.... Fuente: https://rionegro.gov.co/preguntas-frecuentes/2/instructivo-tramites-de-taquilla-subsecretaria-de-rentas/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "REQUISITOS PARA LA EXPEDICION DE PAZ Y SALVO",
+    "answer": "Titulo: REQUISITOS PARA LA EXPEDICION DE PAZ Y SALVO. Respuesta: 1. El paz y salvo solo se expide a el propietario presentando el documento fisico en original. 2. Si el paz y salvo es solicitado por un tercero debe presentar autorizacion simple original (no debe ser autenticada), copia del documento de identidad del propietario y del autorizado. 3. Se debe cancelar $8.565 para realizar el tramite. 4. Encontrarse a paz y salvo por todo concepto con el Municipio.. Fuente: https://rionegro.gov.co/preguntas-frecuentes/2/instructivo-tramites-de-taquilla-subsecretaria-de-rentas/.",
+    "category": "Preguntas frecuentes"
+  },
+  {
+    "question": "Programa o iniciativa: 16.000 paquetes nutricionales fueron entregados a ninos, ninas y adolescentes de Rionegro",
+    "answer": "Titulo: 16.000 paquetes nutricionales fueron entregados a ninos, ninas y adolescentes de Rionegro. Fecha: 2024-06-18. Resumen: 16.000 paquetes nutricionales fueron entregados a ninos, ninas y adolescentes de Rionegro. Fuente: https://rionegro.gov.co/publicaciones/487/16000-paquetes-nutricionales-fueron-entregados-a-ninos-ninas-y-adolescentes-de-rionegro/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Agencia Publica de Empleo de Rionegro",
+    "answer": "Titulo: Agencia Publica de Empleo de Rionegro. Fecha: 2024-06-26. Resumen: Agencia Publica de Empleo de Rionegro. Fuente: https://rionegro.gov.co/publicaciones/508/agencia-publica-de-empleo-de-rionegro/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Alcalde de Rionegro gestiona proyectos ante Gobierno Nacional",
+    "answer": "Titulo: Alcalde de Rionegro gestiona proyectos ante Gobierno Nacional. Fecha: 2024-02-09. Resumen: Con el proposito de tomar algunas decisiones sobre el futuro del programa Sacudete, el Alcalde de Rionegro, Jorge Humberto Rivas, y la Secretaria d. Fuente: https://rionegro.gov.co/publicaciones/475/alcalde-de-rionegro-gestiona-proyectos-ante-gobierno-nacional/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Andres Fernando Aristizabal Marin",
+    "answer": "Titulo: Andres Fernando Aristizabal Marin. Fecha: 2024-05-08. Resumen: Secretario de Desarrollo Territorial. Fuente: https://rionegro.gov.co/publicaciones/398/andres-fernando-aristizabal-marin/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Antecedentes",
+    "answer": "Titulo: Antecedentes. Fecha: 2024-06-27. Resumen: Antecedentes. Fuente: https://rionegro.gov.co/publicaciones/589/antecedentes/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Aprobado presupuesto de Rionegro para la vigencia 2023",
+    "answer": "Titulo: Aprobado presupuesto de Rionegro para la vigencia 2023. Fecha: 2024-06-11. Resumen: En el marco de cuatro ambientaciones y dos debates, el Honorable Concejo Municipal de Rionegro aprobo, en segundo debate, el proyecto de Acuerdo 020 po. Fuente: https://rionegro.gov.co/publicaciones/453/aprobado-presupuesto-de-rionegro-para-la-vigencia-2023/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Asociaciones",
+    "answer": "Titulo: Asociaciones. Fecha: 2024-06-26. Resumen: Asociaciones. Fuente: https://rionegro.gov.co/publicaciones/521/asociaciones/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Atencion oportuna a fuerte vendaval en Rionegro",
+    "answer": "Titulo: Atencion oportuna a fuerte vendaval en Rionegro. Fecha: 2024-05-17. Resumen: En la tarde de esta jueves 16 de mayo se presento en Rionegro un fuerte vendaval que afecto viviendas, locales comerciales, vias urbanas y rurales. La c. Fuente: https://rionegro.gov.co/publicaciones/418/atencion-oportuna-a-fuerte-vendaval-en-rionegro/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Capital Semilla",
+    "answer": "Titulo: Capital Semilla. Fecha: 2024-06-26. Resumen: Capital Semilla. Fuente: https://rionegro.gov.co/publicaciones/512/capital-semilla/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Centro Integral de Bienestar Animal CEIBA",
+    "answer": "Titulo: Centro Integral de Bienestar Animal CEIBA. Fecha: 2024-06-05. Resumen: Centro Integral de Bienestar Animal CEIBA. Fuente: https://rionegro.gov.co/publicaciones/432/centro-integral-de-bienestar-animal-ceiba/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Certificacion BPA a productores Hortofruticolas",
+    "answer": "Titulo: Certificacion BPA a productores Hortofruticolas. Fecha: 2024-06-26. Resumen: Certificacion BPA a productores Hortofruticolas. Fuente: https://rionegro.gov.co/publicaciones/527/certificacion-bpa-a-productores-hortofruticolas/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Conectate!",
+    "answer": "Titulo: Conectate!. Fecha: 2024-05-02. Resumen: JUNTOS con el alcalde 1 | Alcaldia de Rionegro. Fuente: https://rionegro.gov.co/publicaciones/319/juntos-con-el-alcalde-1-alcaldia-de-rionegro/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Conoce mas!",
+    "answer": "Titulo: Conoce mas!. Fecha: 2024-04-26. Resumen: ja | Alcaldia de Rionegro. Fuente: https://rionegro.gov.co/publicaciones/314/ja-alcaldia-de-rionegro/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Convivencia y Control Territorial",
+    "answer": "Titulo: Convivencia y Control Territorial. Fecha: 2024-06-19. Resumen: Convivencia y Control Territorial. Fuente: https://rionegro.gov.co/publicaciones/461/convivencia-y-control-territorial/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Coworklab",
+    "answer": "Titulo: Coworklab. Fecha: 2024-06-26. Resumen: Coworklab. Fuente: https://rionegro.gov.co/publicaciones/511/coworklab/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Cultura Ciudadana",
+    "answer": "Titulo: Cultura Ciudadana. Fecha: 2024-06-26. Resumen: Cultura Ciudadana. Fuente: https://rionegro.gov.co/publicaciones/535/cultura-ciudadana/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Edwin Nicolas Ramirez Layos",
+    "answer": "Titulo: Edwin Nicolas Ramirez Layos. Fecha: 2024-05-08. Resumen: Secretario general. Fuente: https://rionegro.gov.co/publicaciones/400/edwin-nicolas-ramirez-layos/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: El programa Nutricion con Amor ya esta en marcha",
+    "answer": "Titulo: El programa Nutricion con Amor ya esta en marcha. Fecha: 2024-04-10. Resumen: Ya esta en marcha el convenio entre la Fundacion Exito y el Municipio de Rionegro, por medio del cual se destinaran recursos de la Fundacion Exito y. Fuente: https://rionegro.gov.co/publicaciones/559/el-programa-nutricion-con-amor-ya-esta-en-marcha/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: El Proyecto Alianza Oriente Sostenible le presenta a la region la actualizacion del Plan Subregional de Turismo Sostenible al 2040",
+    "answer": "Titulo: El Proyecto Alianza Oriente Sostenible le presenta a la region la actualizacion del Plan Subregional de Turismo Sostenible al 2040. Fecha: 2023-11-10. Resumen: Esta es una actividad como resultado del contrato de subvencion entre la Union Europea en Colombia y la Alcaldia de Rionegro a traves del Proyecto Alia. Fuente: https://rionegro.gov.co/publicaciones/594/el-proyecto-alianza-oriente-sostenible-le-presenta-a-la-region-la-actualizacion-del-plan-subregional-de-turismo-sostenible-al-2040/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: En Rionegro, iniciamos la entrega del Paquete Vacacional Nutricional de junio",
+    "answer": "Titulo: En Rionegro, iniciamos la entrega del Paquete Vacacional Nutricional de junio. Fecha: 2024-06-07. Resumen: Con el fin de garantizar la alimentacion de los ninos, ninas y adolescentes, avanza en nuestro municipio el Programa de Alimentacion Escolar, durante l. Fuente: https://rionegro.gov.co/publicaciones/504/en-rionegro-iniciamos-la-entrega-del-paquete-vacacional-nutricional-de-junio/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Encuentro de municipios del Oriente antioqueno por la primera infancia",
+    "answer": "Titulo: Encuentro de municipios del Oriente antioqueno por la primera infancia. Fecha: 2024-04-15. Resumen: En el marco del mes de la infancia y la adolescencia, Brujula 2024, Ruta 25: jugando en cada rincon de Rionegro, el pasado viernes 12 de abril se realiz. Fuente: https://rionegro.gov.co/publicaciones/560/encuentro-de-municipios-del-oriente-antioqueno-por-la-primera-infancia/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Escuela de formacion artistica",
+    "answer": "Titulo: Escuela de formacion artistica. Fecha: 2024-06-26. Resumen: Escuela de formacion artistica. Fuente: https://rionegro.gov.co/publicaciones/537/escuela-de-formacion-artistica/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Extension agropecuaria",
+    "answer": "Titulo: Extension agropecuaria. Fecha: 2024-06-26. Resumen: Extension agropecuaria. Fuente: https://rionegro.gov.co/publicaciones/525/extension-agropecuaria/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Fabricas de Productividad",
+    "answer": "Titulo: Fabricas de Productividad. Fecha: 2024-06-26. Resumen: Fabricas de Productividad. Fuente: https://rionegro.gov.co/publicaciones/520/fabricas-de-productividad/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Fallo de juez frente a incidente de desacato caso vivienda los Alpes",
+    "answer": "Titulo: Fallo de juez frente a incidente de desacato caso vivienda los Alpes. Fecha: 2023-09-07. Resumen: Con ocasion a un fallo de tutela que ordeno tomar las acciones administrativas, tecnicas y presupuestales para solucionar las inundaciones en el sector. Fuente: https://rionegro.gov.co/publicaciones/486/fallo-de-juez-frente-a-incidente-de-desacato-caso-vivienda-los-alpes/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Ferias de emprendimiento",
+    "answer": "Titulo: Ferias de emprendimiento. Fecha: 2024-06-26. Resumen: Ferias de emprendimiento. Fuente: https://rionegro.gov.co/publicaciones/513/ferias-de-emprendimiento/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Formalizacion",
+    "answer": "Titulo: Formalizacion. Fecha: 2024-06-26. Resumen: Formalizacion. Fuente: https://rionegro.gov.co/publicaciones/518/formalizacion/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Galeria de Imagenes",
+    "answer": "Titulo: Galeria de Imagenes. Fecha: 2024-04-26. Resumen: Imagenes | Alcaldia de Rionegro. Fuente: https://rionegro.gov.co/publicaciones/311/imagenes-alcaldia-de-rionegro/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Gestion administrativa de las Plazas de Mercado",
+    "answer": "Titulo: Gestion administrativa de las Plazas de Mercado. Fecha: 2024-06-26. Resumen: Gestion administrativa de las Plazas de Mercado. Fuente: https://rionegro.gov.co/publicaciones/529/gestion-administrativa-de-las-plazas-de-mercado/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Huertas escolares agroecologicas",
+    "answer": "Titulo: Huertas escolares agroecologicas. Fecha: 2024-06-26. Resumen: Huertas escolares agroecologicas. Fuente: https://rionegro.gov.co/publicaciones/523/huertas-escolares-agroecologicas/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Informacion estadistica",
+    "answer": "Titulo: Informacion estadistica. Fecha: 2024-05-08. Resumen: Informacion estadistica. Fuente: https://rionegro.gov.co/publicaciones/378/informacion-estadistica/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Informacion para poblacion vulnerable",
+    "answer": "Titulo: Informacion para poblacion vulnerable. Fecha: 2024-05-02. Resumen: Informacion para poblacion vulnerable | Alcaldia de Rionegro. Fuente: https://rionegro.gov.co/publicaciones/344/informacion-para-poblacion-vulnerable/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Internacionalizacion",
+    "answer": "Titulo: Internacionalizacion. Fecha: 2024-06-26. Resumen: Internacionalizacion. Fuente: https://rionegro.gov.co/publicaciones/519/internacionalizacion/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Jorge Humberto Rivas Urrea",
+    "answer": "Titulo: Jorge Humberto Rivas Urrea. Fecha: 2024-05-08. Resumen: Alcalde Rionegro. Fuente: https://rionegro.gov.co/publicaciones/383/jorge-humberto-rivas-urrea/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: La Alcaldia de Rionegro le cumple al barrio Quebrada Arriba con el reconocimiento de 45 viviendas",
+    "answer": "Titulo: La Alcaldia de Rionegro le cumple al barrio Quebrada Arriba con el reconocimiento de 45 viviendas. Fecha: 2023-10-25. Resumen: El Alcalde Rodrigo Hernandez realizo la entrega de actos de reconocimiento de viviendas a 45 familias de Quebrada Arriba, proceso que llevo a cabo la Se. Fuente: https://rionegro.gov.co/publicaciones/497/la-alcaldia-de-rionegro-le-cumple-al-barrio-quebrada-arriba-con-el-reconocimiento-de-45-viviendas/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: La Alcaldia de Rionegro realiza de manera gratuita los levantamientos arquitectonicos en el asentamiento El Vergel - La Puerta en el marco del...",
+    "answer": "Titulo: La Alcaldia de Rionegro realiza de manera gratuita los levantamientos arquitectonicos en el asentamiento El Vergel - La Puerta en el marco del Plan de Intervencion Integral de Asentamientos Rurales PIIAR. Fecha: 2023-09-25. Resumen: La Secretaria de Planeacion en convenio con la Universidad Pontificia Bolivariana y la participacion de 69 estudiantes de Arquitectura, realizaron los l. Fuente: https://rionegro.gov.co/publicaciones/498/la-alcaldia-de-rionegro-realiza-de-manera-gratuita-los-levantamientos-arquitectonicos-en-el-asentamiento-el-vergel-la-puerta-en-el-marco-del-plan-de-intervencion-integral-de-asentamientos-rurales-piiar/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Leidy Carolina Tejada Marin",
+    "answer": "Titulo: Leidy Carolina Tejada Marin. Fecha: 2024-05-08. Resumen: Secretaria de Gobierno. Fuente: https://rionegro.gov.co/publicaciones/396/leidy-carolina-tejada-marin/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Marisol Gomez David",
+    "answer": "Titulo: Marisol Gomez David. Fecha: 2024-05-08. Resumen: Secretaria de Planeacion. Fuente: https://rionegro.gov.co/publicaciones/391/marisol-gomez-david/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Mas de 500 millones se han entregado a los protectores de bosques",
+    "answer": "Titulo: Mas de 500 millones se han entregado a los protectores de bosques. Fecha: 2023-10-06. Resumen: Por medio del Decreto 412 del 2018, la Subsecretaria Ambiental perteneciente a la Secretaria de Habitat, continua retribuyendo a la comunidad por el cu. Fuente: https://rionegro.gov.co/publicaciones/485/mas-de-500-millones-se-han-entregado-a-los-protectores-de-bosques/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Mecanismos para la participacion de los ciudadanos, usuarios o grupos de interes en la formulacion de politicas",
+    "answer": "Titulo: Mecanismos para la participacion de los ciudadanos, usuarios o grupos de interes en la formulacion de politicas. Fecha: 2024-04-25. Resumen: Mecanismos para la participacion de los ciudadanos, usuarios o grupos de interes en la formulacion de politicas | Alcaldia de Rionegro. Fuente: https://rionegro.gov.co/publicaciones/310/mecanismos-para-la-participacion-de-los-ciudadanos-usuarios-o-grupos-de-interes-en-la-formulacion-de-politicas-alcaldia-de-rionegro/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: media",
+    "answer": "Titulo: media. Fecha: 2024-04-26. Resumen: Media | Alcaldia de Rionegro. Fuente: https://rionegro.gov.co/publicaciones/313/media-alcaldia-de-rionegro/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Mejoramiento de Vivienda",
+    "answer": "Titulo: Mejoramiento de Vivienda. Fecha: 2024-06-05. Resumen: Mejoramiento de Vivienda. Fuente: https://rionegro.gov.co/publicaciones/444/mejoramiento-de-vivienda/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Mejoramiento Genetico",
+    "answer": "Titulo: Mejoramiento Genetico. Fecha: 2024-06-26. Resumen: Mejoramiento Genetico. Fuente: https://rionegro.gov.co/publicaciones/533/mejoramiento-genetico/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Monitoreo de leche",
+    "answer": "Titulo: Monitoreo de leche. Fecha: 2024-06-26. Resumen: Monitoreo de leche. Fuente: https://rionegro.gov.co/publicaciones/526/monitoreo-de-leche/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Nutriceres",
+    "answer": "Titulo: Nutriceres. Fecha: 2024-06-26. Resumen: Nutriceres. Fuente: https://rionegro.gov.co/publicaciones/542/nutriceres/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Participacion para nuestros ninos y ninas",
+    "answer": "Titulo: Participacion para nuestros ninos y ninas. Fecha: 2024-05-06. Resumen: Participacion para nuestros ninos y ninas. Fuente: https://rionegro.gov.co/publicaciones/363/participacion-para-nuestros-ninos-y-ninas/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Picnic Literario",
+    "answer": "Titulo: Picnic Literario. Fecha: 2024-06-26. Resumen: Picnic Literario. Fuente: https://rionegro.gov.co/publicaciones/536/picnic-literario/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Plan Anual de Adquisiciones (Plan General de Compras)",
+    "answer": "Titulo: Plan Anual de Adquisiciones (Plan General de Compras). Fecha: 2024-05-16. Resumen: Plan Anual de Adquisiciones (Plan General de Compras) | Alcaldia de Rionegro. Fuente: https://rionegro.gov.co/publicaciones/405/plan-anual-adquisiciones/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Plan de bienestar laboral",
+    "answer": "Titulo: Plan de bienestar laboral. Fecha: 2024-06-19. Resumen: Plan de bienestar laboral. Fuente: https://rionegro.gov.co/publicaciones/495/plan-de-bienestar-laboral/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Podcast de la Red de participacion de ninos, ninas y adolescentes",
+    "answer": "Titulo: Podcast de la Red de participacion de ninos, ninas y adolescentes. Fecha: 2024-10-18. Resumen: En esta seccion vas a encontrar los podcast de la red de participacion de ninos, ninas y adolescentes. Fuente: https://rionegro.gov.co/publicaciones/657/podcast-de-la-red-de-participacion-de-ninos-ninas-y-adolescentes/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Programa de Personas Mayores de Rionegro",
+    "answer": "Titulo: Programa de Personas Mayores de Rionegro. Fecha: 2024-06-27. Resumen: Programa de Personas Mayores de Rionegro. Fuente: https://rionegro.gov.co/publicaciones/558/programa-de-personas-mayores-de-rionegro/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Programas de la Secreataria",
+    "answer": "Titulo: Programas de la Secreataria. Fecha: 2024-05-02. Resumen: Programas de la Secretaria | Alcaldia de Rionegro. Fuente: https://rionegro.gov.co/publicaciones/323/programas-de-la-secretaria-alcaldia-de-rionegro/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Programas de la secretaria",
+    "answer": "Titulo: Programas de la secretaria. Fecha: 2024-06-19. Resumen: Programas educacion. Fuente: https://rionegro.gov.co/publicaciones/494/programas-de-la-secretaria/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Qu es la AOS\"",
+    "answer": "Titulo: Qu es la AOS\". Fecha: 2024-06-27. Resumen: Qu es la AOS\". Fuente: https://rionegro.gov.co/publicaciones/588/que-es-la-aos/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Reconversion a Produccion Agroecologica",
+    "answer": "Titulo: Reconversion a Produccion Agroecologica. Fecha: 2024-06-26. Resumen: Reconversion a Produccion Agroecologica. Fuente: https://rionegro.gov.co/publicaciones/531/reconversion-a-produccion-agroecologica/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Red Geodesica Municipal",
+    "answer": "Titulo: Red Geodesica Municipal. Fecha: 2024-06-19. Resumen: La informacion publicada actualmente esta proyectada sobre las coordenadas MAGNA Colombia Bogota.. Fuente: https://rionegro.gov.co/publicaciones/483/red-geodesica-municipal/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Renovacion y establecimiento de praderas",
+    "answer": "Titulo: Renovacion y establecimiento de praderas. Fecha: 2024-06-26. Resumen: Renovacion y establecimiento de praderas. Fuente: https://rionegro.gov.co/publicaciones/532/renovacion-y-establecimiento-de-praderas/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Resultados Proceso de Evaluacion Docente para el Ascenso de Grado o Reubicacion Salarial",
+    "answer": "Titulo: Resultados Proceso de Evaluacion Docente para el Ascenso de Grado o Reubicacion Salarial. Fecha: 2024-06-26. Resumen: En el marco del desarrollo de las etapas del proceso evaluativo de ascenso de grado o reubicacion de nivel salarial de los educadores que pertenecen al r. Fuente: https://rionegro.gov.co/publicaciones/490/resultados-proceso-de-evaluacion-docente-para-el-ascenso-de-grado-o-reubicacion-salarial/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Rionegro abre convocatoria para renovar el Consejo Territorial de Planeacion",
+    "answer": "Titulo: Rionegro abre convocatoria para renovar el Consejo Territorial de Planeacion. Fecha: 2024-02-12. Resumen: Por medio del Decreto 137 del 09 de febrero de 2024, la Administracion Municipal de Rionegro informa a la comunidad que se esta convocando a los sectores. Fuente: https://rionegro.gov.co/publicaciones/496/rionegro-abre-convocatoria-para-renovar-el-consejo-territorial-de-planeacion/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Rionegro Compra Local",
+    "answer": "Titulo: Rionegro Compra Local. Fecha: 2024-06-26. Resumen: Rionegro Compra Local. Fuente: https://rionegro.gov.co/publicaciones/516/rionegro-compra-local/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Rionegro entrego 60 kits de robotica a instituciones educativas",
+    "answer": "Titulo: Rionegro entrego 60 kits de robotica a instituciones educativas. Fecha: 2024-05-24. Resumen: En el marco de la estrategia de educacion Steam (Science, Technology, Engineering, Arts and Mathematics), promovida y liderada por la Subsecretaria de Ju. Fuente: https://rionegro.gov.co/publicaciones/426/rionegro-entrego-60-kits-de-robotica-a-instituciones-educativas/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Rionegro fortalece la tecnificacion en el sector agropecuario",
+    "answer": "Titulo: Rionegro fortalece la tecnificacion en el sector agropecuario. Fecha: 2023-09-12. Resumen: Con el animo de buscar la tecnificacion de unidades productivas para mejorar la productividad, competitividad y sostenibilidad de estas y del sector agr. Fuente: https://rionegro.gov.co/publicaciones/593/rionegro-fortalece-la-tecnificacion-en-el-sector-agropecuario/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Rionegro presento el Cubo de la Ciencia, Tecnologia e Innovacion: Ruta de Innovacion, hacia una ciudad sostenible y competitiva!",
+    "answer": "Titulo: Rionegro presento el Cubo de la Ciencia, Tecnologia e Innovacion: Ruta de Innovacion, hacia una ciudad sostenible y competitiva!. Fecha: 2023-10-04. Resumen: La Administracion Municipal de Rionegro, en cabeza del alcalde Rodrigo Hernandez Alzate, a traves de la Secretaria de Desarrollo Economico, realizo l. Fuente: https://rionegro.gov.co/publicaciones/545/rionegro-presento-el-cubo-de-la-ciencia-tecnologia-e-innovacion-ruta-de-innovacion-hacia-una-ciudad-sostenible-y-competitiva/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Rionegro: Ciudad con Movilidad y Conectividad",
+    "answer": "Titulo: Rionegro: Ciudad con Movilidad y Conectividad. Fecha: 2024-06-27. Resumen: Rionegro: Ciudad con Movilidad y Conectividad. Fuente: https://rionegro.gov.co/publicaciones/585/rionegro-ciudad-con-movilidad-y-conectividad/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Robinson Builes Gomez",
+    "answer": "Titulo: Robinson Builes Gomez. Fecha: 2024-05-08. Resumen: Robinson Builes Gomez. Fuente: https://rionegro.gov.co/publicaciones/390/robinson-builes-gomez/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Seguridad alimentaria",
+    "answer": "Titulo: Seguridad alimentaria. Fecha: 2024-06-26. Resumen: Seguridad alimentaria. Fuente: https://rionegro.gov.co/publicaciones/528/seguridad-alimentaria/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Simbolos",
+    "answer": "Titulo: Simbolos. Fecha: 2024-05-08. Resumen: Simbolos. Fuente: https://rionegro.gov.co/publicaciones/376/simbolos/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Startup 4.0",
+    "answer": "Titulo: Startup 4.0. Fecha: 2024-06-26. Resumen: Startup 4.0. Fuente: https://rionegro.gov.co/publicaciones/515/startup-40/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Subsecretaria Ambiental",
+    "answer": "Titulo: Subsecretaria Ambiental. Fecha: 2024-06-05. Resumen: Subsecretaria Ambiental. Fuente: https://rionegro.gov.co/publicaciones/489/subsecretaria-ambiental/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Subsecretaria de Cultura, Patrimonio e Industrias Creativas",
+    "answer": "Titulo: Subsecretaria de Cultura, Patrimonio e Industrias Creativas. Fecha: 2024-06-26. Resumen: Subsecretaria de Cultura, Patrimonio e Industrias Creativas. Fuente: https://rionegro.gov.co/publicaciones/534/subsecretaria-de-cultura-patrimonio-e-industrias-creativas/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Subsecretaria de Familia",
+    "answer": "Titulo: Subsecretaria de Familia. Fecha: 2024-06-27. Resumen: Subsecretaria de Familia. Fuente: https://rionegro.gov.co/publicaciones/554/subsecretaria-de-familia/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Subsecretaria De Gestion Humana",
+    "answer": "Titulo: Subsecretaria De Gestion Humana. Fecha: 2024-06-27. Resumen: Subsecretaria De Gestion Humana. Fuente: https://rionegro.gov.co/publicaciones/567/subsecretaria-de-gestion-humana/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Subsecretaria de Juventud e innovacion",
+    "answer": "Titulo: Subsecretaria de Juventud e innovacion. Fecha: 2024-06-26. Resumen: Subsecretaria de Juventud e innovacion. Fuente: https://rionegro.gov.co/publicaciones/510/subsecretaria-de-juventud-e-innovacion/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Subsecretaria de la Mujer",
+    "answer": "Titulo: Subsecretaria de la Mujer. Fecha: 2024-06-27. Resumen: Subsecretaria de la Mujer. Fuente: https://rionegro.gov.co/publicaciones/556/subsecretaria-de-la-mujer/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Subsecretaria de Primera Infancia y Atencion Diferencial",
+    "answer": "Titulo: Subsecretaria de Primera Infancia y Atencion Diferencial. Fecha: 2024-06-27. Resumen: Subsecretaria de Primera Infancia y Atencion Diferencial. Fuente: https://rionegro.gov.co/publicaciones/557/subsecretaria-primera-infancia/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Subsecretaria de Promocion del Desarrollo",
+    "answer": "Titulo: Subsecretaria de Promocion del Desarrollo. Fecha: 2024-06-26. Resumen: Subsecretaria de Promocion del Desarrollo. Fuente: https://rionegro.gov.co/publicaciones/509/subsecretaria-de-promocion-del-desarrollo/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Subsecretaria de valorizacion",
+    "answer": "Titulo: Subsecretaria de valorizacion. Fecha: 2024-06-27. Resumen: Subsecretaria de valorizacion. Fuente: https://rionegro.gov.co/publicaciones/549/subsecretaria-de-valorizacion/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Subsecretaria Gestion en Salud",
+    "answer": "Titulo: Subsecretaria Gestion en Salud. Fecha: 2024-06-27. Resumen: Subsecretaria Gestion en Salud. Fuente: https://rionegro.gov.co/publicaciones/555/subsecretaria-gestion-en-salud/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Tecnificacion del sector agropecuario",
+    "answer": "Titulo: Tecnificacion del sector agropecuario. Fecha: 2024-06-26. Resumen: Tecnificacion del sector agropecuario. Fuente: https://rionegro.gov.co/publicaciones/530/tecnificacion-del-sector-agropecuario/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Tu Alcaldia",
+    "answer": "Titulo: Tu Alcaldia. Fecha: 2024-05-06. Resumen: Tu Alcaldia. Fuente: https://rionegro.gov.co/publicaciones/364/tu-alcaldia/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Turismo",
+    "answer": "Titulo: Turismo. Fecha: 2024-06-26. Resumen: Turismo. Fuente: https://rionegro.gov.co/publicaciones/517/turismo/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Programa o iniciativa: Vivienda",
+    "answer": "Titulo: Vivienda. Fecha: 2024-06-05. Resumen: Vivienda. Fuente: https://rionegro.gov.co/publicaciones/437/vivienda/.",
+    "category": "Programas"
+  },
+  {
+    "question": "Restaurante en Rionegro: Agadon Burgers and Shakes",
+    "answer": "Titulo: Agadon Burgers and Shakes. Direccion: Sector Llanogrande.",
+    "category": "Restaurantes"
+  },
+  {
+    "question": "Restaurante en Rionegro: Buffalo Wings",
+    "answer": "Titulo: Buffalo Wings. Direccion: Centro Comercial San Nicolas.",
+    "category": "Restaurantes"
+  },
+  {
+    "question": "Restaurante en Rionegro: Crepes & Waffles",
+    "answer": "Titulo: Crepes & Waffles. Direccion: Centro Comercial San Nicolas / Mall Llanogrande.",
+    "category": "Restaurantes"
+  },
+  {
+    "question": "Restaurante en Rionegro: Da Quei Matti",
+    "answer": "Titulo: Da Quei Matti. Direccion: Cl. 47 #64-20.",
+    "category": "Restaurantes"
+  },
+  {
+    "question": "Restaurante en Rionegro: Isola",
+    "answer": "Titulo: Isola. Direccion: Sector Llanogrande.",
+    "category": "Restaurantes"
+  },
+  {
+    "question": "Restaurante en Rionegro: Kanka Peru",
+    "answer": "Titulo: Kanka Peru. Direccion: Cl. 42 #56-39.",
+    "category": "Restaurantes"
+  },
+  {
+    "question": "Restaurante en Rionegro: L's Cafe",
+    "answer": "Titulo: L's Cafe. Direccion: Plaza de San Antonio de Pereira.",
+    "category": "Restaurantes"
+  },
+  {
+    "question": "Restaurante en Rionegro: La Diva Pizza",
+    "answer": "Titulo: La Diva Pizza. Direccion: Sector Llanogrande.",
+    "category": "Restaurantes"
+  },
+  {
+    "question": "Restaurante en Rionegro: La Finca de Rigo",
+    "answer": "Titulo: La Finca de Rigo. Direccion: Sector Llanogrande.",
+    "category": "Restaurantes"
+  },
+  {
+    "question": "Restaurante en Rionegro: Mondongos",
+    "answer": "Titulo: Mondongos. Direccion: Sector San Antonio de Pereira.",
+    "category": "Restaurantes"
+  },
+  {
+    "question": "Restaurante en Rionegro: Mr Ribs",
+    "answer": "Titulo: Mr Ribs. Direccion: Centro Comercial San Nicolas.",
+    "category": "Restaurantes"
+  },
+  {
+    "question": "Restaurante en Rionegro: Parmessano",
+    "answer": "Titulo: Parmessano. Direccion: Centro Comercial San Nicolas.",
+    "category": "Restaurantes"
+  },
+  {
+    "question": "Restaurante en Rionegro: Taj Mahal",
+    "answer": "Titulo: Taj Mahal. Direccion: Sector Llanogrande.",
+    "category": "Restaurantes"
+  },
+  {
+    "question": "Restaurante en Rionegro: Toshiro Sushi",
+    "answer": "Titulo: Toshiro Sushi. Direccion: Sector Llanogrande.",
+    "category": "Restaurantes"
+  },
+  {
+    "question": "Restaurante en Rionegro: Watakushi",
+    "answer": "Titulo: Watakushi. Direccion: Sector Llanogrande.",
+    "category": "Restaurantes"
+  },
+  {
+    "question": "Centro medico u hospital: Centro Cardiovascular Somer Incare",
+    "answer": "Titulo: Centro Cardiovascular Somer Incare. Direccion: Cl. 37 #54-213 a 54-1. Sector: Sector El Porvenir.",
+    "category": "Salud"
+  },
+  {
+    "question": "Centro medico u hospital: Clinica Somer",
+    "answer": "Titulo: Clinica Somer. Direccion: Cl. 38 #No. 54A-35. Sector: Sector El Porvenir.",
+    "category": "Salud"
+  },
+  {
+    "question": "Centro medico u hospital: Hospital San Juan de Dios de Rionegro",
+    "answer": "Titulo: Hospital San Juan de Dios de Rionegro. Direccion: Cra. 48 #56-59. Sector: Sector Centro.",
+    "category": "Salud"
+  },
+  {
+    "question": "Centro medico u hospital: Hospital San Juan de Dios ESE Rionegro - sede Gilberto Mejia",
+    "answer": "Titulo: Hospital San Juan de Dios ESE Rionegro - sede Gilberto Mejia. Direccion: Cl. 40 #71-15. Sector: Sector El Porvenir.",
+    "category": "Salud"
+  },
+  {
+    "question": "Centro medico u hospital: Hospital San Vicente Fundacion Rionegro",
+    "answer": "Titulo: Hospital San Vicente Fundacion Rionegro. Direccion: Via Aeropuerto JMC, Km 2 + 100. Sector: Sector Llanogrande y alrededores.",
+    "category": "Salud"
+  },
+  {
+    "question": "Centro medico u hospital: Torre medica Clinica llanogrande",
+    "answer": "Titulo: Torre medica Clinica llanogrande. Direccion: Vda. Chipre, Rionegro. Sector: Sector Llanogrande y alrededores.",
+    "category": "Salud"
+  },
+  {
+    "question": "Tramite o servicio: Actualizacion informacion en la base de datos del sistema de identificacion y clasificacion de potenciales beneficiarios de programas sociales...",
+    "answer": "Titulo: Actualizacion informacion en la base de datos del sistema de identificacion y clasificacion de potenciales beneficiarios de programas sociales - SISBEN.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Ampliacion del servicio educativo",
+    "answer": "Titulo: Ampliacion del servicio educativo.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Asignacion de nomenclatura",
+    "answer": "Titulo: Asignacion de nomenclatura.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Asistencia tecnica rural",
+    "answer": "Titulo: Asistencia tecnica rural.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Autorizacion de calendario academico especial",
+    "answer": "Titulo: Autorizacion de calendario academico especial.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Autorizacion de ocupacion de inmuebles (menor de 2000 metros)",
+    "answer": "Titulo: Autorizacion de ocupacion de inmuebles (menor de 2000 metros).",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Cancelacion de la matricula de arrendadores",
+    "answer": "Titulo: Cancelacion de la matricula de arrendadores.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Cancelacion del registro de contribuyentes del Impuesto de Industria y Comercio",
+    "answer": "Titulo: Cancelacion del registro de contribuyentes del Impuesto de Industria y Comercio.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Certificado de avaluo",
+    "answer": "Titulo: Certificado de avaluo.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Certificado de estratificacion socioeconomica",
+    "answer": "Titulo: Certificado de estratificacion socioeconomica.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Certificado de paz y salvo",
+    "answer": "Titulo: Certificado de paz y salvo.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Certificado de residencia",
+    "answer": "Titulo: Certificado de residencia.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Certificado de riesgo de predios",
+    "answer": "Titulo: Certificado de riesgo de predios.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Certificado Ficha Predial",
+    "answer": "Titulo: Certificado Ficha Predial.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Certificado Plano catastral",
+    "answer": "Titulo: Certificado Plano catastral.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Certificado Posesion de bienes",
+    "answer": "Titulo: Certificado Posesion de bienes.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Cesantias parciales para docentes oficiales",
+    "answer": "Titulo: Cesantias parciales para docentes oficiales.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Correccion de errores e inconsistencias en declaraciones",
+    "answer": "Titulo: Correccion de errores e inconsistencias en declaraciones.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Declaracion del Impuesto de Industria y Comercio y su complementario de avisos y tableros",
+    "answer": "Titulo: Declaracion del Impuesto de Industria y Comercio y su complementario de avisos y tableros.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Encuesta del sistema de identificacion y clasificacion de potenciales beneficiarios de programas sociales - SISBEN",
+    "answer": "Titulo: Encuesta del sistema de identificacion y clasificacion de potenciales beneficiarios de programas sociales - SISBEN.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Exencion del Impuesto de Industria y Comercio",
+    "answer": "Titulo: Exencion del Impuesto de Industria y Comercio.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Exencion del Impuesto Predial Unificado",
+    "answer": "Titulo: Exencion del Impuesto Predial Unificado.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Facturacion de contribucion por valorizacion",
+    "answer": "Titulo: Facturacion de contribucion por valorizacion.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Formulacion del proyecto de plan de implantacion",
+    "answer": "Titulo: Formulacion del proyecto de plan de implantacion.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Impuesto a la publicidad visual exterior",
+    "answer": "Titulo: Impuesto a la publicidad visual exterior.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Impuesto a las ventas por el sistema de clubes",
+    "answer": "Titulo: Impuesto a las ventas por el sistema de clubes.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Impuesto de espectaculos publicos",
+    "answer": "Titulo: Impuesto de espectaculos publicos.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Inclusion de personas en la base de datos del sistema de identificacion y clasificacion de potenciales beneficiarios de programas sociales - S...",
+    "answer": "Titulo: Inclusion de personas en la base de datos del sistema de identificacion y clasificacion de potenciales beneficiarios de programas sociales - SISBEN.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Inscripcion o cambio del representante legal y/o revisor fiscal de la propiedad horizontal",
+    "answer": "Titulo: Inscripcion o cambio del representante legal y/o revisor fiscal de la propiedad horizontal.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Legalizacion urbanistica de asentamientos humanos",
+    "answer": "Titulo: Legalizacion urbanistica de asentamientos humanos.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Licencia de funcionamiento de instituciones educativas que ofrezcan programas de educacion formal de adultos",
+    "answer": "Titulo: Licencia de funcionamiento de instituciones educativas que ofrezcan programas de educacion formal de adultos.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Licencia de funcionamiento para establecimientos educativos promovidos por particulares para prestar el servicio publico educativo en los nive...",
+    "answer": "Titulo: Licencia de funcionamiento para establecimientos educativos promovidos por particulares para prestar el servicio publico educativo en los niveles de preescolar, basica y media.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Licencia de funcionamiento para las instituciones promovidas por particulares que ofrezcan el servicio educativo para el trabajo y el desarrol...",
+    "answer": "Titulo: Licencia de funcionamiento para las instituciones promovidas por particulares que ofrezcan el servicio educativo para el trabajo y el desarrollo humano.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Licencia de inhumacion de cadaveres",
+    "answer": "Titulo: Licencia de inhumacion de cadaveres.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Licencia de intervencion del espacio publico",
+    "answer": "Titulo: Licencia de intervencion del espacio publico.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Licencia de ocupacion del espacio publico para la localizacion de equipamiento",
+    "answer": "Titulo: Licencia de ocupacion del espacio publico para la localizacion de equipamiento.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Matricula de arrendadores",
+    "answer": "Titulo: Matricula de arrendadores.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Modificacion en el registro de contribuyentes del Impuesto de Industria y Comercio",
+    "answer": "Titulo: Modificacion en el registro de contribuyentes del Impuesto de Industria y Comercio.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Pago de impuestos municipales (Industria y comercio, predial, valorizacion y otros)",
+    "answer": "Titulo: Pago de impuestos municipales (Industria y comercio, predial, valorizacion y otros).",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Permiso de captacion de recursos",
+    "answer": "Titulo: Permiso de captacion de recursos.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Permiso de escrituracion",
+    "answer": "Titulo: Permiso de escrituracion.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Permiso para demostraciones publicas de polvora, articulos pirotecnicos o fuegos artificiales",
+    "answer": "Titulo: Permiso para demostraciones publicas de polvora, articulos pirotecnicos o fuegos artificiales.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Permiso para espectaculos publicos de las artes escenicas en escenarios no habilitados",
+    "answer": "Titulo: Permiso para espectaculos publicos de las artes escenicas en escenarios no habilitados.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Permiso para espectaculos publicos diferentes a las artes escenicas",
+    "answer": "Titulo: Permiso para espectaculos publicos diferentes a las artes escenicas.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Radicacion de documentos para adelantar actividades de construccion y enajenacion de inmuebles destinados a vivienda",
+    "answer": "Titulo: Radicacion de documentos para adelantar actividades de construccion y enajenacion de inmuebles destinados a vivienda.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Registro de actividades relacionadas con la enajenacion de inmuebles destinados a vivienda",
+    "answer": "Titulo: Registro de actividades relacionadas con la enajenacion de inmuebles destinados a vivienda.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Registro de firmas de rectores, directores y secretario(a)s de establecimientos educativos",
+    "answer": "Titulo: Registro de firmas de rectores, directores y secretario(a)s de establecimientos educativos.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Registro de identificacion tributaria contribuyente Impuesto de Industria y Comercio (RIT)",
+    "answer": "Titulo: Registro de identificacion tributaria contribuyente Impuesto de Industria y Comercio (RIT).",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Retiro de personas de la base de datos del sistema de identificacion y clasificacion de potenciales beneficiarios de programas sociales - SISBEN",
+    "answer": "Titulo: Retiro de personas de la base de datos del sistema de identificacion y clasificacion de potenciales beneficiarios de programas sociales - SISBEN.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Retiro de un hogar de la base de datos del sistema de identificacion y clasificacion de potenciales beneficiarios de programas sociales - SISBEN",
+    "answer": "Titulo: Retiro de un hogar de la base de datos del sistema de identificacion y clasificacion de potenciales beneficiarios de programas sociales - SISBEN.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Servicios Centro Integral de Bienestar Animal - CEIBA",
+    "answer": "Titulo: Servicios Centro Integral de Bienestar Animal - CEIBA.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Tramite o servicio: Visita tecnica de valoracion de condicion de riesgo",
+    "answer": "Titulo: Visita tecnica de valoracion de condicion de riesgo.",
+    "category": "Tramites y servicios"
+  },
+  {
+    "question": "Veterinaria en Rionegro: Canna Pets",
+    "answer": "Titulo: Canna Pets. Direccion: Mall Reserva Plaza, Cl. 47 #76-03 Local 1018. Disponibilidad: No es 24 horas.",
+    "category": "Veterinarias"
+  },
+  {
+    "question": "Veterinaria en Rionegro: Centro Veterinario Cvpets",
+    "answer": "Titulo: Centro Veterinario Cvpets. Direccion: Cl. 43 #56-52. Disponibilidad: Abierto 24 horas.",
+    "category": "Veterinarias"
+  },
+  {
+    "question": "Veterinaria en Rionegro: Clinica Veterinaria - San Antonio",
+    "answer": "Titulo: Clinica Veterinaria - San Antonio. Direccion: #19ab- 55ad-104, La Ceja-Rio Negro. Disponibilidad: Abierto 24 horas.",
+    "category": "Veterinarias"
+  },
+  {
+    "question": "Veterinaria en Rionegro: Clinica Veterinaria ConColas",
+    "answer": "Titulo: Clinica Veterinaria ConColas. Direccion: Via Rionegro-La Ceja, Km 1.5 (Frente al Mall Falabella). Disponibilidad: Abierto 24 horas.",
+    "category": "Veterinarias"
+  },
+  {
+    "question": "Veterinaria en Rionegro: Clinica veterinaria la Vet oriente",
+    "answer": "Titulo: Clinica veterinaria la Vet oriente. Direccion: Carrera 59 # 46-59. Disponibilidad: Abierto 24 horas.",
+    "category": "Veterinarias"
+  }
+]

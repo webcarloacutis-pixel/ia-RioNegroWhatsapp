@@ -1,9 +1,14 @@
 import test from "node:test";
 
+import "./lib/api.test";
 import "./lib/constants.test";
 import "./lib/format.test";
+import "./lib/rionegro-content.test";
+import "./lib/url-security.test";
 import "./lib/validations.test";
 import "./server/assistant-session.test";
+import "./server/auth.test";
+import "./server/middleware.test";
 import "./server/message-service.test";
 import "./server/citizen-report-service.test";
 import "./server/debug-api-routes.test";
@@ -11,6 +16,7 @@ import "./server/external-mock-services.test";
 import "./server/serializers.test";
 import "./server/assistant-analytics-service.test";
 import "./server/rionegro-assistant-internals.test";
+import "./server/security-headers.test";
 
 test("suite cargada", () => {
   // Punto de entrada para `tsx --test`.

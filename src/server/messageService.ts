@@ -53,6 +53,7 @@ const globalForWhatsAppMessages = globalThis as unknown as {
 };
 
 const DEFAULT_AUDIENCE = 1250;
+const DEFAULT_MAX_REAL_MASS_MESSAGE_RECIPIENTS = 100;
 function getUltraMsgDefaultTo() {
   return process.env.ULTRAMSG_DEFAULT_TO?.trim() ?? "";
 }
@@ -206,6 +207,36 @@ function resolveRecipients(to?: string | null) {
     .filter((value): value is string => Boolean(value));
 
   return Array.from(new Set(rawRecipients));
+}
+
+function getMaxRealMassMessageRecipients() {
+  const configured = Number(process.env.MASS_MESSAGE_MAX_RECIPIENTS);
+
+  return Number.isInteger(configured) && configured > 0
+    ? configured
+    : DEFAULT_MAX_REAL_MASS_MESSAGE_RECIPIENTS;
+}
+
+function hasExplicitMassMessageRecipients(input: Pick<SendMessageInput, "segment" | "to">) {
+  return Boolean(input.to?.trim() || input.segment?.recipientPhones?.length);
+}
+
+function assertRealMassMessagePolicy(input: Pick<SendMessageInput, "segment" | "to"> & {
+  recipients: string[];
+}) {
+  if (!hasExplicitMassMessageRecipients(input)) {
+    throw new Error(
+      "Envio real bloqueado: configura destinatarios explicitos en el segmento o en el campo to.",
+    );
+  }
+
+  const maxRecipients = getMaxRealMassMessageRecipients();
+
+  if (input.recipients.length > maxRecipients) {
+    throw new Error(
+      `Envio real bloqueado: ${input.recipients.length} destinatarios supera el maximo permitido (${maxRecipients}).`,
+    );
+  }
 }
 
 export async function sendWhatsAppText({
@@ -467,6 +498,10 @@ async function sendMessageUltraMsg({
   const responses: unknown[] = [];
   const failures: string[] = [];
   const dryRun = isWhatsAppDryRunMode();
+
+  if (!dryRun) {
+    assertRealMassMessagePolicy({ segment, to, recipients });
+  }
 
   if (dryRun) {
     console.log("[announcements] dry-run simulated", {

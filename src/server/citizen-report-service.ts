@@ -8,6 +8,8 @@ import type {
   CitizenReportStatus,
   CitizenReportSummary,
 } from "@/lib/types";
+import { isPublicHttpUrl } from "@/lib/url-security";
+import { getEmergencyContactReference } from "@/server/emergency-contacts";
 
 type CitizenReportImageInput = {
   url: string;
@@ -208,7 +210,13 @@ const REPORT_NATURAL_PATTERNS = [
 ];
 
 const URGENT_SITUATION_PATTERN =
-  /(atentado|ataque terrorista|posible atentado|explosion|balacera|disparos|incendio|fuga de gas|herido|heridos|ambulancia)/;
+  /(atentado|ataque terrorista|posible atentado|explosion|balacera|disparos|incendio|fuga de gas|herido|heridos|ambulancia|derrumbe|deslizamiento)/;
+
+const REPORT_INFORMATION_REQUEST_PATTERNS = [
+  /^(?:como|donde|que|cual|puedo|debo|necesito saber|quiero saber|me puedes decir)\b.*\b(?:denuncia|denunciar|reporte|reportar|reporto)\b/,
+  /^(?:como|que)\s+hago\b.*\b(?:denuncia|denunciar|reporte|reportar|hueco|accidente|choque)\b/,
+  /^(?:donde|como)\b.*\b(?:transito|movilidad|inspeccion|policia|fiscalia)\b/,
+];
 
 const CLASSIFICATION_RULES: Array<{
   pattern: RegExp;
@@ -424,12 +432,7 @@ function assertValidPriority(priority: CitizenReportPriority) {
 }
 
 function isImageUrlAllowed(url: string) {
-  try {
-    const parsed = new URL(url);
-    return parsed.protocol === "https:" || parsed.protocol === "http:";
-  } catch {
-    return false;
-  }
+  return isPublicHttpUrl(url);
 }
 
 function isAllowedImage(input: CitizenReportImageInput) {
@@ -514,6 +517,10 @@ function getMatchedReportKeywords(normalizedText: string) {
   return [...new Set([...keywordMatches, ...naturalMatches])];
 }
 
+function isReportInformationRequest(normalizedText: string) {
+  return REPORT_INFORMATION_REQUEST_PATTERNS.some((pattern) => pattern.test(normalizedText));
+}
+
 function buildReportTitle(category: string, text: string) {
   const cleaned = sanitizeText(text.replace(/^(denuncia|reporte|alerta)\s*:\s*/i, ""), 70);
   return `${category}: ${cleaned || "Reporte ciudadano"}`;
@@ -528,6 +535,7 @@ export function detectCitizenReportIntent(
   messageType = "chat",
 ): CitizenReportIntent {
   const normalized = normalizeText(text);
+  const infoRequest = isReportInformationRequest(normalized);
   const matchedKeywords = getMatchedReportKeywords(normalized);
   let category = "Otro";
   let priority: CitizenReportPriority = "normal";
@@ -544,6 +552,7 @@ export function detectCitizenReportIntent(
 
   const isReport =
     Boolean(normalized) &&
+    !infoRequest &&
     (matchedKeywords.length > 0 ||
       category !== "Otro" ||
       (messageType.toLowerCase() === "image" && normalized.length > 0));
@@ -569,18 +578,20 @@ export function classifyCitizenReport(text: string) {
 
 function buildCitizenReportReply(intent: CitizenReportIntent, hasImage: boolean) {
   if (intent.isUrgentSituation) {
+    const emergencyLine = getEmergencyContactReference();
+
     if (intent.needsLocation) {
       return [
         "Gracias por avisar. Registramos el reporte como posible situación urgente para revisión.",
         "",
-        "Dime por favor la ubicación exacta o el sector donde ocurre. Si hay personas heridas o riesgo inmediato, comunícate también con la línea de emergencias correspondiente.",
+        `Dime por favor la ubicación exacta o el sector donde ocurre. Si hay personas heridas o riesgo inmediato, comunícate también con ${emergencyLine}.`,
       ].join("\n");
     }
 
     return [
       "Gracias por avisar. Registramos el reporte como posible situación urgente para revisión.",
       "",
-      "Si hay personas heridas o riesgo inmediato, por favor comunícate también con la línea de emergencias correspondiente.",
+      `Si hay personas heridas o riesgo inmediato, por favor comunícate también con ${emergencyLine}.`,
     ].join("\n");
   }
 
@@ -1248,6 +1259,7 @@ export const citizenReportInternals = {
   isAllowedImage,
   isCitizenReportMessage,
   detectCitizenReportIntent,
+  isReportInformationRequest,
   classifyCitizenReport,
   handleCitizenReport,
 };
