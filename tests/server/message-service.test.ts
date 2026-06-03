@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   sendMessage,
+  sendWhatsAppImage,
   sendWhatsAppText,
   messageServiceInternals,
 } from "@/server/messageService";
@@ -65,6 +66,27 @@ test("sendWhatsAppText en dry-run no depende de token ni envia real", async () =
   process.env.ULTRAMSG_TOKEN = previousToken;
 });
 
+test("sendWhatsAppImage en dry-run no depende de token ni envia real", async () => {
+  const previousDryRun = process.env.WHATSAPP_DRY_RUN;
+  const previousToken = process.env.ULTRAMSG_TOKEN;
+
+  process.env.WHATSAPP_DRY_RUN = "true";
+  process.env.ULTRAMSG_TOKEN = "";
+
+  const result = await sendWhatsAppImage({
+    to: "+573001330213",
+    imageUrl: "https://res.cloudinary.com/demo/image/upload/flyer.png",
+    caption: "Prueba flyer",
+  });
+
+  assert.equal(result.sent, true);
+  assert.equal(result.simulated, true);
+  assert.equal(result.provider, "ultramsg");
+
+  process.env.WHATSAPP_DRY_RUN = previousDryRun;
+  process.env.ULTRAMSG_TOKEN = previousToken;
+});
+
 test("sendMessage en dry-run simula UltraMsg con destinatarios", async () => {
   const previousDryRun = process.env.WHATSAPP_DRY_RUN;
   const previousSafeMode = process.env.WHATSAPP_SAFE_MODE;
@@ -88,6 +110,35 @@ test("sendMessage en dry-run simula UltraMsg con destinatarios", async () => {
   assert.equal(result.simulated, true);
   assert.equal(result.sent, false);
   assert.match(result.log, /Dry-run UltraMsg OK/);
+
+  process.env.WHATSAPP_DRY_RUN = previousDryRun;
+  process.env.WHATSAPP_SAFE_MODE = previousSafeMode;
+});
+
+test("sendMessage en dry-run simula UltraMsg con imagen adjunta", async () => {
+  const previousDryRun = process.env.WHATSAPP_DRY_RUN;
+  const previousSafeMode = process.env.WHATSAPP_SAFE_MODE;
+
+  process.env.WHATSAPP_DRY_RUN = "true";
+  process.env.WHATSAPP_SAFE_MODE = "true";
+
+  const result = await sendMessage({
+    message: "Comunicado con flyer",
+    segment: {
+      id: "seg-image",
+      name: "Prueba imagen",
+      estimatedUsers: 1,
+      recipientPhones: ["+573001330213"],
+    },
+    scheduledAt: new Date("2026-04-20T10:00:00.000Z"),
+    mode: "MANUAL",
+    imageUrl: "https://res.cloudinary.com/demo/image/upload/flyer.png",
+  });
+
+  assert.equal(result.deliveredCount, 1);
+  assert.equal(result.simulated, true);
+  assert.equal(result.type, "image");
+  assert.match(result.log, /con imagen/);
 
   process.env.WHATSAPP_DRY_RUN = previousDryRun;
   process.env.WHATSAPP_SAFE_MODE = previousSafeMode;

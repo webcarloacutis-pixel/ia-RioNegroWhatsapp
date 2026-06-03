@@ -32,6 +32,12 @@ type AnnouncementInput = {
   type: string;
   scheduledAt: string;
   segmentId: string | null;
+  imageUrl?: string | null;
+  imagePublicId?: string | null;
+  imageFilename?: string | null;
+  imageMimeType?: string | null;
+  imageSize?: number | null;
+  imageProvider?: string | null;
 };
 
 type SegmentInput = {
@@ -65,6 +71,12 @@ type MockAnnouncement = {
   type: string;
   customTypeLabel: string | null;
   scheduledAt: Date;
+  imageUrl: string | null;
+  imagePublicId: string | null;
+  imageFilename: string | null;
+  imageMimeType: string | null;
+  imageSize: number | null;
+  imageProvider: string | null;
   status: AnnouncementStatus;
   sentAt: Date | null;
   segmentId: string | null;
@@ -182,6 +194,17 @@ function resolveAnnouncementTypeInput(value: string) {
   };
 }
 
+function buildAnnouncementImageData(input: AnnouncementInput) {
+  return {
+    imageUrl: input.imageUrl ?? null,
+    imagePublicId: input.imagePublicId ?? null,
+    imageFilename: input.imageFilename ?? null,
+    imageMimeType: input.imageMimeType ?? null,
+    imageSize: input.imageSize ?? null,
+    imageProvider: input.imageProvider ?? null,
+  };
+}
+
 function initializeState(): MockState {
   const now = new Date();
 
@@ -220,6 +243,12 @@ function initializeState(): MockState {
       type: normalizeAnnouncementType(item.type),
       customTypeLabel: null,
       scheduledAt,
+      imageUrl: null,
+      imagePublicId: null,
+      imageFilename: null,
+      imageMimeType: null,
+      imageSize: null,
+      imageProvider: null,
       status: item.status,
       sentAt: item.status === "SENT" || item.status === "SENT_REAL" ? scheduledAt : null,
       segmentId,
@@ -298,6 +327,12 @@ function serializeAnnouncement(announcement: MockAnnouncement): AnnouncementSumm
     type: announcement.type,
     displayType: announcement.customTypeLabel ?? announcement.type,
     scheduledAt: announcement.scheduledAt.toISOString(),
+    imageUrl: announcement.imageUrl,
+    imagePublicId: announcement.imagePublicId,
+    imageFilename: announcement.imageFilename,
+    imageMimeType: announcement.imageMimeType,
+    imageSize: announcement.imageSize,
+    imageProvider: announcement.imageProvider,
     status: announcement.status,
     sentAt: announcement.sentAt?.toISOString() ?? null,
     createdAt: announcement.createdAt.toISOString(),
@@ -454,6 +489,7 @@ export async function createAnnouncement(input: AnnouncementInput) {
     type: resolvedType.type,
     customTypeLabel: resolvedType.customTypeLabel,
     scheduledAt: parseScheduledDate(input.scheduledAt),
+    ...buildAnnouncementImageData(input),
     status: "SCHEDULED",
     sentAt: null,
     segmentId: input.segmentId,
@@ -476,6 +512,7 @@ export async function updateAnnouncement(id: string, input: AnnouncementInput) {
   announcement.customTypeLabel = resolvedType.customTypeLabel;
   announcement.scheduledAt = parseScheduledDate(input.scheduledAt);
   announcement.segmentId = input.segmentId;
+  Object.assign(announcement, buildAnnouncementImageData(input));
   announcement.updatedAt = new Date();
 
   return serializeAnnouncement(announcement);
@@ -498,6 +535,10 @@ export async function simulateAnnouncementSend(id: string) {
     scheduledAt: announcement.scheduledAt,
     mode: "DEMO",
     to: audience.recipientPhones.join(","),
+    imageUrl: announcement.imageUrl,
+    imageFilename: announcement.imageFilename,
+    imageMimeType: announcement.imageMimeType,
+    imageSize: announcement.imageSize,
   });
 
   const log = createLog({
@@ -527,6 +568,10 @@ export async function sendAnnouncementNow(
     scheduledAt: announcement.scheduledAt,
     mode,
     to: audience.recipientPhones.join(","),
+    imageUrl: announcement.imageUrl,
+    imageFilename: announcement.imageFilename,
+    imageMimeType: announcement.imageMimeType,
+    imageSize: announcement.imageSize,
   }).catch((error) => {
     const message =
       error instanceof Error ? error.message : "No se pudo enviar el comunicado.";
@@ -539,7 +584,7 @@ export async function sendAnnouncementNow(
       mode,
       status: "FAILED",
       deliveredCount: 0,
-      details: message,
+      details: announcement.imageUrl ? `[IMAGE] ${message}` : message,
     });
     throw new AppError(message, 502);
   });
@@ -552,10 +597,10 @@ export async function sendAnnouncementNow(
         ? "SENT_REAL"
         : "FAILED";
   const details = result.blockedBySafeMode
-    ? `[BLOCKED_BY_SAFE_MODE] ${result.log}`
+    ? `[BLOCKED_BY_SAFE_MODE] ${announcement.imageUrl ? "[IMAGE] " : ""}${result.log}`
     : result.simulated
-      ? `[SENT_SIMULATED] ${result.log}`
-      : `[SENT_REAL] ${result.log}`;
+      ? `[SENT_SIMULATED] ${announcement.imageUrl ? "[IMAGE] " : ""}${result.log}`
+      : `[SENT_REAL] ${announcement.imageUrl ? "[IMAGE] " : ""}${result.log}`;
 
   announcement.status = nextStatus as AnnouncementStatus;
   announcement.sentAt = nextStatus === "SENT_REAL" ? new Date() : null;

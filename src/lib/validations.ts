@@ -4,6 +4,23 @@ import {
   KNOWLEDGE_CATEGORY_SUGGESTIONS,
   normalizeAnnouncementType,
 } from "@/lib/constants";
+import { isPublicHttpUrl } from "@/lib/url-security";
+
+const MAX_ANNOUNCEMENT_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_ANNOUNCEMENT_IMAGE_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+] as const;
+
+const nullableTrimmedString = (max: number, message: string) =>
+  z
+    .string()
+    .trim()
+    .max(max, message)
+    .optional()
+    .nullable()
+    .transform((value) => value || null);
 
 function normalizeRecipientPhone(value: string) {
   const digits = value.replace(/\D/g, "");
@@ -79,6 +96,29 @@ export const announcementInputSchema = z.object({
     .optional()
     .nullable()
     .transform((value) => value || null),
+  imageUrl: z
+    .string()
+    .trim()
+    .optional()
+    .nullable()
+    .transform((value) => value || null)
+    .refine((value) => !value || isPublicHttpUrl(value), "La URL de la imagen no es publica."),
+  imagePublicId: nullableTrimmedString(180, "El identificador de imagen es demasiado largo."),
+  imageFilename: nullableTrimmedString(180, "El nombre del archivo es demasiado largo."),
+  imageMimeType: z
+    .enum(ALLOWED_ANNOUNCEMENT_IMAGE_MIME_TYPES)
+    .optional()
+    .nullable()
+    .transform((value) => value || null),
+  imageSize: z
+    .number()
+    .int("El tamano de la imagen debe ser entero.")
+    .min(1, "El tamano de la imagen no es valido.")
+    .max(MAX_ANNOUNCEMENT_IMAGE_BYTES, "La imagen no puede superar 5 MB.")
+    .optional()
+    .nullable()
+    .transform((value) => value ?? null),
+  imageProvider: nullableTrimmedString(40, "El proveedor de imagen es demasiado largo."),
 });
 
 export const segmentInputSchema = z.object({

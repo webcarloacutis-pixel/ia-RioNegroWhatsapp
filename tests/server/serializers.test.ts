@@ -17,6 +17,12 @@ test("serializeAnnouncement expone los campos esperados para el panel", () => {
     type: "NEWS",
     customTypeLabel: "Boletin especial",
     scheduledAt: new Date("2026-04-20T10:00:00.000Z"),
+    imageUrl: "https://res.cloudinary.com/demo/image/upload/flyer.png",
+    imagePublicId: "rionegro/announcements/flyer",
+    imageFilename: "flyer.png",
+    imageMimeType: "image/png",
+    imageSize: 1024,
+    imageProvider: "cloudinary",
     status: "SCHEDULED",
     sentAt: null,
     createdAt: new Date("2026-04-19T08:00:00.000Z"),
@@ -31,6 +37,8 @@ test("serializeAnnouncement expone los campos esperados para el panel", () => {
 
   assert.equal(payload.displayType, "Boletin especial");
   assert.equal(payload.segment?.name, "Cobertura municipal");
+  assert.equal(payload.imageProvider, "cloudinary");
+  assert.equal(payload.imageFilename, "flyer.png");
 });
 
 test("serializeSegment calcula conteos y ultima fecha de uso", () => {

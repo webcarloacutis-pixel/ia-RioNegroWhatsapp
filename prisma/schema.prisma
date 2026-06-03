@@ -87,6 +87,12 @@ model Announcement {
   type         AnnouncementType
   customTypeLabel String?
   scheduledAt  DateTime
+  imageUrl     String?            @db.Text
+  imagePublicId String?
+  imageFilename String?
+  imageMimeType String?
+  imageSize    Int?
+  imageProvider String?
   status       AnnouncementStatus @default(SCHEDULED)
   sentAt       DateTime?
   segmentId    String?

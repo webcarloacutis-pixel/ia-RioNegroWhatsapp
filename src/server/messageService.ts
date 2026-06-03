@@ -14,6 +14,10 @@ type SendMessageInput = {
   scheduledAt: Date;
   mode?: "DEMO" | "MANUAL" | "SCHEDULED";
   to?: string | null;
+  imageUrl?: string | null;
+  imageFilename?: string | null;
+  imageMimeType?: string | null;
+  imageSize?: number | null;
 };
 
 type SendMessageResult = {
@@ -21,6 +25,7 @@ type SendMessageResult = {
   simulated: boolean;
   blockedBySafeMode?: boolean;
   provider: "ultramsg" | "mock";
+  type?: "text" | "image" | "text_fallback";
   message?: string;
   error?: string;
   deliveredCount: number;
@@ -43,6 +48,16 @@ type WhatsAppAudioInput = {
   inboundMessageId?: string;
 };
 
+type WhatsAppImageInput = {
+  to: string;
+  imageUrl?: string | null;
+  imageBase64?: string | null;
+  caption?: string;
+  inboundReply?: boolean;
+  inboundMessageId?: string;
+  announcementId?: string;
+};
+
 type SafeInboundReservation = {
   allowed: boolean;
   markSent: () => void;
@@ -54,6 +69,7 @@ const globalForWhatsAppMessages = globalThis as unknown as {
 
 const DEFAULT_AUDIENCE = 1250;
 const DEFAULT_MAX_REAL_MASS_MESSAGE_RECIPIENTS = 100;
+const MAX_ULTRAMSG_IMAGE_CAPTION_LENGTH = 900;
 function getUltraMsgDefaultTo() {
   return process.env.ULTRAMSG_DEFAULT_TO?.trim() ?? "";
 }
@@ -385,6 +401,90 @@ export async function sendWhatsAppAudio({
   return response.data;
 }
 
+export async function sendWhatsAppImage({
+  to,
+  imageUrl,
+  imageBase64,
+  caption,
+  inboundReply = false,
+  inboundMessageId,
+  announcementId,
+}: WhatsAppImageInput) {
+  if (!imageUrl && !imageBase64) {
+    throw new Error("Falta imageUrl o imageBase64 para enviar imagen.");
+  }
+
+  if (isWhatsAppDryRunMode()) {
+    console.log("[ultramsg] sending image", {
+      to: maskRecipient(to),
+      inboundReply,
+      announcementId,
+      dryRun: true,
+    });
+
+    console.log("[ultramsg] reply sent", {
+      to: maskRecipient(to),
+      type: "image",
+      dryRun: true,
+    });
+
+    return {
+      sent: true,
+      simulated: true,
+      provider: "ultramsg",
+      message: "dry-run ok",
+    };
+  }
+
+  const safeReservation = reserveSafeInboundReply({
+    inboundReply,
+    inboundMessageId,
+  });
+
+  if (!safeReservation.allowed) {
+    return {
+      skipped: true,
+      reason: "duplicate_inbound_reply",
+    };
+  }
+
+  const token = getUltraMsgToken();
+  const image = imageUrl ?? imageBase64?.replace(
+    /^data:image\/[a-zA-Z0-9.+-]+;base64,/,
+    "",
+  );
+  const data = qs.stringify({
+    token,
+    to,
+    image,
+    caption,
+  });
+
+  console.log("[ultramsg] sending image", {
+    to: maskRecipient(to),
+    inboundReply,
+    announcementId,
+  });
+
+  const response = await axios({
+    method: "post",
+    url: `${getUltraMsgBaseUrl()}/messages/image`,
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    data,
+  });
+
+  safeReservation.markSent();
+
+  console.log("[ultramsg] reply sent", {
+    to: maskRecipient(to),
+    type: "image",
+  });
+
+  return response.data;
+}
+
 export async function sendWhatsAppTextAfterAudioFailure({
   to,
   message,
@@ -452,6 +552,7 @@ async function sendMessageMock({
   segment,
   scheduledAt,
   mode,
+  imageUrl,
 }: SendMessageInput): Promise<SendMessageResult> {
   const deliveredCount = segment?.recipientPhones?.length || segment?.estimatedUsers || DEFAULT_AUDIENCE;
   const targetName = segment?.name ?? "Cobertura general";
@@ -471,9 +572,26 @@ async function sendMessageMock({
     sent: true,
     simulated: true,
     provider: "mock",
+    type: imageUrl ? "image" : "text",
     message: "mock ok",
     deliveredCount,
-    log: `Enviado a ${new Intl.NumberFormat("es-CO").format(deliveredCount)} usuarios`,
+    log: `Enviado a ${new Intl.NumberFormat("es-CO").format(deliveredCount)} usuarios${
+      imageUrl ? " con imagen" : ""
+    }`,
+  };
+}
+
+function buildImageCaption(message: string) {
+  if (message.length <= MAX_ULTRAMSG_IMAGE_CAPTION_LENGTH) {
+    return {
+      caption: message,
+      shouldSendFullTextAfterImage: false,
+    };
+  }
+
+  return {
+    caption: `${message.slice(0, MAX_ULTRAMSG_IMAGE_CAPTION_LENGTH - 3)}...`,
+    shouldSendFullTextAfterImage: true,
   };
 }
 
@@ -483,6 +601,7 @@ async function sendMessageUltraMsg({
   scheduledAt,
   mode,
   to,
+  imageUrl,
 }: SendMessageInput): Promise<SendMessageResult> {
   const targetName = segment?.name ?? "Cobertura general";
   const recipients = resolveRecipients(to || segment?.recipientPhones?.join(",") || null);
@@ -497,7 +616,10 @@ async function sendMessageUltraMsg({
 
   const responses: unknown[] = [];
   const failures: string[] = [];
+  const imageFallbacks: string[] = [];
   const dryRun = isWhatsAppDryRunMode();
+  const hasImage = Boolean(imageUrl?.trim());
+  const imageCaption = buildImageCaption(message);
 
   if (!dryRun) {
     assertRealMassMessagePolicy({ segment, to, recipients });
@@ -521,6 +643,41 @@ async function sendMessageUltraMsg({
         });
       }
 
+      if (hasImage) {
+        const parsedImageBody = await sendWhatsAppImage({
+          to: recipient,
+          imageUrl,
+          caption: imageCaption.caption,
+          inboundReply: false,
+        });
+
+        if (imageCaption.shouldSendFullTextAfterImage) {
+          try {
+            await sendWhatsAppText({
+              to: recipient,
+              message,
+              inboundReply: false,
+            });
+          } catch (error) {
+            console.error("[announcements] ultramsg long caption fallback failed", {
+              mode,
+              scheduledAt: scheduledAt.toISOString(),
+              segment: targetName,
+              to: maskRecipient(recipient),
+              error: error instanceof Error ? error.message : "unknown_error",
+            });
+          }
+        }
+
+        responses.push({
+          to: recipient,
+          type: "image",
+          body: parsedImageBody,
+        });
+
+        continue;
+      }
+
       const parsedBody = await sendWhatsAppText({
         to: recipient,
         message,
@@ -529,14 +686,50 @@ async function sendMessageUltraMsg({
 
       responses.push({
         to: recipient,
+        type: "text",
         body: parsedBody,
       });
     } catch (error) {
+      if (hasImage) {
+        console.error("[announcements] ultramsg image failed", {
+          mode,
+          scheduledAt: scheduledAt.toISOString(),
+          segment: targetName,
+          to: maskRecipient(recipient),
+          error: error instanceof Error ? error.message : "unknown_error",
+        });
+
+        try {
+          const fallbackBody = await sendWhatsAppText({
+            to: recipient,
+            message,
+            inboundReply: false,
+          });
+
+          imageFallbacks.push(recipient);
+          responses.push({
+            to: recipient,
+            type: "text_fallback",
+            body: fallbackBody,
+          });
+
+          continue;
+        } catch (fallbackError) {
+          console.error("[announcements] ultramsg image fallback failed", {
+            mode,
+            scheduledAt: scheduledAt.toISOString(),
+            segment: targetName,
+            to: maskRecipient(recipient),
+            error: fallbackError instanceof Error ? fallbackError.message : "unknown_error",
+          });
+        }
+      }
+
       console.error("[messageService] error UltraMsg", {
         mode,
         scheduledAt: scheduledAt.toISOString(),
         segment: targetName,
-        to: recipient,
+        to: maskRecipient(recipient),
         error: error instanceof Error ? error.message : "unknown_error",
       });
 
@@ -565,14 +758,25 @@ async function sendMessageUltraMsg({
     sent: !dryRun,
     simulated: dryRun,
     provider: "ultramsg",
+    type: hasImage
+      ? imageFallbacks.length === responses.length
+        ? "text_fallback"
+        : "image"
+      : "text",
     message: dryRun ? "dry-run ok" : "sent real",
     deliveredCount: responses.length,
     log:
       failures.length > 0
-        ? `Enviado por UltraMsg a ${responses.length} destinatario(s). Fallaron: ${failures.join(", ")}`
+        ? `Enviado por UltraMsg a ${responses.length} destinatario(s)${
+            hasImage ? " con imagen" : ""
+          }. Fallaron: ${failures.join(", ")}`
+        : imageFallbacks.length > 0
+          ? `Imagen no enviada a ${imageFallbacks.length} destinatario(s); se envio texto de respaldo.`
         : dryRun
-          ? `Dry-run UltraMsg OK para ${responses.length} destinatario(s).`
-          : `Enviado por UltraMsg a ${recipients.join(", ")}`,
+          ? `Dry-run UltraMsg OK para ${responses.length} destinatario(s)${
+              hasImage ? " con imagen" : ""
+            }.`
+          : `Enviado por UltraMsg a ${recipients.join(", ")}${hasImage ? " con imagen" : ""}`,
   };
 }
 
@@ -595,6 +799,7 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
       simulated: true,
       blockedBySafeMode: true,
       provider: "mock",
+      type: input.imageUrl ? "image" : "text",
       message: "blocked_by_safe_mode",
       deliveredCount: 0,
       log: "Bloqueado por modo seguro: WHATSAPP_SAFE_MODE=true impide envios proactivos reales.",
@@ -614,6 +819,7 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
 }
 
 export const messageServiceInternals = {
+  buildImageCaption,
   canResolveUltraMsgBaseUrl,
   getUltraMsgBaseUrl,
   isUltraMsgConfigured,

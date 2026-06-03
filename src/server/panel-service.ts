@@ -35,6 +35,12 @@ type AnnouncementInput = {
   type: string;
   scheduledAt: string;
   segmentId: string | null;
+  imageUrl?: string | null;
+  imagePublicId?: string | null;
+  imageFilename?: string | null;
+  imageMimeType?: string | null;
+  imageSize?: number | null;
+  imageProvider?: string | null;
 };
 
 type DeliveryLoggedError = AppError & {
@@ -172,6 +178,17 @@ function resolveAnnouncementTypeInput(value: string) {
   };
 }
 
+function buildAnnouncementImageData(input: AnnouncementInput) {
+  return {
+    imageUrl: input.imageUrl ?? null,
+    imagePublicId: input.imagePublicId ?? null,
+    imageFilename: input.imageFilename ?? null,
+    imageMimeType: input.imageMimeType ?? null,
+    imageSize: input.imageSize ?? null,
+    imageProvider: input.imageProvider ?? null,
+  };
+}
+
 function isDatabaseUnavailable(error: unknown) {
   if (!(error instanceof Error)) {
     return false;
@@ -194,9 +211,11 @@ function isDatabaseUnavailable(error: unknown) {
   const message = error.message;
 
   return (
+    error.name === "PrismaClientInitializationError" ||
     Boolean(errorWithCode.code && prismaRecoverableCodes.has(errorWithCode.code)) ||
     message.includes("Authentication failed against database server") ||
     message.includes("Can't reach database server") ||
+    message.includes("Server has closed the connection") ||
     message.includes("Timed out fetching a new connection") ||
     message.includes("Error querying the database") ||
     message.includes("does not exist") ||
@@ -348,6 +367,7 @@ async function createAnnouncementDb(input: AnnouncementInput) {
       customTypeLabel: resolvedType.customTypeLabel,
       scheduledAt: parseScheduledDate(input.scheduledAt),
       segmentId: input.segmentId,
+      ...buildAnnouncementImageData(input),
     },
     include: {
       segment: {
@@ -383,6 +403,7 @@ async function updateAnnouncementDb(id: string, input: AnnouncementInput) {
       customTypeLabel: resolvedType.customTypeLabel,
       scheduledAt: parseScheduledDate(input.scheduledAt),
       segmentId: input.segmentId,
+      ...buildAnnouncementImageData(input),
     },
     include: {
       segment: {
@@ -429,6 +450,10 @@ async function simulateAnnouncementSendDb(id: string) {
     scheduledAt: announcement.scheduledAt,
     mode: "DEMO",
     to: audience.recipientPhones.join(","),
+    imageUrl: announcement.imageUrl,
+    imageFilename: announcement.imageFilename,
+    imageMimeType: announcement.imageMimeType,
+    imageSize: announcement.imageSize,
   });
 
   const log = await prisma.deliveryLog.create({
@@ -499,6 +524,10 @@ async function sendAnnouncementNowDb(
     scheduledAt: announcement.scheduledAt,
     mode,
     to: audience.recipientPhones.join(","),
+    imageUrl: announcement.imageUrl,
+    imageFilename: announcement.imageFilename,
+    imageMimeType: announcement.imageMimeType,
+    imageSize: announcement.imageSize,
   }).catch(async (error) => {
     const message =
       error instanceof Error ? error.message : "No se pudo enviar el comunicado.";
@@ -532,7 +561,7 @@ async function sendAnnouncementNowDb(
           mode,
           status: DeliveryStatus.FAILED,
           deliveredCount: 0,
-          details: message,
+          details: announcement.imageUrl ? `[IMAGE] ${message}` : message,
         },
         include: {
           announcement: {
@@ -557,12 +586,13 @@ async function sendAnnouncementNowDb(
   const nextStatus = getSendResultStatus(result);
   const deliveryStatus = getDeliveryStatusForResult(result);
   const isRealSend = nextStatus === AnnouncementStatus.SENT_REAL;
+  const mediaPrefix = announcement.imageUrl ? "[IMAGE] " : "";
   const details =
     result.blockedBySafeMode
-      ? `[BLOCKED_BY_SAFE_MODE] ${result.log}`
+      ? `[BLOCKED_BY_SAFE_MODE] ${mediaPrefix}${result.log}`
       : result.simulated
-        ? `[SENT_SIMULATED] ${result.log}`
-        : `[SENT_REAL] ${result.log}`;
+        ? `[SENT_SIMULATED] ${mediaPrefix}${result.log}`
+        : `[SENT_REAL] ${mediaPrefix}${result.log}`;
 
   const [updatedAnnouncement, log] = await prisma.$transaction([
     prisma.announcement.update({

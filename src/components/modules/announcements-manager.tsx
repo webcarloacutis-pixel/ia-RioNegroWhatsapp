@@ -1,9 +1,10 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useState, useTransition } from "react";
-import { Edit3, Send, Sparkles, Trash2 } from "lucide-react";
+import { useMemo, useRef, useState, useTransition } from "react";
+import { Edit3, ImagePlus, Send, Sparkles, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -33,6 +34,12 @@ type AnnouncementFormState = {
   type: string;
   scheduledAt: string;
   segmentId: string;
+  imageUrl: string | null;
+  imagePublicId: string | null;
+  imageFilename: string | null;
+  imageMimeType: string | null;
+  imageSize: number | null;
+  imageProvider: string | null;
 };
 
 const initialForm: AnnouncementFormState = {
@@ -42,7 +49,17 @@ const initialForm: AnnouncementFormState = {
   type: "GENERAL",
   scheduledAt: "",
   segmentId: "",
+  imageUrl: null,
+  imagePublicId: null,
+  imageFilename: null,
+  imageMimeType: null,
+  imageSize: null,
+  imageProvider: null,
 };
+
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const ALLOWED_IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
 
 function getAnnouncementStatusTone(status: AnnouncementSummary["status"]) {
   if (status === "SENT" || status === "SENT_REAL") return "success";
@@ -59,6 +76,8 @@ export function AnnouncementsManager({
   const [isPending, startTransition] = useTransition();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<AnnouncementFormState>(initialForm);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   const sortedAnnouncements = useMemo(
     () =>
@@ -94,6 +113,92 @@ export function AnnouncementsManager({
     }
 
     return payload.data;
+  }
+
+  function getImageExtension(filename: string) {
+    const extension = filename.split(".").pop()?.toLowerCase();
+    return extension || "";
+  }
+
+  function validateImageBeforeUpload(file: File) {
+    if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
+      return "Solo se permiten imagenes JPG, PNG o WebP.";
+    }
+
+    if (!ALLOWED_IMAGE_EXTENSIONS.has(getImageExtension(file.name))) {
+      return "La extension debe ser jpg, jpeg, png o webp.";
+    }
+
+    if (file.size > MAX_IMAGE_BYTES) {
+      return "La imagen no puede superar 5 MB.";
+    }
+
+    return null;
+  }
+
+  async function handleImageUpload(file: File) {
+    const validationError = validateImageBeforeUpload(file);
+
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    const body = new FormData();
+    body.append("file", file);
+    setIsUploadingImage(true);
+
+    try {
+      const response = await fetch("/api/admin/uploads/announcement-image", {
+        method: "POST",
+        body,
+      });
+      const payload = await response.json();
+
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error ?? "No se pudo subir la imagen.");
+      }
+
+      const image = payload.image as {
+        url: string;
+        secureUrl: string;
+        publicId: string;
+        filename: string;
+        mimeType: string;
+        size: number;
+        provider: string;
+      };
+
+      setForm((current) => ({
+        ...current,
+        imageUrl: image.secureUrl || image.url,
+        imagePublicId: image.publicId,
+        imageFilename: image.filename,
+        imageMimeType: image.mimeType,
+        imageSize: image.size,
+        imageProvider: image.provider,
+      }));
+      toast.success("Flyer subido.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo subir la imagen.");
+    } finally {
+      setIsUploadingImage(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  }
+
+  function removeImage() {
+    setForm((current) => ({
+      ...current,
+      imageUrl: null,
+      imagePublicId: null,
+      imageFilename: null,
+      imageMimeType: null,
+      imageSize: null,
+      imageProvider: null,
+    }));
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -148,9 +253,16 @@ export function AnnouncementsManager({
     }
   }
 
-  async function handleSendNow(id: string) {
+  async function handleSendNow(announcement: AnnouncementSummary) {
+    const confirmed = window.confirm(
+      `Vas a enviar "${announcement.title}" ahora.${
+        announcement.imageUrl ? "\nIncluye flyer adjunto." : ""
+      }\nDeseas continuar?`,
+    );
+    if (!confirmed) return;
+
     try {
-      const data = await request(`/api/announcements/${id}/send`, {
+      const data = await request(`/api/announcements/${announcement.id}/send`, {
         method: "POST",
       });
       toast.success(data.feedback);
@@ -169,6 +281,12 @@ export function AnnouncementsManager({
       type: announcement.displayType,
       scheduledAt: toDateTimeLocalValue(announcement.scheduledAt),
       segmentId: announcement.segment?.id ?? "",
+      imageUrl: announcement.imageUrl,
+      imagePublicId: announcement.imagePublicId,
+      imageFilename: announcement.imageFilename,
+      imageMimeType: announcement.imageMimeType,
+      imageSize: announcement.imageSize,
+      imageProvider: announcement.imageProvider,
     });
   }
 
@@ -289,6 +407,66 @@ export function AnnouncementsManager({
               />
             </label>
 
+            <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Flyer o imagen</p>
+                  <p className="mt-1 text-xs text-muted">
+                    Opcional: sube un flyer existente para acompanar el comunicado.
+                  </p>
+                </div>
+                {form.imageUrl ? <Badge tone="success">Con imagen</Badge> : null}
+              </div>
+
+              <input
+                ref={fileInputRef}
+                className="sr-only"
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void handleImageUpload(file);
+                }}
+              />
+
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="gap-2"
+                  disabled={isUploadingImage}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImagePlus className="size-4" />
+                  {isUploadingImage ? "Subiendo..." : form.imageUrl ? "Cambiar flyer" : "Subir flyer"}
+                </Button>
+                {form.imageUrl ? (
+                  <Button type="button" variant="ghost" className="gap-2" onClick={removeImage}>
+                    <X className="size-4" />
+                    Quitar imagen
+                  </Button>
+                ) : null}
+              </div>
+
+              {form.imageUrl ? (
+                <div className="flex items-center gap-4">
+                  <Image
+                    src={form.imageUrl}
+                    alt="Vista previa del flyer"
+                    width={96}
+                    height={96}
+                    className="h-24 w-24 rounded-lg border border-border object-cover"
+                  />
+                  <div className="min-w-0 text-sm text-muted">
+                    <p className="truncate font-medium text-foreground">
+                      {form.imageFilename ?? "Flyer cargado"}
+                    </p>
+                    <p>{form.imageMimeType ?? "imagen"}</p>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
             <div className="flex flex-wrap gap-3">
               <Button type="submit" disabled={isPending}>
                 {editingId ? "Actualizar comunicado" : "Crear comunicado"}
@@ -320,16 +498,26 @@ export function AnnouncementsManager({
                 className="rounded-[28px] border border-border bg-white p-5"
               >
                 <div className="flex flex-wrap items-start justify-between gap-4">
-                  <div>
+                  <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="text-lg font-semibold text-foreground">{announcement.title}</p>
                       <Badge tone="info">{formatTypeLabel(announcement.displayType)}</Badge>
                       <Badge tone={getAnnouncementStatusTone(announcement.status)}>
                         {formatStatusLabel(announcement.status)}
                       </Badge>
+                      {announcement.imageUrl ? <Badge tone="success">Con imagen</Badge> : null}
                     </div>
                     <p className="mt-3 text-sm leading-7 text-muted">{announcement.message}</p>
                   </div>
+                  {announcement.imageUrl ? (
+                    <Image
+                      src={announcement.imageUrl}
+                      alt={`Flyer de ${announcement.title}`}
+                      width={96}
+                      height={96}
+                      className="h-24 w-24 rounded-lg border border-border object-cover"
+                    />
+                  ) : null}
                 </div>
 
                 <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted">
@@ -360,7 +548,7 @@ export function AnnouncementsManager({
                   <Button
                     variant="primary"
                     className="gap-2"
-                    onClick={() => handleSendNow(announcement.id)}
+                    onClick={() => handleSendNow(announcement)}
                   >
                     <Send className="size-4" />
                     Enviar ahora

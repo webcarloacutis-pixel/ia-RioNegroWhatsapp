@@ -86,6 +86,12 @@ export type AnnouncementSummary = {
   type: AnnouncementTypeValue;
   displayType: string;
   scheduledAt: string;
+  imageUrl: string | null;
+  imagePublicId: string | null;
+  imageFilename: string | null;
+  imageMimeType: string | null;
+  imageSize: number | null;
+  imageProvider: string | null;
   status: AnnouncementStatusValue;
   sentAt: string | null;
   createdAt: string;

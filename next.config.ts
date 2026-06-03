@@ -41,6 +41,14 @@ const securityHeaders = [
 
 const nextConfig: NextConfig = {
   distDir: ".next-prod",
+  images: {
+    remotePatterns: [
+      {
+        protocol: "https",
+        hostname: "res.cloudinary.com",
+      },
+    ],
+  },
   async headers() {
     return [
       {

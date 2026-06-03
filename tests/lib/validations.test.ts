@@ -30,6 +30,64 @@ test("announcementInputSchema normaliza tipo y campos opcionales", () => {
   assert.equal(payload.type, "CIERRE_VIAL");
   assert.equal(payload.location, null);
   assert.equal(payload.segmentId, null);
+  assert.equal(payload.imageUrl, null);
+});
+
+test("announcementInputSchema acepta metadatos de flyer Cloudinary", () => {
+  const payload = announcementInputSchema.parse({
+    title: "Jornada de salud",
+    message: "Habra jornada de salud gratuita para la comunidad este viernes.",
+    location: "Parque principal",
+    type: "salud publica",
+    scheduledAt: "2026-04-20T10:00",
+    segmentId: null,
+    imageUrl: "https://res.cloudinary.com/demo/image/upload/flyer.png",
+    imagePublicId: "rionegro/announcements/flyer",
+    imageFilename: "flyer.png",
+    imageMimeType: "image/png",
+    imageSize: 1024,
+    imageProvider: "cloudinary",
+  });
+
+  assert.equal(payload.imageUrl, "https://res.cloudinary.com/demo/image/upload/flyer.png");
+  assert.equal(payload.imageMimeType, "image/png");
+  assert.equal(payload.imageProvider, "cloudinary");
+});
+
+test("announcementInputSchema rechaza metadatos de imagen no permitidos", () => {
+  assert.throws(() =>
+    announcementInputSchema.parse({
+      title: "Jornada de salud",
+      message: "Habra jornada de salud gratuita para la comunidad este viernes.",
+      location: "Parque principal",
+      type: "salud publica",
+      scheduledAt: "2026-04-20T10:00",
+      segmentId: null,
+      imageUrl: "https://example.com/flyer.svg",
+      imagePublicId: "rionegro/announcements/flyer",
+      imageFilename: "flyer.svg",
+      imageMimeType: "image/svg+xml",
+      imageSize: 1024,
+      imageProvider: "cloudinary",
+    }),
+  );
+
+  assert.throws(() =>
+    announcementInputSchema.parse({
+      title: "Jornada de salud",
+      message: "Habra jornada de salud gratuita para la comunidad este viernes.",
+      location: "Parque principal",
+      type: "salud publica",
+      scheduledAt: "2026-04-20T10:00",
+      segmentId: null,
+      imageUrl: "http://localhost/flyer.png",
+      imagePublicId: "rionegro/announcements/flyer",
+      imageFilename: "flyer.png",
+      imageMimeType: "image/png",
+      imageSize: 1024,
+      imageProvider: "cloudinary",
+    }),
+  );
 });
 
 test("segmentInputSchema limpia y deduplica numeros", () => {
