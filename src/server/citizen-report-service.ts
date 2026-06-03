@@ -465,7 +465,51 @@ function maskPhone(value?: string | null) {
   return digits.length <= 4 ? "****" : `****${digits.slice(-4)}`;
 }
 
+const KNOWN_REPORT_LOCATIONS = [
+  { key: "llanogrande", label: "Llanogrande" },
+  { key: "san antonio", label: "San Antonio" },
+  { key: "ojos de agua", label: "Ojos de Agua" },
+  { key: "centro", label: "Centro" },
+  { key: "el porvenir", label: "El Porvenir" },
+  { key: "autopista", label: "Autopista" },
+  { key: "aeropuerto", label: "Aeropuerto" },
+  { key: "parque", label: "parque" },
+  { key: "hospital", label: "hospital" },
+  { key: "colegio", label: "colegio" },
+];
+
+function findKnownReportLocation(text: string) {
+  const normalized = normalizeText(text);
+  const viaMatch = normalized.match(
+    /\b(?:en\s+|por\s+)?(?:la\s+)?via\s+(san antonio|llanogrande|ojos de agua|el porvenir|centro|autopista|aeropuerto|parque|hospital|colegio)\b/,
+  );
+
+  if (viaMatch?.[1]) {
+    const matched = KNOWN_REPORT_LOCATIONS.find((item) => item.key === viaMatch[1]);
+    return `via ${matched?.label ?? viaMatch[1]}`;
+  }
+
+  const directMatch = KNOWN_REPORT_LOCATIONS.find((item) =>
+    new RegExp(`\\b${item.key.replace(/\s+/g, "\\s+")}\\b`).test(normalized),
+  );
+
+  return directMatch?.label;
+}
+
+function normalizeReportLocation(value: string) {
+  return sanitizeText(value, 120)
+    .replace(/^\s*la\s+via\b/i, "via")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function inferLocation(text: string) {
+  const knownLocation = findKnownReportLocation(text);
+
+  if (knownLocation) {
+    return normalizeReportLocation(knownLocation);
+  }
+
   const patterns = [
     /\b(?:en|por)\s+(San Antonio|Ojos de Agua|el centro|la autopista|el aeropuerto|la glorieta|Llanogrande)\b/i,
     /\b(?:en|por)\s+((?:la\s+)?v[ií]a\s+[^.,;\n]+)/i,
@@ -498,12 +542,16 @@ function inferLocation(text: string) {
           "lugar",
         ].includes(normalized)
       ) {
-        return sanitized;
+        return normalizeReportLocation(sanitized);
       }
     }
   }
 
   return undefined;
+}
+
+export function extractLocationFromReportText(text: string) {
+  return inferLocation(text);
 }
 
 function getMatchedReportKeywords(normalizedText: string) {
@@ -576,6 +624,49 @@ export function classifyCitizenReport(text: string) {
   return detectCitizenReportIntent(text);
 }
 
+function buildLocationPhrase(location?: string | null) {
+  if (!location) return "";
+
+  const normalized = normalizeText(location);
+
+  if (normalized.startsWith("via ")) {
+    return `en la ${location}`;
+  }
+
+  if (/^(autopista|parque|hospital|colegio|aeropuerto)\b/.test(normalized)) {
+    return `en ${location}`;
+  }
+
+  return `en el sector de ${location}`;
+}
+
+function buildKnownLocationReportReply(intent: CitizenReportIntent) {
+  const locationPhrase = buildLocationPhrase(intent.location);
+  const category = normalizeText(intent.category);
+
+  if (category.includes("accidente")) {
+    return [
+      `Gracias por reportarlo. Ya registramos el accidente ${locationPhrase} para revision.`,
+      "",
+      "Si puedes, envianos una foto del lugar o un punto de referencia mas exacto.",
+    ].join("\n");
+  }
+
+  if (category.includes("arbol")) {
+    return [
+      `Gracias por reportarlo. Ya registramos el caso de arbol caido ${locationPhrase} para revision.`,
+      "",
+      "Si puedes, envianos una foto del lugar o un punto de referencia mas exacto.",
+    ].join("\n");
+  }
+
+  return [
+    `Gracias por reportarlo. Ya registramos el caso ${locationPhrase} para revision.`,
+    "",
+    "Si puedes, envianos una foto del lugar o un punto de referencia mas exacto.",
+  ].join("\n");
+}
+
 function buildCitizenReportReply(intent: CitizenReportIntent, hasImage: boolean) {
   if (intent.isUrgentSituation) {
     const emergencyLine = getEmergencyContactReference();
@@ -609,6 +700,10 @@ function buildCitizenReportReply(intent: CitizenReportIntent, hasImage: boolean)
       "",
       "Si tienes otro dato, como un punto de referencia más exacto, puedes enviarlo por aquí.",
     ].join("\n");
+  }
+
+  if (intent.location) {
+    return buildKnownLocationReportReply(intent);
   }
 
   return [
@@ -1259,6 +1354,7 @@ export const citizenReportInternals = {
   isAllowedImage,
   isCitizenReportMessage,
   detectCitizenReportIntent,
+  extractLocationFromReportText,
   isReportInformationRequest,
   classifyCitizenReport,
   handleCitizenReport,

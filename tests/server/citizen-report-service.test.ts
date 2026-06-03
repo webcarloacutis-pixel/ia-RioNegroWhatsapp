@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import {
   detectCitizenReportIntent,
+  extractLocationFromReportText,
   handleCitizenReport,
 } from "@/server/citizen-report-service";
 
@@ -140,9 +141,38 @@ test("handleCitizenReport registra accidente con sector y pide foto o referencia
   if (result.handled) {
     assert.equal(result.report?.category, "Accidente");
     assert.equal(result.report?.location, "Llanogrande");
-    assert.match(result.reply, /registramos la informaci[oó]n/i);
+    assert.match(result.reply, /accidente/i);
+    assert.match(result.reply, /Llanogrande/i);
     assert.match(result.reply, /foto|referencia/i);
   }
+});
+
+test("handleCitizenReport conserva via San Antonio como ubicacion parcial", async () => {
+  const result = await handleCitizenReport({
+    text: "Hay un arbol caido en la via San Antonio",
+    messageType: "chat",
+    recipient: "+573001112247",
+    whatsappMessageId: `unit-tree-san-antonio-${Date.now()}`,
+  });
+
+  assert.equal(result.handled, true);
+
+  if (result.handled) {
+    assert.match(result.report?.category ?? "", /rbol ca/i);
+    assert.match(result.report?.location ?? "", /via San Antonio/i);
+    assert.match(result.reply, /arbol caido/i);
+    assert.match(result.reply, /San Antonio/i);
+    assert.match(result.reply, /foto|referencia/i);
+    assert.doesNotMatch(result.reply, /dime por favor.*sector/i);
+  }
+});
+
+test("extractLocationFromReportText detecta ubicaciones parciales conocidas", () => {
+  assert.equal(extractLocationFromReportText("Hay un accidente en Llanogrande"), "Llanogrande");
+  assert.equal(
+    extractLocationFromReportText("Hay un arbol caido en la via San Antonio"),
+    "via San Antonio",
+  );
 });
 
 test("handleCitizenReport no guarda imagenes con URL privada o MIME no permitido", async () => {

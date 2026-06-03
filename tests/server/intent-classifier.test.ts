@@ -8,11 +8,14 @@ test("clasifica preguntas absurdas o fuera de alcance sin usar base municipal", 
     "La Alcaldia vende empanadas interdimensionales?",
   );
   const pelea = analyzeUserMessageIntent("Quien gana una pelea entre Batman y Goku?");
+  const dragones = analyzeUserMessageIntent("Cuantos dragones hay en Rionegro?");
 
   assert.equal(empanadas.intent, "ABSURD_OR_UNKNOWN");
   assert.equal(empanadas.shouldRefuseBecauseUnknown, true);
   assert.equal(empanadas.shouldUseKnowledgeBase, false);
   assert.equal(pelea.intent, "ABSURD_OR_UNKNOWN");
+  assert.equal(dragones.intent, "ABSURD_OR_UNKNOWN");
+  assert.equal(dragones.shouldRefuseBecauseUnknown, true);
 });
 
 test("detecta ambiguedad y pide una sola aclaracion para impuestos", () => {

@@ -159,8 +159,8 @@ function scenarioToForm(scenario: QaScenario): ScenarioFormState {
     description: scenario.description,
     input: scenario.input,
     expectedBehavior: scenario.expectedBehavior,
-    expectedKeywords: scenario.expectedKeywords.join(", "),
-    forbiddenKeywords: scenario.forbiddenKeywords.join(", "),
+    expectedKeywords: (scenario.expectedKeywords ?? []).join(", "),
+    forbiddenKeywords: (scenario.forbiddenKeywords ?? []).join(", "),
     active: scenario.active,
   };
 }
@@ -616,6 +616,7 @@ export function QaDashboardPanel({ initialData }: QaDashboardPanelProps) {
               <div className="grid gap-3 sm:grid-cols-2">
                 {[
                   ["Enlaces", data.hallucinations.links, "URLs no oficiales."],
+                  ["Correos", data.hallucinations.emails, "Correos no esperados."],
                   ["Telefonos", data.hallucinations.phones, "Telefonos no esperados."],
                   ["Direcciones", data.hallucinations.addresses, "Direcciones no esperadas."],
                   ["Horarios", data.hallucinations.hours, "Horarios no esperados."],

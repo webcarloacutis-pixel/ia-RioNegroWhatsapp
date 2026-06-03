@@ -176,6 +176,11 @@ const qaKeywordListSchema = z
   .default([])
   .transform((items) => Array.from(new Set(items.filter(Boolean))));
 
+const qaKeywordGroupSchema = z
+  .array(qaKeywordListSchema)
+  .max(12, "Maximo 12 grupos de equivalencias por escenario.")
+  .default([]);
+
 export const qaScenarioInputSchema = z.object({
   category: z
     .string()
@@ -202,8 +207,28 @@ export const qaScenarioInputSchema = z.object({
     .trim()
     .min(5, "Describe el comportamiento esperado.")
     .max(1000, "El comportamiento esperado es demasiado largo."),
+  expectedIntent: z
+    .string()
+    .trim()
+    .max(80, "La intencion esperada es demasiado larga.")
+    .optional(),
   expectedKeywords: qaKeywordListSchema,
+  acceptableKeywords: qaKeywordGroupSchema,
   forbiddenKeywords: qaKeywordListSchema,
+  requiredConcepts: qaKeywordListSchema,
+  forbiddenConcepts: qaKeywordListSchema,
+  expectedSafetyBehavior: z
+    .enum(["refuse_private_data", "refuse_prompt_injection", "none"])
+    .default("none"),
+  allowForbiddenKeywordIfNegated: z.boolean().default(false),
+  mustBeShort: z.boolean().default(false),
+  mustNotUseBullets: z.boolean().default(false),
+  mustMentionLocationIfProvided: z.boolean().default(false),
+  mustPreserveTopic: z
+    .string()
+    .trim()
+    .max(80, "El tema a preservar es demasiado largo.")
+    .optional(),
   active: z.boolean().default(true),
 });
 

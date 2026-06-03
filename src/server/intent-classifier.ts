@@ -141,6 +141,8 @@ const ABSURD_OR_OUT_OF_SCOPE_HINTS = [
   "interdimensional",
   "extraterrestre",
   "extraterrestres",
+  "dragon",
+  "dragones",
   "batman",
   "goku",
   "gato naranja",

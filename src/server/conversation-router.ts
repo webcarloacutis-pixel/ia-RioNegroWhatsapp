@@ -6,6 +6,7 @@ import {
 } from "@/server/intent-classifier";
 import type { KnowledgeEntrySummary } from "@/lib/types";
 import { buildOfficialKnowledgeEntries } from "@/lib/rionegro-content";
+import { extractLocationFromReportText } from "@/server/citizen-report-service";
 import { listKnowledgeEntries } from "@/server/panel-service";
 import { getEmergencyContactReference, getEmergencyContacts } from "@/server/emergency-contacts";
 import {
@@ -452,12 +453,57 @@ export function buildClarifyingQuestion(message: string) {
   return "Claro. Me cuentas un poco mas para poder orientarte bien?";
 }
 
-export function buildCitizenReportAssistantPrompt(analysis: AnalyzedUserMessageIntent) {
+function buildLocationPhrase(location: string) {
+  const normalizedLocation = normalizeText(location);
+
+  if (normalizedLocation.startsWith("via ")) {
+    return `en la ${location}`;
+  }
+
+  if (normalizedLocation.startsWith("parque") || normalizedLocation.startsWith("hospital")) {
+    return `en el ${location}`;
+  }
+
+  if (normalizedLocation.startsWith("colegio")) {
+    return `en el ${location}`;
+  }
+
+  return `en el sector de ${location}`;
+}
+
+function getReportSubject(analysis: AnalyzedUserMessageIntent) {
+  const normalizedCategory = normalizeText(analysis.reason);
+
+  if (normalizedCategory.includes("accidente") || normalizedCategory.includes("choque")) {
+    return "el accidente";
+  }
+
+  if (normalizedCategory.includes("arbol")) {
+    return "el caso de arbol caido";
+  }
+
+  return "el caso";
+}
+
+export function buildCitizenReportAssistantPrompt(
+  analysis: AnalyzedUserMessageIntent,
+  message = "",
+) {
   if (analysis.intent === "EMERGENCY_REPORT") {
     return [
       "Gracias por avisar. Registramos el reporte como posible situacion urgente.",
       "",
       `Si hay personas heridas o riesgo inmediato, comunicate tambien con ${getEmergencyContactReference()}.`,
+    ].join("\n");
+  }
+
+  const location = extractLocationFromReportText(message);
+
+  if (location) {
+    return [
+      `Gracias por reportarlo. Ya registramos ${getReportSubject(analysis)} ${buildLocationPhrase(location)} para revision.`,
+      "",
+      "Si puedes, envianos una foto del lugar o un punto de referencia mas exacto.",
     ].join("\n");
   }
 
@@ -485,7 +531,7 @@ export function getPreAssistantReply(
   }
 
   if (analysis.shouldCreateCitizenReport) {
-    return buildCitizenReportAssistantPrompt(analysis);
+    return buildCitizenReportAssistantPrompt(analysis, message);
   }
 
   return null;

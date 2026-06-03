@@ -33,12 +33,24 @@ test("routeConversationBeforeAssistant corta reportes reales antes del asistente
   assert.equal(noLocation.analysis.shouldCreateCitizenReport, true);
   assert.match(noLocation.reply ?? "", /ubicacion exacta|sector/i);
   assert.equal(withLocation.analysis.shouldCreateCitizenReport, true);
-  assert.match(withLocation.reply ?? "", /Gracias por reportarlo|ubicacion/i);
+  assert.match(withLocation.reply ?? "", /accidente/i);
+  assert.match(withLocation.reply ?? "", /Llanogrande/i);
+  assert.doesNotMatch(withLocation.reply ?? "", /dime.*sector/i);
   assert.equal(reportQuestion.analysis.shouldCreateCitizenReport, false);
   assert.equal(
     reportQuestion.reply,
     "Claro. Cuentame que paso y en que sector para poder registrar el reporte.",
   );
+});
+
+test("routeConversationBeforeAssistant conserva ubicacion parcial de arbol caido", () => {
+  const result = routeConversationBeforeAssistant("Hay un arbol caido en la via San Antonio");
+
+  assert.equal(result.analysis.shouldCreateCitizenReport, true);
+  assert.match(result.reply ?? "", /arbol caido/i);
+  assert.match(result.reply ?? "", /via San Antonio/i);
+  assert.match(result.reply ?? "", /foto/i);
+  assert.doesNotMatch(result.reply ?? "", /dime.*sector/i);
 });
 
 test("buildClarifyingQuestion hace una sola pregunta para impuestos", () => {

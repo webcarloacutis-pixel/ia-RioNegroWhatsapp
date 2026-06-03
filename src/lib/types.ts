@@ -256,8 +256,18 @@ export type QaScenario = {
   description: string;
   input: string;
   expectedBehavior: string;
-  expectedKeywords: string[];
-  forbiddenKeywords: string[];
+  expectedIntent?: string;
+  expectedKeywords?: string[];
+  acceptableKeywords?: string[][];
+  forbiddenKeywords?: string[];
+  requiredConcepts?: string[];
+  forbiddenConcepts?: string[];
+  expectedSafetyBehavior?: "refuse_private_data" | "refuse_prompt_injection" | "none";
+  allowForbiddenKeywordIfNegated?: boolean;
+  mustBeShort?: boolean;
+  mustNotUseBullets?: boolean;
+  mustMentionLocationIfProvided?: boolean;
+  mustPreserveTopic?: string;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -265,6 +275,7 @@ export type QaScenario = {
 
 export type QaHallucinationFinding = {
   inventedLinks: string[];
+  inventedEmails: string[];
   inventedPhones: string[];
   inventedAddresses: string[];
   inventedHours: string[];
@@ -286,6 +297,10 @@ export type QaScenarioResult = {
   forbiddenKeywords: string[];
   matchedKeywords: string[];
   missingKeywords: string[];
+  matchedAcceptableGroups: string[][];
+  missingAcceptableGroups: string[][];
+  matchedConcepts: string[];
+  missingConcepts: string[];
   detectedForbiddenKeywords: string[];
   hallucinations: QaHallucinationFinding;
   differences: string[];
@@ -345,6 +360,7 @@ export type QaDashboardData = {
   hallucinations: {
     total: number;
     links: number;
+    emails: number;
     phones: number;
     addresses: number;
     hours: number;

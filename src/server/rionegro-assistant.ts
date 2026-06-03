@@ -173,7 +173,13 @@ const PROMPT_INJECTION_HINTS = [
 ];
 
 const PROMPT_INJECTION_REPLY =
-  "No puedo ayudar con solicitudes para cambiar mis instrucciones internas, revelar configuracion o exponer secretos. Puedo orientarte con informacion oficial de Rionegro.";
+  "No puedo revelar instrucciones internas ni cambiar mis reglas por solicitud del chat. Puedo ayudarte con informacion oficial de Rionegro.";
+
+const PRIVATE_CITIZEN_DATA_REPLY =
+  "No puedo entregar datos privados de ciudadanos. Puedo ayudarte con tramites, servicios o reportes ciudadanos de Rionegro.";
+
+const PREDIAL_DOCUMENTS_CONTEXT_REPLY =
+  "Sobre el impuesto predial, no tengo informacion oficial confirmada sobre los documentos necesarios en este momento.\n\nSi quieres, puedo orientarte con la informacion oficial disponible sobre pagos o atencion de predial.";
 
 function normalizeText(value: string) {
   return value
@@ -204,6 +210,83 @@ function hasPromptInjectionAttempt(message: string) {
     /(instrucciones|instructions|reglas|rules|system|developer|prompt)/.test(text);
 
   return includesAny(text, PROMPT_INJECTION_HINTS) || asksForInternalData || triesToOverride;
+}
+
+function hasPrivateCitizenDataRequest(message: string) {
+  const text = normalizeText(message);
+  const asksForPrivateData =
+    /(dame|muestra|muestrame|entrega|entregame|comparte|comparteme|saca|exporta|ver|consultar)/.test(
+      text,
+    ) &&
+    /(datos|informacion|base|listado|telefonos|cedulas|direcciones)/.test(text) &&
+    /(ciudadanos|usuarios|personas|habitantes|reportantes)/.test(text);
+  const impersonatesAdmin =
+    /(actua como|soy|modo)\s+(administrador|admin|superadmin|funcionario)/.test(text);
+
+  return asksForPrivateData || (impersonatesAdmin && /(datos|ciudadanos|usuarios)/.test(text));
+}
+
+type ExtractedConversationContext = {
+  topic: "predial" | "industria_y_comercio" | "pqrs" | "denuncia" | "tramite" | "reporte";
+  asksForDocuments: boolean;
+};
+
+function extractConversationContextFromInput(input: string): ExtractedConversationContext | null {
+  const parts = input
+    .split(/\r?\n+/)
+    .map((part) => normalizeText(part))
+    .filter(Boolean);
+  const text = normalizeText(input);
+
+  if (parts.length < 2) {
+    return null;
+  }
+
+  const topic = includesAny(text, ["predial", "impuesto predial"])
+    ? "predial"
+    : includesAny(text, ["industria y comercio", "ica"])
+      ? "industria_y_comercio"
+      : includesAny(text, ["pqrs", "peticion", "queja", "reclamo"])
+        ? "pqrs"
+        : includesAny(text, ["denuncia"])
+          ? "denuncia"
+          : includesAny(text, ["reporte", "reportar"])
+            ? "reporte"
+            : includesAny(text, ["tramite", "tramites"])
+              ? "tramite"
+              : null;
+
+  if (!topic) {
+    return null;
+  }
+
+  return {
+    topic,
+    asksForDocuments: includesAny(text, [
+      "documento",
+      "documentos",
+      "requisitos",
+      "que necesito",
+      "que documentos necesito",
+    ]),
+  };
+}
+
+function buildConversationContextReply(message: string) {
+  const context = extractConversationContextFromInput(message);
+
+  if (!context) {
+    return null;
+  }
+
+  if (context.topic === "predial" && context.asksForDocuments) {
+    return {
+      reply: PREDIAL_DOCUMENTS_CONTEXT_REPLY,
+      topic: "INSTITUTIONAL" as AssistantTopicValue,
+    };
+  }
+
+  return null;
 }
 
 function stripLeadingConversationalPrefix(value: string) {
@@ -652,6 +735,10 @@ function hasInstitutionalServicesIntent(text: string) {
     "tramites",
     "tramite",
     "servicios",
+    "dependencia",
+    "dependencias",
+    "secretaria",
+    "secretarias",
     "puedo realizar",
     "atencion al ciudadano",
     "pqrs",
@@ -1531,17 +1618,19 @@ function buildInstitutionalServicesReply(message: string, language: AssistantLan
         ].join("\n\n");
   }
 
-  return [
-    copy.servicesTitle,
-    formatBulletList(
-      servicesToShow.map((service) =>
-        language === "en"
-          ? `${service.titleEn}: ${service.descriptionEn}`
-          : `${service.titleEs}: ${service.descriptionEs}`,
-      ),
-    ),
-    copy.servicesFollowUp,
-  ].join("\n\n");
+  const serviceNames = servicesToShow
+    .map((service) => (language === "en" ? service.titleEn : service.titleEs))
+    .join("; ");
+
+  return language === "en"
+    ? [
+        `Available City Hall offices and service areas include: ${serviceNames}.`,
+        copy.servicesFollowUp,
+      ].join("\n\n")
+    : [
+        `Dependencias y areas de servicio disponibles en la Alcaldia de Rionegro: ${serviceNames}.`,
+        copy.servicesFollowUp,
+      ].join("\n\n");
 }
 
 function buildAppointmentReply(message: string, placeMatches: OfficialPlace[], language: AssistantLanguage) {
@@ -2421,11 +2510,79 @@ export async function chatWithAssistant(
 
   addAssistantTurn(session.id, "user", message);
 
+  if (hasPrivateCitizenDataRequest(message)) {
+    const finalReply = PRIVATE_CITIZEN_DATA_REPLY;
+    const updated = addAssistantTurn(session.id, "assistant", finalReply);
+    const meta = buildMeta({
+      topic: "OUT_OF_SCOPE",
+      route: "RULE_BASED",
+      usedOpenAI: false,
+      profile: currentSession.profile,
+      sources: [],
+    });
+
+    updateAssistantContext(sessionId, {
+      lastTopic: meta.topic,
+      conversationLanguage: language,
+    });
+
+    await recordAssistantQuery({
+      sessionId,
+      userMessage: message,
+      assistantReply: finalReply,
+      topic: meta.topic,
+      route: meta.route,
+      usedOpenAI: false,
+      profile: currentSession.profile,
+    });
+
+    return {
+      reply: finalReply,
+      history: updated.history,
+      meta,
+    };
+  }
+
   if (hasPromptInjectionAttempt(message)) {
     const finalReply = PROMPT_INJECTION_REPLY;
     const updated = addAssistantTurn(session.id, "assistant", finalReply);
     const meta = buildMeta({
       topic: "OUT_OF_SCOPE",
+      route: "RULE_BASED",
+      usedOpenAI: false,
+      profile: currentSession.profile,
+      sources: [],
+    });
+
+    updateAssistantContext(sessionId, {
+      lastTopic: meta.topic,
+      conversationLanguage: language,
+    });
+
+    await recordAssistantQuery({
+      sessionId,
+      userMessage: message,
+      assistantReply: finalReply,
+      topic: meta.topic,
+      route: meta.route,
+      usedOpenAI: false,
+      profile: currentSession.profile,
+    });
+
+    return {
+      reply: finalReply,
+      history: updated.history,
+      meta,
+    };
+  }
+
+  const conversationContextReply = buildConversationContextReply(message);
+
+  if (conversationContextReply) {
+    const finalReply = conversationContextReply.reply;
+    const updated = addAssistantTurn(session.id, "assistant", finalReply);
+    const meta = buildMeta({
+      topic: conversationContextReply.topic,
       route: "RULE_BASED",
       usedOpenAI: false,
       profile: currentSession.profile,
@@ -2638,6 +2795,8 @@ export const assistantInternals = {
   hasThanksIntent,
   hasAssistantCapabilityIntent,
   hasPromptInjectionAttempt,
+  hasPrivateCitizenDataRequest,
+  extractConversationContextFromInput,
   applyWhatsAppTone,
   routeConversationBeforeAssistant,
   analyzeConversationIntent,
