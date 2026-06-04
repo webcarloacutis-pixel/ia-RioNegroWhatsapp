@@ -14,10 +14,16 @@ type SendMessageInput = {
   scheduledAt: Date;
   mode?: "DEMO" | "MANUAL" | "SCHEDULED";
   to?: string | null;
+  title?: string | null;
   imageUrl?: string | null;
   imageFilename?: string | null;
   imageMimeType?: string | null;
   imageSize?: number | null;
+  audioUrl?: string | null;
+  audioFilename?: string | null;
+  audioMimeType?: string | null;
+  audioSize?: number | null;
+  audioDuration?: number | null;
 };
 
 type SendMessageResult = {
@@ -25,7 +31,7 @@ type SendMessageResult = {
   simulated: boolean;
   blockedBySafeMode?: boolean;
   provider: "ultramsg" | "mock";
-  type?: "text" | "image" | "text_fallback";
+  type?: "text" | "image" | "audio" | "mixed" | "text_fallback";
   message?: string;
   error?: string;
   deliveredCount: number;
@@ -41,11 +47,13 @@ type WhatsAppTextInput = {
 
 type WhatsAppAudioInput = {
   to: string;
-  audioBase64: string;
+  audioBase64?: string;
+  audioUrl?: string | null;
   mimeType?: string;
   caption?: string;
   inboundReply?: boolean;
   inboundMessageId?: string;
+  announcementId?: string;
 };
 
 type WhatsAppImageInput = {
@@ -328,14 +336,21 @@ export async function sendWhatsAppText({
 export async function sendWhatsAppAudio({
   to,
   audioBase64,
+  audioUrl,
   caption,
   inboundReply = false,
   inboundMessageId,
+  announcementId,
 }: WhatsAppAudioInput) {
+  if (!audioUrl && !audioBase64) {
+    throw new Error("Falta audioUrl o audioBase64 para enviar audio.");
+  }
+
   if (isWhatsAppDryRunMode()) {
     console.log("[ultramsg] sending audio", {
       to: maskRecipient(to),
       inboundReply,
+      announcementId,
       dryRun: true,
     });
 
@@ -366,20 +381,22 @@ export async function sendWhatsAppAudio({
   }
 
   const token = getUltraMsgToken();
-  const cleanAudioBase64 = audioBase64.replace(
+  const audio = audioUrl ?? audioBase64?.replace(
     /^data:audio\/[a-zA-Z0-9.+-]+;base64,/,
     "",
   );
   const data = qs.stringify({
     token,
     to,
-    audio: cleanAudioBase64,
+    audio,
     caption,
   });
 
   console.log("[ultramsg] sending audio", {
     to: maskRecipient(to),
     inboundReply,
+    announcementId,
+    source: audioUrl ? "url" : "base64",
   });
 
   const response = await axios({
@@ -553,10 +570,14 @@ async function sendMessageMock({
   scheduledAt,
   mode,
   imageUrl,
+  audioUrl,
 }: SendMessageInput): Promise<SendMessageResult> {
   const deliveredCount = segment?.recipientPhones?.length || segment?.estimatedUsers || DEFAULT_AUDIENCE;
   const targetName = segment?.name ?? "Cobertura general";
   const preview = message.length > 80 ? `${message.slice(0, 80)}...` : message;
+  const hasImage = Boolean(imageUrl?.trim());
+  const hasAudio = Boolean(audioUrl?.trim());
+  const mediaSuffix = formatMediaLogSuffix({ hasImage, hasAudio });
 
   console.log("[messageService] envio mock ejecutado", {
     mode,
@@ -572,12 +593,10 @@ async function sendMessageMock({
     sent: true,
     simulated: true,
     provider: "mock",
-    type: imageUrl ? "image" : "text",
+    type: resolveMessageType({ hasImage, hasAudio }),
     message: "mock ok",
     deliveredCount,
-    log: `Enviado a ${new Intl.NumberFormat("es-CO").format(deliveredCount)} usuarios${
-      imageUrl ? " con imagen" : ""
-    }`,
+    log: `Enviado a ${new Intl.NumberFormat("es-CO").format(deliveredCount)} usuarios${mediaSuffix}`,
   };
 }
 
@@ -595,13 +614,36 @@ function buildImageCaption(message: string) {
   };
 }
 
+function buildAudioIntroMessage(input: { title?: string | null }) {
+  const title = input.title?.trim();
+  return title
+    ? `Mensaje de la Alcaldia de Rionegro: ${title}`
+    : "Mensaje de la Alcaldia de Rionegro.";
+}
+
+function resolveMessageType(input: { hasImage: boolean; hasAudio: boolean }) {
+  if (input.hasImage && input.hasAudio) return "mixed";
+  if (input.hasAudio) return "audio";
+  if (input.hasImage) return "image";
+  return "text";
+}
+
+function formatMediaLogSuffix(input: { hasImage: boolean; hasAudio: boolean }) {
+  if (input.hasImage && input.hasAudio) return " con imagen y audio";
+  if (input.hasAudio) return " con audio";
+  if (input.hasImage) return " con imagen";
+  return "";
+}
+
 async function sendMessageUltraMsg({
   message,
   segment,
   scheduledAt,
   mode,
   to,
+  title,
   imageUrl,
+  audioUrl,
 }: SendMessageInput): Promise<SendMessageResult> {
   const targetName = segment?.name ?? "Cobertura general";
   const recipients = resolveRecipients(to || segment?.recipientPhones?.join(",") || null);
@@ -619,7 +661,10 @@ async function sendMessageUltraMsg({
   const imageFallbacks: string[] = [];
   const dryRun = isWhatsAppDryRunMode();
   const hasImage = Boolean(imageUrl?.trim());
+  const hasAudio = Boolean(audioUrl?.trim());
   const imageCaption = buildImageCaption(message);
+  const audioIntro = buildAudioIntroMessage({ title });
+  const mediaSuffix = formatMediaLogSuffix({ hasImage, hasAudio });
 
   if (!dryRun) {
     assertRealMassMessagePolicy({ segment, to, recipients });
@@ -634,6 +679,8 @@ async function sendMessageUltraMsg({
   }
 
   for (const recipient of recipients) {
+    let sentAudioIntro = false;
+
     try {
       if (!dryRun) {
         console.log("[announcements] ultramsg sending", {
@@ -641,6 +688,44 @@ async function sendMessageUltraMsg({
           to: maskRecipient(recipient),
           segment: targetName,
         });
+      }
+
+      if (hasAudio) {
+        const parsedIntroBody = await sendWhatsAppText({
+          to: recipient,
+          message: audioIntro,
+          inboundReply: false,
+        });
+        sentAudioIntro = true;
+
+        let parsedImageBody: unknown = null;
+
+        if (hasImage) {
+          parsedImageBody = await sendWhatsAppImage({
+            to: recipient,
+            imageUrl,
+            caption: imageCaption.caption,
+            inboundReply: false,
+          });
+        }
+
+        const parsedAudioBody = await sendWhatsAppAudio({
+          to: recipient,
+          audioUrl,
+          inboundReply: false,
+        });
+
+        responses.push({
+          to: recipient,
+          type: resolveMessageType({ hasImage, hasAudio }),
+          body: {
+            text: parsedIntroBody,
+            image: parsedImageBody,
+            audio: parsedAudioBody,
+          },
+        });
+
+        continue;
       }
 
       if (hasImage) {
@@ -690,6 +775,45 @@ async function sendMessageUltraMsg({
         body: parsedBody,
       });
     } catch (error) {
+      if (hasAudio) {
+        console.error("[announcements] audio announcement failed", {
+          mode,
+          scheduledAt: scheduledAt.toISOString(),
+          segment: targetName,
+          to: maskRecipient(recipient),
+          error: error instanceof Error ? error.message : "unknown_error",
+        });
+
+        if (!sentAudioIntro) {
+          try {
+            const fallbackBody = await sendWhatsAppText({
+              to: recipient,
+              message,
+              inboundReply: false,
+            });
+
+            responses.push({
+              to: recipient,
+              type: "text_fallback",
+              body: fallbackBody,
+            });
+
+            continue;
+          } catch (fallbackError) {
+            console.error("[announcements] audio text fallback failed", {
+              mode,
+              scheduledAt: scheduledAt.toISOString(),
+              segment: targetName,
+              to: maskRecipient(recipient),
+              error: fallbackError instanceof Error ? fallbackError.message : "unknown_error",
+            });
+          }
+        }
+
+        failures.push(recipient);
+        continue;
+      }
+
       if (hasImage) {
         console.error("[announcements] ultramsg image failed", {
           mode,
@@ -758,25 +882,20 @@ async function sendMessageUltraMsg({
     sent: !dryRun,
     simulated: dryRun,
     provider: "ultramsg",
-    type: hasImage
-      ? imageFallbacks.length === responses.length
+    type:
+      imageFallbacks.length === responses.length && !hasAudio
         ? "text_fallback"
-        : "image"
-      : "text",
+        : resolveMessageType({ hasImage, hasAudio }),
     message: dryRun ? "dry-run ok" : "sent real",
     deliveredCount: responses.length,
     log:
       failures.length > 0
-        ? `Enviado por UltraMsg a ${responses.length} destinatario(s)${
-            hasImage ? " con imagen" : ""
-          }. Fallaron: ${failures.join(", ")}`
+        ? `Enviado por UltraMsg a ${responses.length} destinatario(s)${mediaSuffix}. Fallaron: ${failures.join(", ")}`
         : imageFallbacks.length > 0
           ? `Imagen no enviada a ${imageFallbacks.length} destinatario(s); se envio texto de respaldo.`
         : dryRun
-          ? `Dry-run UltraMsg OK para ${responses.length} destinatario(s)${
-              hasImage ? " con imagen" : ""
-            }.`
-          : `Enviado por UltraMsg a ${recipients.join(", ")}${hasImage ? " con imagen" : ""}`,
+          ? `Dry-run UltraMsg OK para ${responses.length} destinatario(s)${mediaSuffix}.`
+          : `Enviado por UltraMsg a ${recipients.join(", ")}${mediaSuffix}`,
   };
 }
 
@@ -799,7 +918,10 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
       simulated: true,
       blockedBySafeMode: true,
       provider: "mock",
-      type: input.imageUrl ? "image" : "text",
+      type: resolveMessageType({
+        hasImage: Boolean(input.imageUrl?.trim()),
+        hasAudio: Boolean(input.audioUrl?.trim()),
+      }),
       message: "blocked_by_safe_mode",
       deliveredCount: 0,
       log: "Bloqueado por modo seguro: WHATSAPP_SAFE_MODE=true impide envios proactivos reales.",

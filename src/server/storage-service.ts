@@ -5,6 +5,7 @@ import { v2 as cloudinary, type UploadApiResponse } from "cloudinary";
 import { AppError } from "@/lib/errors";
 
 export const MAX_ANNOUNCEMENT_IMAGE_BYTES = 5 * 1024 * 1024;
+export const MAX_ANNOUNCEMENT_AUDIO_BYTES = 15 * 1024 * 1024;
 
 export type AnnouncementImageUploadResult = {
   url: string;
@@ -15,6 +16,17 @@ export type AnnouncementImageUploadResult = {
   size: number;
   width?: number;
   height?: number;
+  provider: "cloudinary";
+};
+
+export type AnnouncementAudioUploadResult = {
+  url: string;
+  secureUrl: string;
+  publicId: string;
+  filename: string;
+  mimeType: AllowedAnnouncementAudioMimeType;
+  size: number;
+  duration?: number;
   provider: "cloudinary";
 };
 
@@ -33,8 +45,27 @@ type ValidatedAnnouncementImage = {
   size: number;
 };
 
+type AllowedAnnouncementAudioMimeType =
+  | "audio/mpeg"
+  | "audio/mp3"
+  | "audio/mp4"
+  | "audio/m4a"
+  | "audio/ogg"
+  | "audio/wav"
+  | "audio/webm"
+  | "audio/aac";
+
+type ValidatedAnnouncementAudio = {
+  buffer: Buffer;
+  filename: string;
+  mimeType: AllowedAnnouncementAudioMimeType;
+  extension: "mp3" | "m4a" | "ogg" | "oga" | "wav" | "webm" | "aac";
+  size: number;
+};
+
 const DEFAULT_CLOUDINARY_FOLDER = "rionegro/announcements";
 const ALLOWED_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
+const ALLOWED_AUDIO_EXTENSIONS = new Set(["mp3", "m4a", "ogg", "oga", "wav", "webm", "aac"]);
 const BLOCKED_EXTENSIONS = new Set([
   "bat",
   "cmd",
@@ -49,9 +80,23 @@ const BLOCKED_EXTENSIONS = new Set([
   "zip",
 ]);
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const ALLOWED_AUDIO_MIME_TYPES = new Set<AllowedAnnouncementAudioMimeType>([
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/mp4",
+  "audio/m4a",
+  "audio/ogg",
+  "audio/wav",
+  "audio/webm",
+  "audio/aac",
+]);
 
 function getCloudinaryFolder() {
   return process.env.CLOUDINARY_FOLDER?.trim() || DEFAULT_CLOUDINARY_FOLDER;
+}
+
+function getCloudinaryAudioFolder() {
+  return `${getCloudinaryFolder().replace(/\/+$/, "")}/audio`;
 }
 
 function isCloudinaryMockMode() {
@@ -134,6 +179,59 @@ function detectImageMimeType(buffer: Buffer) {
   return null;
 }
 
+function normalizeAudioMimeType(value: string) {
+  return value === "audio/mp3" ? "audio/mpeg" : value;
+}
+
+function detectAudioMimeType(buffer: Buffer) {
+  if (buffer.length >= 3 && buffer.subarray(0, 3).toString("ascii") === "ID3") {
+    return "audio/mpeg";
+  }
+
+  if (buffer.length >= 2 && buffer[0] === 0xff && (buffer[1] & 0xe0) === 0xe0) {
+    return "audio/mpeg";
+  }
+
+  if (buffer.length >= 4 && buffer.subarray(0, 4).toString("ascii") === "OggS") {
+    return "audio/ogg";
+  }
+
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+    buffer.subarray(8, 12).toString("ascii") === "WAVE"
+  ) {
+    return "audio/wav";
+  }
+
+  if (
+    buffer.length >= 4 &&
+    buffer[0] === 0x1a &&
+    buffer[1] === 0x45 &&
+    buffer[2] === 0xdf &&
+    buffer[3] === 0xa3
+  ) {
+    return "audio/webm";
+  }
+
+  if (buffer.length >= 12 && buffer.subarray(4, 8).toString("ascii") === "ftyp") {
+    return "audio/mp4";
+  }
+
+  if (buffer.length >= 2 && buffer[0] === 0xff && (buffer[1] === 0xf1 || buffer[1] === 0xf9)) {
+    return "audio/aac";
+  }
+
+  return null;
+}
+
+function audioMimeTypesMatch(detectedMimeType: string, declaredMimeType: string) {
+  const detected = normalizeAudioMimeType(detectedMimeType);
+  const declared = normalizeAudioMimeType(declaredMimeType);
+
+  return detected === declared || (detected === "audio/mp4" && declared === "audio/m4a");
+}
+
 function assertExtensionIsAllowed(extension: string | null) {
   if (!extension) {
     throw new AppError("El archivo debe tener extension jpg, jpeg, png o webp.", 400);
@@ -163,6 +261,48 @@ function assertMimeTypeMatchesExtension(mimeType: string, extension: string) {
 
   if (extension === "webp" && mimeType !== "image/webp") {
     throw new AppError("La extension del archivo no coincide con su contenido.", 400);
+  }
+}
+
+function assertAudioExtensionIsAllowed(extension: string | null) {
+  if (!extension) {
+    throw new AppError("El archivo debe tener extension mp3, m4a, ogg, oga, wav, webm o aac.", 400);
+  }
+
+  if (BLOCKED_EXTENSIONS.has(extension)) {
+    throw new AppError("No se permite este tipo de archivo.", 400);
+  }
+
+  if (!ALLOWED_AUDIO_EXTENSIONS.has(extension)) {
+    throw new AppError("Solo se permiten audios MP3, M4A, OGG, WAV, WEBM o AAC.", 400);
+  }
+}
+
+function assertAudioMimeTypeMatchesExtension(mimeType: string, extension: string) {
+  const normalizedMime = normalizeAudioMimeType(mimeType);
+
+  if (extension === "mp3" && normalizedMime !== "audio/mpeg") {
+    throw new AppError("La extension del audio no coincide con su contenido.", 400);
+  }
+
+  if (extension === "m4a" && normalizedMime !== "audio/mp4" && normalizedMime !== "audio/m4a") {
+    throw new AppError("La extension del audio no coincide con su contenido.", 400);
+  }
+
+  if ((extension === "ogg" || extension === "oga") && normalizedMime !== "audio/ogg") {
+    throw new AppError("La extension del audio no coincide con su contenido.", 400);
+  }
+
+  if (extension === "wav" && normalizedMime !== "audio/wav") {
+    throw new AppError("La extension del audio no coincide con su contenido.", 400);
+  }
+
+  if (extension === "webm" && normalizedMime !== "audio/webm") {
+    throw new AppError("La extension del audio no coincide con su contenido.", 400);
+  }
+
+  if (extension === "aac" && normalizedMime !== "audio/aac") {
+    throw new AppError("La extension del audio no coincide con su contenido.", 400);
   }
 }
 
@@ -215,6 +355,55 @@ async function validateAnnouncementImageFile(
   };
 }
 
+async function validateAnnouncementAudioFile(
+  file: UploadableFile,
+): Promise<ValidatedAnnouncementAudio> {
+  if (!file || typeof file.arrayBuffer !== "function") {
+    throw new AppError("Archivo requerido.", 400);
+  }
+
+  const extension = getExtension(file.name);
+  assertAudioExtensionIsAllowed(extension);
+
+  if (!ALLOWED_AUDIO_MIME_TYPES.has(file.type as AllowedAnnouncementAudioMimeType)) {
+    throw new AppError("Solo se permiten audios MP3, M4A, OGG, WAV, WEBM o AAC.", 400);
+  }
+
+  if (!Number.isFinite(file.size) || file.size <= 0) {
+    throw new AppError("El audio esta vacio.", 400);
+  }
+
+  if (file.size > MAX_ANNOUNCEMENT_AUDIO_BYTES) {
+    throw new AppError("El audio no puede superar 15 MB.", 413);
+  }
+
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  if (buffer.length > MAX_ANNOUNCEMENT_AUDIO_BYTES) {
+    throw new AppError("El audio no puede superar 15 MB.", 413);
+  }
+
+  const detectedMimeType = detectAudioMimeType(buffer);
+
+  if (!detectedMimeType) {
+    throw new AppError("El contenido del archivo no corresponde a un audio valido.", 400);
+  }
+
+  if (!audioMimeTypesMatch(detectedMimeType, file.type)) {
+    throw new AppError("El MIME declarado no coincide con el contenido del audio.", 400);
+  }
+
+  assertAudioMimeTypeMatchesExtension(detectedMimeType, extension as string);
+
+  return {
+    buffer,
+    extension: extension as ValidatedAnnouncementAudio["extension"],
+    filename: sanitizeFilename(file.name, extension as string),
+    mimeType: file.type as AllowedAnnouncementAudioMimeType,
+    size: buffer.length,
+  };
+}
+
 function buildPublicId(filename: string) {
   const baseName = filename.replace(/\.[^.]+$/, "");
   const slug = baseName
@@ -256,6 +445,24 @@ function toUploadResult(
   };
 }
 
+function toAudioUploadResult(
+  audio: ValidatedAnnouncementAudio,
+  result: Pick<UploadApiResponse, "url" | "secure_url" | "public_id"> & {
+    duration?: number;
+  },
+): AnnouncementAudioUploadResult {
+  return {
+    url: result.url,
+    secureUrl: result.secure_url,
+    publicId: result.public_id,
+    filename: audio.filename,
+    mimeType: audio.mimeType,
+    size: audio.size,
+    duration: typeof result.duration === "number" ? Math.round(result.duration) : undefined,
+    provider: "cloudinary",
+  };
+}
+
 async function uploadToCloudinary(
   image: ValidatedAnnouncementImage,
 ): Promise<AnnouncementImageUploadResult> {
@@ -293,6 +500,42 @@ async function uploadToCloudinary(
   return toUploadResult(image, result);
 }
 
+async function uploadAudioToCloudinary(
+  audio: ValidatedAnnouncementAudio,
+): Promise<AnnouncementAudioUploadResult> {
+  const folder = getCloudinaryAudioFolder();
+  const publicId = buildPublicId(audio.filename);
+
+  if (isCloudinaryMockMode()) {
+    const mockUrl = `https://res.cloudinary.com/mock/video/upload/${folder}/${publicId}.${audio.extension}`;
+
+    return {
+      url: mockUrl,
+      secureUrl: mockUrl,
+      publicId: `${folder}/${publicId}`,
+      filename: audio.filename,
+      mimeType: audio.mimeType,
+      size: audio.size,
+      duration: undefined,
+      provider: "cloudinary",
+    };
+  }
+
+  configureCloudinary();
+
+  const dataUri = `data:${audio.mimeType};base64,${audio.buffer.toString("base64")}`;
+  const result = await cloudinary.uploader.upload(dataUri, {
+    folder,
+    public_id: publicId,
+    resource_type: "video",
+    overwrite: false,
+    unique_filename: false,
+    use_filename: false,
+  });
+
+  return toAudioUploadResult(audio, result);
+}
+
 export async function uploadAnnouncementImage(
   file: UploadableFile,
 ): Promise<AnnouncementImageUploadResult> {
@@ -302,17 +545,53 @@ export async function uploadAnnouncementImage(
   return uploadToCloudinary(image);
 }
 
+export async function uploadAnnouncementAudio(
+  file: UploadableFile,
+): Promise<AnnouncementAudioUploadResult> {
+  assertCloudinaryConfigured();
+
+  const audio = await validateAnnouncementAudioFile(file);
+  return uploadAudioToCloudinary(audio);
+}
+
+export async function deleteAnnouncementAudio(publicId?: string | null) {
+  if (!publicId) {
+    return { deleted: false };
+  }
+
+  assertCloudinaryConfigured();
+
+  if (isCloudinaryMockMode()) {
+    return { deleted: true, provider: "cloudinary" as const };
+  }
+
+  configureCloudinary();
+  await cloudinary.uploader.destroy(publicId, { resource_type: "video" });
+  return { deleted: true, provider: "cloudinary" as const };
+}
+
+export function isStorageConfigured() {
+  return isCloudinaryConfigured() || isCloudinaryMockMode();
+}
+
 export const storageServiceInternals = {
   ALLOWED_EXTENSIONS,
+  ALLOWED_AUDIO_EXTENSIONS,
+  ALLOWED_AUDIO_MIME_TYPES,
   ALLOWED_MIME_TYPES,
   BLOCKED_EXTENSIONS,
   DEFAULT_CLOUDINARY_FOLDER,
   assertCloudinaryConfigured,
   detectImageMimeType,
+  detectAudioMimeType,
   getCloudinaryFolder,
+  getCloudinaryAudioFolder,
   getExtension,
   isCloudinaryConfigured,
   isCloudinaryMockMode,
+  normalizeAudioMimeType,
+  audioMimeTypesMatch,
   sanitizeFilename,
+  validateAnnouncementAudioFile,
   validateAnnouncementImageFile,
 };

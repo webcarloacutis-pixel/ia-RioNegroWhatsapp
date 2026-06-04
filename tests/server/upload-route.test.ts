@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 
 import { authInternals } from "@/lib/auth";
 import { POST } from "@/app/api/admin/uploads/announcement-image/route";
+import { POST as POST_AUDIO } from "@/app/api/admin/uploads/announcement-audio/route";
 
 function pngFile() {
   return new File(
@@ -13,6 +14,14 @@ function pngFile() {
     ],
     "flyer.png",
     { type: "image/png" },
+  );
+}
+
+function mp3File() {
+  return new File(
+    [new Uint8Array([0x49, 0x44, 0x33, 0x04, 0x00, 0x00, 0x00, 0x00])],
+    "mensaje.mp3",
+    { type: "audio/mpeg" },
   );
 }
 
@@ -61,6 +70,59 @@ test("POST /api/admin/uploads/announcement-image sube imagen valida en modo mock
     assert.equal(payload.ok, true);
     assert.equal(payload.image.provider, "cloudinary");
     assert.equal(payload.image.mimeType, "image/png");
+  } finally {
+    process.env.SESSION_SECRET = previousSecret;
+    process.env.CLOUDINARY_MOCK = previousMock;
+    process.env.CLOUDINARY_FOLDER = previousFolder;
+  }
+});
+
+test("POST /api/admin/uploads/announcement-audio exige sesion admin", async () => {
+  const formData = new FormData();
+  formData.set("file", mp3File());
+
+  const response = await POST_AUDIO(
+    new Request("http://localhost/api/admin/uploads/announcement-audio", {
+      method: "POST",
+      body: formData,
+    }),
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.equal(payload.ok, false);
+});
+
+test("POST /api/admin/uploads/announcement-audio sube audio valido en modo mock", async () => {
+  const previousSecret = process.env.SESSION_SECRET;
+  const previousMock = process.env.CLOUDINARY_MOCK;
+  const previousFolder = process.env.CLOUDINARY_FOLDER;
+
+  process.env.SESSION_SECRET = "test-secret-for-upload-route";
+  process.env.CLOUDINARY_MOCK = "true";
+  process.env.CLOUDINARY_FOLDER = "tests/announcements";
+
+  try {
+    const formData = new FormData();
+    formData.set("file", mp3File());
+
+    const cookie = `${authInternals.AUTH_COOKIE_NAME}=${authInternals.createSignedSessionCookieValue()}`;
+    const response = await POST_AUDIO(
+      new Request("http://localhost/api/admin/uploads/announcement-audio", {
+        method: "POST",
+        headers: {
+          cookie,
+        },
+        body: formData,
+      }),
+    );
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.ok, true);
+    assert.equal(payload.audio.provider, "cloudinary");
+    assert.equal(payload.audio.mimeType, "audio/mpeg");
+    assert.match(payload.audio.secureUrl, /\/audio\//);
   } finally {
     process.env.SESSION_SECRET = previousSecret;
     process.env.CLOUDINARY_MOCK = previousMock;

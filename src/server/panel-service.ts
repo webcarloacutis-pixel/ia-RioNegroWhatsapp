@@ -41,6 +41,13 @@ type AnnouncementInput = {
   imageMimeType?: string | null;
   imageSize?: number | null;
   imageProvider?: string | null;
+  audioUrl?: string | null;
+  audioPublicId?: string | null;
+  audioFilename?: string | null;
+  audioMimeType?: string | null;
+  audioSize?: number | null;
+  audioDuration?: number | null;
+  audioProvider?: string | null;
 };
 
 type DeliveryLoggedError = AppError & {
@@ -187,6 +194,30 @@ function buildAnnouncementImageData(input: AnnouncementInput) {
     imageSize: input.imageSize ?? null,
     imageProvider: input.imageProvider ?? null,
   };
+}
+
+function buildAnnouncementAudioData(input: AnnouncementInput) {
+  return {
+    audioUrl: input.audioUrl ?? null,
+    audioPublicId: input.audioPublicId ?? null,
+    audioFilename: input.audioFilename ?? null,
+    audioMimeType: input.audioMimeType ?? null,
+    audioSize: input.audioSize ?? null,
+    audioDuration: input.audioDuration ?? null,
+    audioProvider: input.audioProvider ?? null,
+  };
+}
+
+function buildAnnouncementMediaPrefix(input: {
+  imageUrl?: string | null;
+  audioUrl?: string | null;
+}) {
+  const parts = [
+    input.imageUrl ? "[IMAGE]" : "",
+    input.audioUrl ? "[AUDIO]" : "",
+  ].filter(Boolean);
+
+  return parts.length ? `${parts.join("")} ` : "";
 }
 
 function isDatabaseUnavailable(error: unknown) {
@@ -368,6 +399,7 @@ async function createAnnouncementDb(input: AnnouncementInput) {
       scheduledAt: parseScheduledDate(input.scheduledAt),
       segmentId: input.segmentId,
       ...buildAnnouncementImageData(input),
+      ...buildAnnouncementAudioData(input),
     },
     include: {
       segment: {
@@ -404,6 +436,7 @@ async function updateAnnouncementDb(id: string, input: AnnouncementInput) {
       scheduledAt: parseScheduledDate(input.scheduledAt),
       segmentId: input.segmentId,
       ...buildAnnouncementImageData(input),
+      ...buildAnnouncementAudioData(input),
     },
     include: {
       segment: {
@@ -445,6 +478,7 @@ async function simulateAnnouncementSendDb(id: string) {
   });
 
   const result = await sendMessage({
+    title: announcement.title,
     message: announcement.message,
     segment: audience,
     scheduledAt: announcement.scheduledAt,
@@ -454,6 +488,11 @@ async function simulateAnnouncementSendDb(id: string) {
     imageFilename: announcement.imageFilename,
     imageMimeType: announcement.imageMimeType,
     imageSize: announcement.imageSize,
+    audioUrl: announcement.audioUrl,
+    audioFilename: announcement.audioFilename,
+    audioMimeType: announcement.audioMimeType,
+    audioSize: announcement.audioSize,
+    audioDuration: announcement.audioDuration,
   });
 
   const log = await prisma.deliveryLog.create({
@@ -519,6 +558,7 @@ async function sendAnnouncementNowDb(
   }
 
   const result = await sendMessage({
+    title: announcement.title,
     message: announcement.message,
     segment: audience,
     scheduledAt: announcement.scheduledAt,
@@ -528,6 +568,11 @@ async function sendAnnouncementNowDb(
     imageFilename: announcement.imageFilename,
     imageMimeType: announcement.imageMimeType,
     imageSize: announcement.imageSize,
+    audioUrl: announcement.audioUrl,
+    audioFilename: announcement.audioFilename,
+    audioMimeType: announcement.audioMimeType,
+    audioSize: announcement.audioSize,
+    audioDuration: announcement.audioDuration,
   }).catch(async (error) => {
     const message =
       error instanceof Error ? error.message : "No se pudo enviar el comunicado.";
@@ -561,7 +606,7 @@ async function sendAnnouncementNowDb(
           mode,
           status: DeliveryStatus.FAILED,
           deliveredCount: 0,
-          details: announcement.imageUrl ? `[IMAGE] ${message}` : message,
+          details: `${buildAnnouncementMediaPrefix(announcement)}${message}`,
         },
         include: {
           announcement: {
@@ -586,7 +631,7 @@ async function sendAnnouncementNowDb(
   const nextStatus = getSendResultStatus(result);
   const deliveryStatus = getDeliveryStatusForResult(result);
   const isRealSend = nextStatus === AnnouncementStatus.SENT_REAL;
-  const mediaPrefix = announcement.imageUrl ? "[IMAGE] " : "";
+  const mediaPrefix = buildAnnouncementMediaPrefix(announcement);
   const details =
     result.blockedBySafeMode
       ? `[BLOCKED_BY_SAFE_MODE] ${mediaPrefix}${result.log}`

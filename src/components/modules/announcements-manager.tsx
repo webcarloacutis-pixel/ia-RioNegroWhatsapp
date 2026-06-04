@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useMemo, useRef, useState, useTransition } from "react";
-import { Edit3, ImagePlus, Send, Sparkles, Trash2, X } from "lucide-react";
+import { Edit3, FileAudio, ImagePlus, Send, Sparkles, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -40,6 +40,13 @@ type AnnouncementFormState = {
   imageMimeType: string | null;
   imageSize: number | null;
   imageProvider: string | null;
+  audioUrl: string | null;
+  audioPublicId: string | null;
+  audioFilename: string | null;
+  audioMimeType: string | null;
+  audioSize: number | null;
+  audioDuration: number | null;
+  audioProvider: string | null;
 };
 
 const initialForm: AnnouncementFormState = {
@@ -55,11 +62,30 @@ const initialForm: AnnouncementFormState = {
   imageMimeType: null,
   imageSize: null,
   imageProvider: null,
+  audioUrl: null,
+  audioPublicId: null,
+  audioFilename: null,
+  audioMimeType: null,
+  audioSize: null,
+  audioDuration: null,
+  audioProvider: null,
 };
 
 const MAX_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_AUDIO_BYTES = 15 * 1024 * 1024;
 const ALLOWED_IMAGE_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const ALLOWED_IMAGE_EXTENSIONS = new Set(["jpg", "jpeg", "png", "webp"]);
+const ALLOWED_AUDIO_MIME_TYPES = new Set([
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/mp4",
+  "audio/m4a",
+  "audio/ogg",
+  "audio/wav",
+  "audio/webm",
+  "audio/aac",
+]);
+const ALLOWED_AUDIO_EXTENSIONS = new Set(["mp3", "m4a", "ogg", "oga", "wav", "webm", "aac"]);
 
 function getAnnouncementStatusTone(status: AnnouncementSummary["status"]) {
   if (status === "SENT" || status === "SENT_REAL") return "success";
@@ -77,7 +103,9 @@ export function AnnouncementsManager({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<AnnouncementFormState>(initialForm);
   const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [isUploadingAudio, setIsUploadingAudio] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const audioInputRef = useRef<HTMLInputElement | null>(null);
 
   const sortedAnnouncements = useMemo(
     () =>
@@ -120,6 +148,24 @@ export function AnnouncementsManager({
     return extension || "";
   }
 
+  function getAudioExtension(filename: string) {
+    const extension = filename.split(".").pop()?.toLowerCase();
+    return extension || "";
+  }
+
+  function formatFileSize(size: number | null) {
+    if (!size) return "Tamano no disponible";
+    if (size >= 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`;
+    return `${Math.max(1, Math.round(size / 1024))} KB`;
+  }
+
+  function formatDuration(duration: number | null) {
+    if (!duration) return null;
+    const minutes = Math.floor(duration / 60);
+    const seconds = duration % 60;
+    return `${minutes}:${seconds.toString().padStart(2, "0")}`;
+  }
+
   function validateImageBeforeUpload(file: File) {
     if (!ALLOWED_IMAGE_MIME_TYPES.has(file.type)) {
       return "Solo se permiten imagenes JPG, PNG o WebP.";
@@ -131,6 +177,22 @@ export function AnnouncementsManager({
 
     if (file.size > MAX_IMAGE_BYTES) {
       return "La imagen no puede superar 5 MB.";
+    }
+
+    return null;
+  }
+
+  function validateAudioBeforeUpload(file: File) {
+    if (!ALLOWED_AUDIO_MIME_TYPES.has(file.type)) {
+      return "Solo se permiten audios MP3, M4A, OGG, WAV, WEBM o AAC.";
+    }
+
+    if (!ALLOWED_AUDIO_EXTENSIONS.has(getAudioExtension(file.name))) {
+      return "La extension debe ser mp3, m4a, ogg, oga, wav, webm o aac.";
+    }
+
+    if (file.size > MAX_AUDIO_BYTES) {
+      return "El audio no puede superar 15 MB.";
     }
 
     return null;
@@ -189,6 +251,61 @@ export function AnnouncementsManager({
     }
   }
 
+  async function handleAudioUpload(file: File) {
+    const validationError = validateAudioBeforeUpload(file);
+
+    if (validationError) {
+      toast.error(validationError);
+      return;
+    }
+
+    const body = new FormData();
+    body.append("file", file);
+    setIsUploadingAudio(true);
+
+    try {
+      const response = await fetch("/api/admin/uploads/announcement-audio", {
+        method: "POST",
+        body,
+      });
+      const payload = await response.json();
+
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error ?? "No se pudo subir el audio.");
+      }
+
+      const audio = payload.audio as {
+        url: string;
+        secureUrl: string;
+        publicId: string;
+        filename: string;
+        mimeType: string;
+        size: number;
+        duration?: number;
+        provider: string;
+      };
+
+      setForm((current) => ({
+        ...current,
+        audioUrl: audio.secureUrl || audio.url,
+        audioPublicId: audio.publicId,
+        audioFilename: audio.filename,
+        audioMimeType: audio.mimeType,
+        audioSize: audio.size,
+        audioDuration: audio.duration ?? null,
+        audioProvider: audio.provider,
+      }));
+      toast.success("Audio subido.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo subir el audio.");
+    } finally {
+      setIsUploadingAudio(false);
+      if (audioInputRef.current) {
+        audioInputRef.current.value = "";
+      }
+    }
+  }
+
   function removeImage() {
     setForm((current) => ({
       ...current,
@@ -198,6 +315,19 @@ export function AnnouncementsManager({
       imageMimeType: null,
       imageSize: null,
       imageProvider: null,
+    }));
+  }
+
+  function removeAudio() {
+    setForm((current) => ({
+      ...current,
+      audioUrl: null,
+      audioPublicId: null,
+      audioFilename: null,
+      audioMimeType: null,
+      audioSize: null,
+      audioDuration: null,
+      audioProvider: null,
     }));
   }
 
@@ -257,6 +387,7 @@ export function AnnouncementsManager({
     const confirmed = window.confirm(
       `Vas a enviar "${announcement.title}" ahora.${
         announcement.imageUrl ? "\nIncluye flyer adjunto." : ""
+      }${announcement.audioUrl ? "\nIncluye audio adjunto." : ""
       }\nDeseas continuar?`,
     );
     if (!confirmed) return;
@@ -287,6 +418,13 @@ export function AnnouncementsManager({
       imageMimeType: announcement.imageMimeType,
       imageSize: announcement.imageSize,
       imageProvider: announcement.imageProvider,
+      audioUrl: announcement.audioUrl,
+      audioPublicId: announcement.audioPublicId,
+      audioFilename: announcement.audioFilename,
+      audioMimeType: announcement.audioMimeType,
+      audioSize: announcement.audioSize,
+      audioDuration: announcement.audioDuration,
+      audioProvider: announcement.audioProvider,
     });
   }
 
@@ -467,6 +605,67 @@ export function AnnouncementsManager({
               ) : null}
             </div>
 
+            <div className="space-y-3 rounded-lg border border-border bg-muted/20 p-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">Audio o nota de voz</p>
+                  <p className="mt-1 text-xs text-muted">
+                    Opcional: sube una nota de voz o audio. MP3, M4A, OGG, WAV, WEBM o AAC. Maximo 15 MB.
+                  </p>
+                </div>
+                {form.audioUrl ? <Badge tone="success">Con audio</Badge> : null}
+              </div>
+
+              <input
+                ref={audioInputRef}
+                className="sr-only"
+                type="file"
+                accept="audio/mpeg,audio/mp3,audio/mp4,audio/m4a,audio/ogg,audio/wav,audio/webm,audio/aac"
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void handleAudioUpload(file);
+                }}
+              />
+
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="gap-2"
+                  disabled={isUploadingAudio}
+                  onClick={() => audioInputRef.current?.click()}
+                >
+                  <FileAudio className="size-4" />
+                  {isUploadingAudio ? "Subiendo..." : form.audioUrl ? "Cambiar audio" : "Subir audio"}
+                </Button>
+                {form.audioUrl ? (
+                  <Button type="button" variant="ghost" className="gap-2" onClick={removeAudio}>
+                    <X className="size-4" />
+                    Quitar audio
+                  </Button>
+                ) : null}
+              </div>
+
+              {form.audioUrl ? (
+                <div className="space-y-3 rounded-lg border border-border bg-white p-3">
+                  <audio controls className="w-full" src={form.audioUrl}>
+                    Tu navegador no puede reproducir este audio.
+                  </audio>
+                  <div className="min-w-0 text-sm text-muted">
+                    <p className="truncate font-medium text-foreground">
+                      {form.audioFilename ?? "Audio cargado"}
+                    </p>
+                    <p>
+                      {form.audioMimeType ?? "audio"} - {formatFileSize(form.audioSize)}
+                      {formatDuration(form.audioDuration)
+                        ? ` - ${formatDuration(form.audioDuration)}`
+                        : ""}
+                    </p>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+
             <div className="flex flex-wrap gap-3">
               <Button type="submit" disabled={isPending}>
                 {editingId ? "Actualizar comunicado" : "Crear comunicado"}
@@ -506,6 +705,7 @@ export function AnnouncementsManager({
                         {formatStatusLabel(announcement.status)}
                       </Badge>
                       {announcement.imageUrl ? <Badge tone="success">Con imagen</Badge> : null}
+                      {announcement.audioUrl ? <Badge tone="success">Con audio</Badge> : null}
                     </div>
                     <p className="mt-3 text-sm leading-7 text-muted">{announcement.message}</p>
                   </div>
@@ -519,6 +719,17 @@ export function AnnouncementsManager({
                     />
                   ) : null}
                 </div>
+
+                {announcement.audioUrl ? (
+                  <div className="mt-4 space-y-2 rounded-lg border border-border bg-muted/20 p-3">
+                    <audio controls className="w-full" src={announcement.audioUrl}>
+                      Tu navegador no puede reproducir este audio.
+                    </audio>
+                    <p className="truncate text-xs text-muted">
+                      {announcement.audioFilename ?? "Audio cargado"} - {formatFileSize(announcement.audioSize)}
+                    </p>
+                  </div>
+                ) : null}
 
                 <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted">
                   <span>{formatDateTime(announcement.scheduledAt)}</span>

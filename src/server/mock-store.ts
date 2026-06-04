@@ -38,6 +38,13 @@ type AnnouncementInput = {
   imageMimeType?: string | null;
   imageSize?: number | null;
   imageProvider?: string | null;
+  audioUrl?: string | null;
+  audioPublicId?: string | null;
+  audioFilename?: string | null;
+  audioMimeType?: string | null;
+  audioSize?: number | null;
+  audioDuration?: number | null;
+  audioProvider?: string | null;
 };
 
 type SegmentInput = {
@@ -77,6 +84,13 @@ type MockAnnouncement = {
   imageMimeType: string | null;
   imageSize: number | null;
   imageProvider: string | null;
+  audioUrl: string | null;
+  audioPublicId: string | null;
+  audioFilename: string | null;
+  audioMimeType: string | null;
+  audioSize: number | null;
+  audioDuration: number | null;
+  audioProvider: string | null;
   status: AnnouncementStatus;
   sentAt: Date | null;
   segmentId: string | null;
@@ -205,6 +219,30 @@ function buildAnnouncementImageData(input: AnnouncementInput) {
   };
 }
 
+function buildAnnouncementAudioData(input: AnnouncementInput) {
+  return {
+    audioUrl: input.audioUrl ?? null,
+    audioPublicId: input.audioPublicId ?? null,
+    audioFilename: input.audioFilename ?? null,
+    audioMimeType: input.audioMimeType ?? null,
+    audioSize: input.audioSize ?? null,
+    audioDuration: input.audioDuration ?? null,
+    audioProvider: input.audioProvider ?? null,
+  };
+}
+
+function buildAnnouncementMediaPrefix(input: {
+  imageUrl?: string | null;
+  audioUrl?: string | null;
+}) {
+  const parts = [
+    input.imageUrl ? "[IMAGE]" : "",
+    input.audioUrl ? "[AUDIO]" : "",
+  ].filter(Boolean);
+
+  return parts.length ? `${parts.join("")} ` : "";
+}
+
 function initializeState(): MockState {
   const now = new Date();
 
@@ -249,6 +287,13 @@ function initializeState(): MockState {
       imageMimeType: null,
       imageSize: null,
       imageProvider: null,
+      audioUrl: null,
+      audioPublicId: null,
+      audioFilename: null,
+      audioMimeType: null,
+      audioSize: null,
+      audioDuration: null,
+      audioProvider: null,
       status: item.status,
       sentAt: item.status === "SENT" || item.status === "SENT_REAL" ? scheduledAt : null,
       segmentId,
@@ -333,6 +378,13 @@ function serializeAnnouncement(announcement: MockAnnouncement): AnnouncementSumm
     imageMimeType: announcement.imageMimeType,
     imageSize: announcement.imageSize,
     imageProvider: announcement.imageProvider,
+    audioUrl: announcement.audioUrl,
+    audioPublicId: announcement.audioPublicId,
+    audioFilename: announcement.audioFilename,
+    audioMimeType: announcement.audioMimeType,
+    audioSize: announcement.audioSize,
+    audioDuration: announcement.audioDuration,
+    audioProvider: announcement.audioProvider,
     status: announcement.status,
     sentAt: announcement.sentAt?.toISOString() ?? null,
     createdAt: announcement.createdAt.toISOString(),
@@ -490,6 +542,7 @@ export async function createAnnouncement(input: AnnouncementInput) {
     customTypeLabel: resolvedType.customTypeLabel,
     scheduledAt: parseScheduledDate(input.scheduledAt),
     ...buildAnnouncementImageData(input),
+    ...buildAnnouncementAudioData(input),
     status: "SCHEDULED",
     sentAt: null,
     segmentId: input.segmentId,
@@ -513,6 +566,7 @@ export async function updateAnnouncement(id: string, input: AnnouncementInput) {
   announcement.scheduledAt = parseScheduledDate(input.scheduledAt);
   announcement.segmentId = input.segmentId;
   Object.assign(announcement, buildAnnouncementImageData(input));
+  Object.assign(announcement, buildAnnouncementAudioData(input));
   announcement.updatedAt = new Date();
 
   return serializeAnnouncement(announcement);
@@ -530,6 +584,7 @@ export async function simulateAnnouncementSend(id: string) {
   const announcement = getAnnouncementOrThrow(id);
   const audience = await resolveAudience(announcement.segmentId);
   const result = await sendMessage({
+    title: announcement.title,
     message: announcement.message,
     segment: audience,
     scheduledAt: announcement.scheduledAt,
@@ -539,6 +594,11 @@ export async function simulateAnnouncementSend(id: string) {
     imageFilename: announcement.imageFilename,
     imageMimeType: announcement.imageMimeType,
     imageSize: announcement.imageSize,
+    audioUrl: announcement.audioUrl,
+    audioFilename: announcement.audioFilename,
+    audioMimeType: announcement.audioMimeType,
+    audioSize: announcement.audioSize,
+    audioDuration: announcement.audioDuration,
   });
 
   const log = createLog({
@@ -563,6 +623,7 @@ export async function sendAnnouncementNow(
 
   const audience = await resolveAudience(announcement.segmentId);
   const result = await sendMessage({
+    title: announcement.title,
     message: announcement.message,
     segment: audience,
     scheduledAt: announcement.scheduledAt,
@@ -572,6 +633,11 @@ export async function sendAnnouncementNow(
     imageFilename: announcement.imageFilename,
     imageMimeType: announcement.imageMimeType,
     imageSize: announcement.imageSize,
+    audioUrl: announcement.audioUrl,
+    audioFilename: announcement.audioFilename,
+    audioMimeType: announcement.audioMimeType,
+    audioSize: announcement.audioSize,
+    audioDuration: announcement.audioDuration,
   }).catch((error) => {
     const message =
       error instanceof Error ? error.message : "No se pudo enviar el comunicado.";
@@ -584,7 +650,7 @@ export async function sendAnnouncementNow(
       mode,
       status: "FAILED",
       deliveredCount: 0,
-      details: announcement.imageUrl ? `[IMAGE] ${message}` : message,
+      details: `${buildAnnouncementMediaPrefix(announcement)}${message}`,
     });
     throw new AppError(message, 502);
   });
@@ -597,10 +663,10 @@ export async function sendAnnouncementNow(
         ? "SENT_REAL"
         : "FAILED";
   const details = result.blockedBySafeMode
-    ? `[BLOCKED_BY_SAFE_MODE] ${announcement.imageUrl ? "[IMAGE] " : ""}${result.log}`
+    ? `[BLOCKED_BY_SAFE_MODE] ${buildAnnouncementMediaPrefix(announcement)}${result.log}`
     : result.simulated
-      ? `[SENT_SIMULATED] ${announcement.imageUrl ? "[IMAGE] " : ""}${result.log}`
-      : `[SENT_REAL] ${announcement.imageUrl ? "[IMAGE] " : ""}${result.log}`;
+      ? `[SENT_SIMULATED] ${buildAnnouncementMediaPrefix(announcement)}${result.log}`
+      : `[SENT_REAL] ${buildAnnouncementMediaPrefix(announcement)}${result.log}`;
 
   announcement.status = nextStatus as AnnouncementStatus;
   announcement.sentAt = nextStatus === "SENT_REAL" ? new Date() : null;

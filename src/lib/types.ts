@@ -92,6 +92,13 @@ export type AnnouncementSummary = {
   imageMimeType: string | null;
   imageSize: number | null;
   imageProvider: string | null;
+  audioUrl: string | null;
+  audioPublicId: string | null;
+  audioFilename: string | null;
+  audioMimeType: string | null;
+  audioSize: number | null;
+  audioDuration: number | null;
+  audioProvider: string | null;
   status: AnnouncementStatusValue;
   sentAt: string | null;
   createdAt: string;

@@ -23,6 +23,13 @@ test("serializeAnnouncement expone los campos esperados para el panel", () => {
     imageMimeType: "image/png",
     imageSize: 1024,
     imageProvider: "cloudinary",
+    audioUrl: "https://res.cloudinary.com/demo/video/upload/audio.mp3",
+    audioPublicId: "rionegro/announcements/audio/audio",
+    audioFilename: "audio.mp3",
+    audioMimeType: "audio/mpeg",
+    audioSize: 2048,
+    audioDuration: 35,
+    audioProvider: "cloudinary",
     status: "SCHEDULED",
     sentAt: null,
     createdAt: new Date("2026-04-19T08:00:00.000Z"),
@@ -39,6 +46,9 @@ test("serializeAnnouncement expone los campos esperados para el panel", () => {
   assert.equal(payload.segment?.name, "Cobertura municipal");
   assert.equal(payload.imageProvider, "cloudinary");
   assert.equal(payload.imageFilename, "flyer.png");
+  assert.equal(payload.audioProvider, "cloudinary");
+  assert.equal(payload.audioFilename, "audio.mp3");
+  assert.equal(payload.audioDuration, 35);
 });
 
 test("serializeSegment calcula conteos y ultima fecha de uso", () => {

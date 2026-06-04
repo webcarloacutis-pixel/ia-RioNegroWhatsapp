@@ -54,6 +54,64 @@ test("announcementInputSchema acepta metadatos de flyer Cloudinary", () => {
   assert.equal(payload.imageProvider, "cloudinary");
 });
 
+test("announcementInputSchema acepta metadatos de audio Cloudinary", () => {
+  const payload = announcementInputSchema.parse({
+    title: "Mensaje del alcalde",
+    message: "Audio institucional para la comunidad de Rionegro.",
+    location: "Rionegro",
+    type: "comunicado",
+    scheduledAt: "2026-04-20T10:00",
+    segmentId: null,
+    audioUrl: "https://res.cloudinary.com/demo/video/upload/rionegro/announcements/audio/mensaje.mp3",
+    audioPublicId: "rionegro/announcements/audio/mensaje",
+    audioFilename: "mensaje.mp3",
+    audioMimeType: "audio/mpeg",
+    audioSize: 1024,
+    audioDuration: 45,
+    audioProvider: "cloudinary",
+  });
+
+  assert.equal(payload.audioMimeType, "audio/mpeg");
+  assert.equal(payload.audioProvider, "cloudinary");
+  assert.equal(payload.audioDuration, 45);
+});
+
+test("announcementInputSchema rechaza metadatos de audio no permitidos", () => {
+  assert.throws(() =>
+    announcementInputSchema.parse({
+      title: "Mensaje del alcalde",
+      message: "Audio institucional para la comunidad de Rionegro.",
+      location: "Rionegro",
+      type: "comunicado",
+      scheduledAt: "2026-04-20T10:00",
+      segmentId: null,
+      audioUrl: "http://localhost/audio.mp3",
+      audioPublicId: "rionegro/announcements/audio/mensaje",
+      audioFilename: "mensaje.mp3",
+      audioMimeType: "audio/mpeg",
+      audioSize: 1024,
+      audioProvider: "cloudinary",
+    }),
+  );
+
+  assert.throws(() =>
+    announcementInputSchema.parse({
+      title: "Mensaje del alcalde",
+      message: "Audio institucional para la comunidad de Rionegro.",
+      location: "Rionegro",
+      type: "comunicado",
+      scheduledAt: "2026-04-20T10:00",
+      segmentId: null,
+      audioUrl: "https://res.cloudinary.com/demo/video/upload/audio.exe",
+      audioPublicId: "rionegro/announcements/audio/mensaje",
+      audioFilename: "audio.exe",
+      audioMimeType: "application/x-msdownload",
+      audioSize: 1024,
+      audioProvider: "cloudinary",
+    }),
+  );
+});
+
 test("announcementInputSchema rechaza metadatos de imagen no permitidos", () => {
   assert.throws(() =>
     announcementInputSchema.parse({

@@ -7,10 +7,21 @@ import {
 import { isPublicHttpUrl } from "@/lib/url-security";
 
 const MAX_ANNOUNCEMENT_IMAGE_BYTES = 5 * 1024 * 1024;
+const MAX_ANNOUNCEMENT_AUDIO_BYTES = 15 * 1024 * 1024;
 const ALLOWED_ANNOUNCEMENT_IMAGE_MIME_TYPES = [
   "image/jpeg",
   "image/png",
   "image/webp",
+] as const;
+const ALLOWED_ANNOUNCEMENT_AUDIO_MIME_TYPES = [
+  "audio/mpeg",
+  "audio/mp3",
+  "audio/mp4",
+  "audio/m4a",
+  "audio/ogg",
+  "audio/wav",
+  "audio/webm",
+  "audio/aac",
 ] as const;
 
 const nullableTrimmedString = (max: number, message: string) =>
@@ -119,6 +130,37 @@ export const announcementInputSchema = z.object({
     .nullable()
     .transform((value) => value ?? null),
   imageProvider: nullableTrimmedString(40, "El proveedor de imagen es demasiado largo."),
+  audioUrl: z
+    .string()
+    .trim()
+    .optional()
+    .nullable()
+    .transform((value) => value || null)
+    .refine((value) => !value || isPublicHttpUrl(value), "La URL del audio no es publica."),
+  audioPublicId: nullableTrimmedString(180, "El identificador de audio es demasiado largo."),
+  audioFilename: nullableTrimmedString(180, "El nombre del audio es demasiado largo."),
+  audioMimeType: z
+    .enum(ALLOWED_ANNOUNCEMENT_AUDIO_MIME_TYPES)
+    .optional()
+    .nullable()
+    .transform((value) => value || null),
+  audioSize: z
+    .number()
+    .int("El tamano del audio debe ser entero.")
+    .min(1, "El tamano del audio no es valido.")
+    .max(MAX_ANNOUNCEMENT_AUDIO_BYTES, "El audio no puede superar 15 MB.")
+    .optional()
+    .nullable()
+    .transform((value) => value ?? null),
+  audioDuration: z
+    .number()
+    .int("La duracion del audio debe ser entera.")
+    .min(0, "La duracion del audio no es valida.")
+    .max(5 * 60, "El audio no puede superar 5 minutos.")
+    .optional()
+    .nullable()
+    .transform((value) => value ?? null),
+  audioProvider: nullableTrimmedString(40, "El proveedor de audio es demasiado largo."),
 });
 
 export const segmentInputSchema = z.object({

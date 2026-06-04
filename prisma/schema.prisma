@@ -93,6 +93,13 @@ model Announcement {
   imageMimeType String?
   imageSize    Int?
   imageProvider String?
+  audioUrl     String?            @db.Text
+  audioPublicId String?
+  audioFilename String?
+  audioMimeType String?
+  audioSize    Int?
+  audioDuration Int?
+  audioProvider String?
   status       AnnouncementStatus @default(SCHEDULED)
   sentAt       DateTime?
   segmentId    String?
