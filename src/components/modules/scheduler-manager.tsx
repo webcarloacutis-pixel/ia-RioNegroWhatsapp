@@ -2,7 +2,16 @@
 
 import { useRouter } from "next/navigation";
 import { useTransition } from "react";
-import { Clock3, PlayCircle, Send, Sparkles } from "lucide-react";
+import {
+  AlertTriangle,
+  CheckCircle2,
+  Clock3,
+  PlayCircle,
+  Send,
+  ShieldAlert,
+  Sparkles,
+  TimerReset,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
@@ -23,8 +32,24 @@ type SchedulerManagerProps = {
 function getStatusTone(status: SchedulerData["scheduledAnnouncements"][number]["status"]) {
   if (status === "SENT" || status === "SENT_REAL") return "success";
   if (status === "FAILED" || status === "BLOCKED_BY_SAFE_MODE") return "danger";
+  if (status === "SENDING") return "info";
   if (status === "SENT_SIMULATED") return "warning";
   return "warning";
+}
+
+function formatBooleanStatus(value: boolean) {
+  return value ? "Activo" : "Inactivo";
+}
+
+function getLogNotice(details: string | null) {
+  if (!details) return null;
+  if (details.includes("[BLOCKED_BY_SAFE_MODE]")) {
+    return "No se envio real porque WHATSAPP_SAFE_MODE esta activo.";
+  }
+  if (details.includes("NO_RECIPIENTS")) {
+    return "No se envio porque no hay destinatarios en el segmento ni ULTRAMSG_DEFAULT_TO.";
+  }
+  return null;
 }
 
 export function SchedulerManager({ data }: SchedulerManagerProps) {
@@ -39,7 +64,7 @@ export function SchedulerManager({ data }: SchedulerManagerProps) {
       throw new Error(payload.error ?? "No se pudo procesar la solicitud.");
     }
 
-    return payload.data;
+    return payload.data ?? payload;
   }
 
   async function handleSimulate(id: string) {
@@ -64,14 +89,13 @@ export function SchedulerManager({ data }: SchedulerManagerProps) {
 
   async function handleRunScheduler() {
     try {
-      const result = await request("/api/scheduler/run", { method: "POST" });
-      const failedCount = Array.isArray(result.processed)
-        ? result.processed.filter((item: { status: string }) => item.status === "FAILED").length
-        : 0;
+      const result = await request("/api/admin/scheduler/run", { method: "POST" });
+      const failedCount = Number(result.failedCount ?? 0);
+      const blockedCount = Number(result.blockedCount ?? 0);
 
-      if (failedCount > 0) {
+      if (failedCount > 0 || blockedCount > 0) {
         toast.error(
-          `Se enviaron ${result.processedCount} comunicado(s) y fallaron ${failedCount}. Revisa la bitacora.`,
+          `Procesados ${result.processedCount}. Fallidos ${failedCount}. Bloqueados ${blockedCount}.`,
         );
       } else {
         toast.success(
@@ -89,7 +113,9 @@ export function SchedulerManager({ data }: SchedulerManagerProps) {
   return (
     <div className="space-y-6">
       <section className="panel-card rounded-[34px] px-7 py-8">
-        <Badge tone="info">Programador de envios</Badge>
+        <Badge tone={data.status.schedulerEnabled ? "success" : "danger"}>
+          Scheduler {formatBooleanStatus(data.status.schedulerEnabled)}
+        </Badge>
         <h1 className="mt-4 text-4xl text-foreground">
           Supervisa el pipeline de salida del canal oficial
         </h1>
@@ -101,11 +127,81 @@ export function SchedulerManager({ data }: SchedulerManagerProps) {
         <div className="mt-6 flex flex-wrap gap-3">
           <Button className="gap-2" onClick={handleRunScheduler} disabled={isPending}>
             <PlayCircle className="size-4" />
-            Procesar pendientes
+            Procesar programados ahora
           </Button>
-          <Badge tone="warning">Worker con validacion UltraMsg</Badge>
+          <Badge tone={data.status.workerExpected ? "info" : "warning"}>
+            Worker {data.status.workerExpected ? "esperado" : "no esperado"}
+          </Badge>
+          <Badge tone="info">Cada {data.status.intervalSeconds}s</Badge>
         </div>
       </section>
+
+      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <PanelCard className="space-y-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <TimerReset className="size-4 text-primary" />
+            Ultima ejecucion
+          </div>
+          <p className="text-sm text-muted">
+            {data.status.lastRunAt ? formatDateTime(data.status.lastRunAt) : "Sin ejecuciones registradas"}
+          </p>
+        </PanelCard>
+        <PanelCard className="space-y-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <Clock3 className="size-4 text-primary" />
+            Hora servidor
+          </div>
+          <p className="text-sm text-muted">UTC {data.status.serverTimeUtc}</p>
+          <p className="text-sm text-muted">Bogota {data.status.serverTimeBogota}</p>
+        </PanelCard>
+        <PanelCard className="space-y-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <CheckCircle2 className="size-4 text-primary" />
+            Cola
+          </div>
+          <p className="text-sm text-muted">
+            {data.status.pendingScheduled} pendientes, {data.status.overdueScheduled} vencidos
+          </p>
+        </PanelCard>
+        <PanelCard className="space-y-2">
+          <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+            <ShieldAlert className="size-4 text-primary" />
+            UltraMsg
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Badge tone={data.status.safeMode ? "danger" : "success"}>
+              Safe {formatBooleanStatus(data.status.safeMode)}
+            </Badge>
+            <Badge tone={data.status.dryRun ? "warning" : "success"}>
+              Dry-run {formatBooleanStatus(data.status.dryRun)}
+            </Badge>
+            <Badge tone={data.status.ultramsgMock ? "warning" : "success"}>
+              Mock {formatBooleanStatus(data.status.ultramsgMock)}
+            </Badge>
+            <Badge tone={data.status.hasDefaultRecipient ? "success" : "danger"}>
+              Default TO {data.status.hasDefaultRecipient ? "configurado" : "faltante"}
+            </Badge>
+          </div>
+        </PanelCard>
+      </section>
+
+      {data.status.safeMode || !data.status.hasDefaultRecipient ? (
+        <section className="rounded-2xl border border-border bg-white px-5 py-4">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 size-5 text-[#93661c]" />
+            <div className="space-y-1 text-sm text-muted">
+              {data.status.safeMode ? (
+                <p>No se enviaran mensajes reales mientras WHATSAPP_SAFE_MODE este activo.</p>
+              ) : null}
+              {!data.status.hasDefaultRecipient ? (
+                <p>
+                  Cobertura general necesita numeros en el segmento o ULTRAMSG_DEFAULT_TO configurado.
+                </p>
+              ) : null}
+            </div>
+          </div>
+        </section>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <PanelCard className="space-y-5">
@@ -116,10 +212,15 @@ export function SchedulerManager({ data }: SchedulerManagerProps) {
               </p>
               <h2 className="mt-2 text-2xl text-foreground">Comunicados programados</h2>
             </div>
-            <Badge tone="info">{data.scheduledAnnouncements.length} pendientes</Badge>
+            <Badge tone="info">{data.status.pendingScheduled} pendientes</Badge>
           </div>
 
           <div className="space-y-4">
+            {data.scheduledAnnouncements.length === 0 ? (
+              <div className="rounded-[24px] border border-border bg-white p-5 text-sm text-muted">
+                No hay comunicados programados en cola.
+              </div>
+            ) : null}
             {data.scheduledAnnouncements.map((announcement) => (
               <article
                 key={announcement.id}
@@ -157,11 +258,16 @@ export function SchedulerManager({ data }: SchedulerManagerProps) {
                     variant="ghost"
                     className="gap-2"
                     onClick={() => handleSimulate(announcement.id)}
+                    disabled={announcement.status === "SENDING"}
                   >
                     <Sparkles className="size-4" />
                     Simular envio
                   </Button>
-                  <Button className="gap-2" onClick={() => handleSendNow(announcement.id)}>
+                  <Button
+                    className="gap-2"
+                    onClick={() => handleSendNow(announcement.id)}
+                    disabled={announcement.status === "SENDING"}
+                  >
                     <Send className="size-4" />
                     Enviar ahora
                   </Button>
@@ -197,9 +303,19 @@ export function SchedulerManager({ data }: SchedulerManagerProps) {
                   </Badge>
                 </div>
                 <p className="mt-2 text-sm text-muted">{log.details ?? "Evento registrado"}.</p>
+                {getLogNotice(log.details) ? (
+                  <p className="mt-2 text-sm font-semibold text-foreground">
+                    {getLogNotice(log.details)}
+                  </p>
+                ) : null}
                 <p className="mt-2 text-sm text-muted">{formatDateTime(log.createdAt)}</p>
               </div>
             ))}
+            {data.recentLogs.length === 0 ? (
+              <div className="rounded-[24px] bg-surface px-4 py-4 text-sm text-muted">
+                Sin actividad registrada.
+              </div>
+            ) : null}
           </div>
         </PanelCard>
       </div>

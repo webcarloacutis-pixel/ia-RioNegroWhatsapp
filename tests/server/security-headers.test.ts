@@ -6,9 +6,14 @@ import nextConfig from "../../next.config";
 test("next.config define headers de seguridad globales", async () => {
   assert.equal(typeof nextConfig.headers, "function");
 
-  const headerRules = await nextConfig.headers();
+  const getHeaders = nextConfig.headers;
+  assert.ok(getHeaders);
+
+  const headerRules = await getHeaders();
   const globalRule = headerRules.find((rule) => rule.source === "/:path*");
-  const headers = new Map(globalRule?.headers.map((header) => [header.key, header.value]));
+  assert.ok(globalRule);
+
+  const headers = new Map(globalRule.headers.map((header) => [header.key, header.value]));
 
   assert.match(headers.get("Content-Security-Policy") ?? "", /frame-ancestors 'none'/);
   assert.equal(headers.get("X-Content-Type-Options"), "nosniff");

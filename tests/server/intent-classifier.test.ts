@@ -36,9 +36,32 @@ test("no confunde saludo con pregunta municipal adicional", () => {
 test("detecta reportes ciudadanos reales antes del asistente general", () => {
   const analysis = analyzeUserMessageIntent("Hay un accidente en Llanogrande");
 
-  assert.equal(analysis.intent, "CITIZEN_REPORT");
+  assert.equal(analysis.intent, "EMERGENCY_REPORT");
   assert.equal(analysis.shouldCreateCitizenReport, true);
   assert.equal(analysis.shouldUseKnowledgeBase, false);
+});
+
+test("no crea reporte para consultas privadas de mascotas o servicios", () => {
+  const cat = analyzeUserMessageIntent(
+    "Mi gato se enfermo y necesito llevarlo al veterinario 24 horas.",
+  );
+  const pharmacy = analyzeUserMessageIntent("Donde hay farmacia abierta?");
+  const hospital = analyzeUserMessageIntent("Mi mama esta enferma, donde hay hospital?");
+
+  assert.equal(cat.intent, "KNOWLEDGE_BASE_QUERY");
+  assert.equal(cat.shouldCreateCitizenReport, false);
+  assert.equal(cat.shouldUseKnowledgeBase, true);
+  assert.equal(pharmacy.shouldCreateCitizenReport, false);
+  assert.equal(pharmacy.shouldUseKnowledgeBase, true);
+  assert.equal(hospital.shouldCreateCitizenReport, false);
+});
+
+test("pide confirmacion para ayudas urgentes ambiguas", () => {
+  const analysis = analyzeUserMessageIntent("Necesito ayuda urgente con mi perro.");
+
+  assert.equal(analysis.intent, "AMBIGUOUS");
+  assert.equal(analysis.shouldCreateCitizenReport, false);
+  assert.equal(analysis.shouldAskClarifyingQuestion, true);
 });
 
 test("detecta emergencias graves como reporte urgente", () => {

@@ -43,6 +43,25 @@ test("routeConversationBeforeAssistant corta reportes reales antes del asistente
   );
 });
 
+test("routeConversationBeforeAssistant no registra consultas privadas de veterinaria", () => {
+  const result = routeConversationBeforeAssistant(
+    "Mi gato se enfermo y necesito llevarlo al veterinario 24 horas.",
+  );
+
+  assert.equal(result.analysis.shouldCreateCitizenReport, false);
+  assert.equal(result.analysis.shouldUseKnowledgeBase, true);
+  assert.equal(result.reply, null);
+});
+
+test("routeConversationBeforeAssistant pide confirmacion para ayuda urgente con mascota", () => {
+  const result = routeConversationBeforeAssistant("Necesito ayuda urgente con mi perro.");
+
+  assert.equal(result.analysis.shouldCreateCitizenReport, false);
+  assert.equal(result.analysis.shouldAskClarifyingQuestion, true);
+  assert.match(result.reply ?? "", /mascota|alerta/i);
+  assert.doesNotMatch(result.reply ?? "", /registramos/i);
+});
+
 test("routeConversationBeforeAssistant conserva ubicacion parcial de arbol caido", () => {
   const result = routeConversationBeforeAssistant("Hay un arbol caido en la via San Antonio");
 

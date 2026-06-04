@@ -13,7 +13,10 @@ import {
   normalizeAnnouncementType,
 } from "@/lib/constants";
 import { AppError } from "@/lib/errors";
-import { parseBogotaDateTimeLocalToUtcDate } from "@/lib/format";
+import {
+  formatDateTimeForBogotaDisplay,
+  parseBogotaDateTimeLocalToUtcDate,
+} from "@/lib/format";
 import { prisma } from "@/lib/prisma";
 import type {
   AnnouncementSummary,
@@ -22,6 +25,9 @@ import type {
   KnowledgeEntrySummary,
   MetricsData,
   SchedulerData,
+  SchedulerRunResult,
+  SchedulerRunSummary,
+  SchedulerStatus,
   SegmentSummary,
 } from "@/lib/types";
 import * as mockStore from "@/server/mock-store";
@@ -67,7 +73,157 @@ type KnowledgeInput = {
   category: string;
 };
 
+type ProcessScheduledOptions = {
+  source?: "worker" | "admin" | "cron";
+};
+
 let fallbackWarningShown = false;
+
+function isEnvTrue(value: string | undefined) {
+  return value === "true";
+}
+
+function getSchedulerEnabled() {
+  return process.env.SCHEDULER_ENABLED !== "false";
+}
+
+function getSchedulerIntervalSeconds() {
+  const configured = Number(process.env.SCHEDULER_INTERVAL_SECONDS);
+
+  return Number.isInteger(configured) && configured > 0 ? configured : 15;
+}
+
+function getDefaultRecipient() {
+  return process.env.ULTRAMSG_DEFAULT_TO?.trim() ?? "";
+}
+
+function hasDefaultRecipient() {
+  return Boolean(getDefaultRecipient());
+}
+
+function isDryRunMode() {
+  return (
+    isEnvTrue(process.env.WHATSAPP_DRY_RUN) ||
+    isEnvTrue(process.env.ULTRAMSG_MOCK) ||
+    isEnvTrue(process.env.SIMULATION_MODE)
+  );
+}
+
+function isSafeMode() {
+  return isEnvTrue(process.env.WHATSAPP_SAFE_MODE);
+}
+
+function getServerClockStatus(now = new Date()) {
+  return {
+    serverTimeUtc: now.toISOString(),
+    serverTimeBogota: formatDateTimeForBogotaDisplay(now),
+  };
+}
+
+function buildNoRecipientsMessage() {
+  return "NO_RECIPIENTS: No se envio porque no hay destinatarios en el segmento ni ULTRAMSG_DEFAULT_TO.";
+}
+
+function buildSchedulerRunSummary(
+  run: {
+    id: string;
+    source: string;
+    startedAt: Date;
+    completedAt: Date | null;
+    dueCount: number;
+    lockedCount: number;
+    processedCount: number;
+    sentCount: number;
+    failedCount: number;
+    blockedCount: number;
+    simulatedCount: number;
+    skippedCount: number;
+    details: string | null;
+  } | null,
+): SchedulerRunSummary | null {
+  if (!run) {
+    return null;
+  }
+
+  return {
+    id: run.id,
+    source: run.source,
+    startedAt: run.startedAt.toISOString(),
+    completedAt: run.completedAt?.toISOString() ?? null,
+    dueCount: run.dueCount,
+    lockedCount: run.lockedCount,
+    processedCount: run.processedCount,
+    sentCount: run.sentCount,
+    failedCount: run.failedCount,
+    blockedCount: run.blockedCount,
+    simulatedCount: run.simulatedCount,
+    skippedCount: run.skippedCount,
+    details: run.details,
+  };
+}
+
+function classifyDeliveryLog(log: DeliveryLogSummary) {
+  const details = log.details ?? "";
+
+  if (details.includes("[BLOCKED_BY_SAFE_MODE]")) {
+    return "blocked" as const;
+  }
+
+  if (details.includes("[SENT_SIMULATED]")) {
+    return "simulated" as const;
+  }
+
+  if (details.includes("[SENT_REAL]")) {
+    return "sent" as const;
+  }
+
+  if (log.status === "FAILED") {
+    return "failed" as const;
+  }
+
+  return "sent" as const;
+}
+
+function buildSchedulerRunResult(input: {
+  source: string;
+  startedAt: Date;
+  completedAt: Date;
+  dueCount: number;
+  lockedCount: number;
+  skippedCount: number;
+  processed: DeliveryLogSummary[];
+}): SchedulerRunResult {
+  const result: SchedulerRunResult = {
+    source: input.source,
+    startedAt: input.startedAt.toISOString(),
+    completedAt: input.completedAt.toISOString(),
+    dueCount: input.dueCount,
+    lockedCount: input.lockedCount,
+    processedCount: input.processed.length,
+    sentCount: 0,
+    failedCount: 0,
+    blockedCount: 0,
+    simulatedCount: 0,
+    skippedCount: input.skippedCount,
+    processed: input.processed,
+  };
+
+  for (const log of input.processed) {
+    const outcome = classifyDeliveryLog(log);
+
+    if (outcome === "sent") {
+      result.sentCount += 1;
+    } else if (outcome === "simulated") {
+      result.simulatedCount += 1;
+    } else if (outcome === "blocked") {
+      result.blockedCount += 1;
+    } else {
+      result.failedCount += 1;
+    }
+  }
+
+  return result;
+}
 
 function parseScheduledDate(value: string) {
   const date = parseBogotaDateTimeLocalToUtcDate(value);
@@ -383,9 +539,17 @@ async function listAnnouncementsDb(): Promise<AnnouncementSummary[]> {
 }
 
 async function createAnnouncementDb(input: AnnouncementInput) {
+  const scheduledAt = parseScheduledDate(input.scheduledAt);
+
   console.log("[announcements] create requested", {
     type: input.type,
     hasSegment: Boolean(input.segmentId),
+  });
+  console.log("[announcements] scheduledAt utc", {
+    scheduledAt: scheduledAt.toISOString(),
+  });
+  console.log("[announcements] scheduledAt bogota", {
+    scheduledAt: formatDateTimeForBogotaDisplay(scheduledAt),
   });
 
   const resolvedType = resolveAnnouncementTypeInput(input.type);
@@ -396,7 +560,7 @@ async function createAnnouncementDb(input: AnnouncementInput) {
       location: input.location,
       type: resolvedType.type,
       customTypeLabel: resolvedType.customTypeLabel,
-      scheduledAt: parseScheduledDate(input.scheduledAt),
+      scheduledAt,
       segmentId: input.segmentId,
       ...buildAnnouncementImageData(input),
       ...buildAnnouncementAudioData(input),
@@ -424,6 +588,16 @@ async function createAnnouncementDb(input: AnnouncementInput) {
 async function updateAnnouncementDb(id: string, input: AnnouncementInput) {
   await getAnnouncementOrThrow(id);
   const resolvedType = resolveAnnouncementTypeInput(input.type);
+  const scheduledAt = parseScheduledDate(input.scheduledAt);
+
+  console.log("[announcements] scheduledAt utc", {
+    id,
+    scheduledAt: scheduledAt.toISOString(),
+  });
+  console.log("[announcements] scheduledAt bogota", {
+    id,
+    scheduledAt: formatDateTimeForBogotaDisplay(scheduledAt),
+  });
 
   const announcement = await prisma.announcement.update({
     where: { id },
@@ -433,7 +607,7 @@ async function updateAnnouncementDb(id: string, input: AnnouncementInput) {
       location: input.location,
       type: resolvedType.type,
       customTypeLabel: resolvedType.customTypeLabel,
-      scheduledAt: parseScheduledDate(input.scheduledAt),
+      scheduledAt,
       segmentId: input.segmentId,
       ...buildAnnouncementImageData(input),
       ...buildAnnouncementAudioData(input),
@@ -530,6 +704,48 @@ async function simulateAnnouncementSendDb(id: string) {
   };
 }
 
+async function markAnnouncementFailedWithLogDb(input: {
+  announcementId: string;
+  segmentId: string | null;
+  mode: DeliveryMode;
+  details: string;
+}) {
+  const [, log] = await prisma.$transaction([
+    prisma.announcement.update({
+      where: { id: input.announcementId },
+      data: {
+        status: AnnouncementStatus.FAILED,
+        sentAt: null,
+      },
+    }),
+    prisma.deliveryLog.create({
+      data: {
+        announcementId: input.announcementId,
+        segmentId: input.segmentId,
+        mode: input.mode,
+        status: DeliveryStatus.FAILED,
+        deliveredCount: 0,
+        details: input.details,
+      },
+      include: {
+        announcement: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
+        segment: {
+          select: {
+            name: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  return serializeDeliveryLog(log);
+}
+
 async function sendAnnouncementNowDb(
   id: string,
   mode: DeliveryMode = DeliveryMode.MANUAL,
@@ -550,11 +766,23 @@ async function sendAnnouncementNowDb(
     recipientPhones: audience.recipientPhones.length,
   });
 
-  if (!audience.recipientPhones.length && !process.env.ULTRAMSG_DEFAULT_TO?.trim()) {
+  if (!audience.recipientPhones.length && !hasDefaultRecipient()) {
+    const message = buildNoRecipientsMessage();
+
     console.warn("[announcements] no recipients", {
       id,
       segment: audience.name,
     });
+
+    const log = await markAnnouncementFailedWithLogDb({
+      announcementId: announcement.id,
+      segmentId: audience.id,
+      mode,
+      details: `${buildAnnouncementMediaPrefix(announcement)}${message}`,
+    });
+    const loggedError = new AppError(message, 502) as DeliveryLoggedError;
+    loggedError.deliveryLog = log;
+    throw loggedError;
   }
 
   const result = await sendMessage({
@@ -576,55 +804,24 @@ async function sendAnnouncementNowDb(
   }).catch(async (error) => {
     const message =
       error instanceof Error ? error.message : "No se pudo enviar el comunicado.";
+    const details = `${buildAnnouncementMediaPrefix(announcement)}${
+      /sin destinatarios/i.test(message) ? buildNoRecipientsMessage() : message
+    }`;
+
     console.error("[announcements] failed", {
       id,
       mode,
       error: message,
     });
 
-    const [, log] = await prisma.$transaction([
-      prisma.announcement.update({
-        where: { id: announcement.id },
-        data: {
-          status: AnnouncementStatus.FAILED,
-          sentAt: null,
-        },
-        include: {
-          segment: {
-            select: {
-              id: true,
-              name: true,
-              estimatedUsers: true,
-            },
-          },
-        },
-      }),
-      prisma.deliveryLog.create({
-        data: {
-          announcementId: announcement.id,
-          segmentId: audience.id,
-          mode,
-          status: DeliveryStatus.FAILED,
-          deliveredCount: 0,
-          details: `${buildAnnouncementMediaPrefix(announcement)}${message}`,
-        },
-        include: {
-          announcement: {
-            select: {
-              id: true,
-              title: true,
-            },
-          },
-          segment: {
-            select: {
-              name: true,
-            },
-          },
-        },
-      }),
-    ]);
+    const log = await markAnnouncementFailedWithLogDb({
+      announcementId: announcement.id,
+      segmentId: audience.id,
+      mode,
+      details,
+    });
     const loggedError = new AppError(message, 502) as DeliveryLoggedError;
-    loggedError.deliveryLog = serializeDeliveryLog(log);
+    loggedError.deliveryLog = log;
     throw loggedError;
   });
 
@@ -952,11 +1149,53 @@ async function getDashboardDataDb(): Promise<DashboardData> {
   };
 }
 
-async function getSchedulerDataDb(): Promise<SchedulerData> {
-  const [scheduledAnnouncements, recentLogs] = await Promise.all([
-    prisma.announcement.findMany({
+async function getSchedulerStatusDb(): Promise<SchedulerStatus> {
+  const now = new Date();
+  const [pendingScheduled, overdueScheduled, lastRun] = await Promise.all([
+    prisma.announcement.count({
       where: {
         status: AnnouncementStatus.SCHEDULED,
+      },
+    }),
+    prisma.announcement.count({
+      where: {
+        status: AnnouncementStatus.SCHEDULED,
+        scheduledAt: {
+          lte: now,
+        },
+      },
+    }),
+    prisma.schedulerRun.findFirst({
+      orderBy: {
+        createdAt: "desc",
+      },
+    }),
+  ]);
+  const runSummary = buildSchedulerRunSummary(lastRun);
+
+  return {
+    schedulerEnabled: getSchedulerEnabled(),
+    workerExpected: getSchedulerEnabled(),
+    intervalSeconds: getSchedulerIntervalSeconds(),
+    lastRunAt: runSummary?.completedAt ?? runSummary?.startedAt ?? null,
+    lastRun: runSummary,
+    pendingScheduled,
+    overdueScheduled,
+    ...getServerClockStatus(now),
+    safeMode: isSafeMode(),
+    dryRun: isDryRunMode(),
+    ultramsgMock: isEnvTrue(process.env.ULTRAMSG_MOCK),
+    hasDefaultRecipient: hasDefaultRecipient(),
+  };
+}
+
+async function getSchedulerDataDb(): Promise<SchedulerData> {
+  const [scheduledAnnouncements, recentLogs, status] = await Promise.all([
+    prisma.announcement.findMany({
+      where: {
+        status: {
+          in: [AnnouncementStatus.SCHEDULED, AnnouncementStatus.SENDING],
+        },
       },
       orderBy: {
         scheduledAt: "asc",
@@ -972,11 +1211,13 @@ async function getSchedulerDataDb(): Promise<SchedulerData> {
       },
     }),
     getRecentLogs(8),
+    getSchedulerStatusDb(),
   ]);
 
   return {
     scheduledAnnouncements: scheduledAnnouncements.map(serializeAnnouncement),
     recentLogs,
+    status,
   };
 }
 
@@ -1056,49 +1297,44 @@ async function getMetricsDataDb(): Promise<MetricsData> {
   };
 }
 
-async function createFailedDeliveryLogDb(announcementId: string, error: unknown) {
-  const [, log] = await prisma.$transaction([
-    prisma.announcement.update({
-      where: { id: announcementId },
-      data: {
-        status: AnnouncementStatus.FAILED,
-        sentAt: null,
-      },
-    }),
-    prisma.deliveryLog.create({
-      data: {
-        announcementId,
-        mode: DeliveryMode.SCHEDULED,
-        status: DeliveryStatus.FAILED,
-        deliveredCount: 0,
-        details:
-          error instanceof Error ? error.message : "No se pudo enviar el comunicado programado.",
-      },
-      include: {
-        announcement: {
-          select: {
-            id: true,
-            title: true,
-          },
-        },
-        segment: {
-          select: {
-            name: true,
-          },
-        },
-      },
-    }),
-  ]);
+async function createFailedDeliveryLogDb(
+  announcementId: string,
+  error: unknown,
+  segmentId: string | null = null,
+) {
+  const message =
+    error instanceof Error ? error.message : "No se pudo enviar el comunicado programado.";
 
-  return serializeDeliveryLog(log);
+  return markAnnouncementFailedWithLogDb({
+    announcementId,
+    segmentId,
+    mode: DeliveryMode.SCHEDULED,
+    details: /sin destinatarios/i.test(message) ? buildNoRecipientsMessage() : message,
+  });
 }
 
-async function processScheduledAnnouncementsDb() {
+async function processScheduledAnnouncementsDb(
+  options: ProcessScheduledOptions = {},
+): Promise<SchedulerRunResult> {
+  const source = options.source ?? "worker";
+  const startedAt = new Date();
+  const run = await prisma.schedulerRun.create({
+    data: {
+      source,
+      startedAt,
+    },
+  });
+
+  console.log("[scheduler] tick", {
+    source,
+    startedAt: startedAt.toISOString(),
+  });
+
   const dueAnnouncements = await prisma.announcement.findMany({
     where: {
       status: AnnouncementStatus.SCHEDULED,
       scheduledAt: {
-        lte: new Date(),
+        lte: startedAt,
       },
     },
     orderBy: {
@@ -1106,31 +1342,158 @@ async function processScheduledAnnouncementsDb() {
     },
   });
 
+  console.log("[scheduler] due announcements found", {
+    source,
+    count: dueAnnouncements.length,
+  });
+
   const processed: DeliveryLogSummary[] = [];
+  let lockedCount = 0;
+  let skippedCount = 0;
 
   for (const announcement of dueAnnouncements) {
+    const lock = await prisma.announcement.updateMany({
+      where: {
+        id: announcement.id,
+        status: AnnouncementStatus.SCHEDULED,
+        scheduledAt: {
+          lte: startedAt,
+        },
+      },
+      data: {
+        status: AnnouncementStatus.SENDING,
+      },
+    });
+
+    if (lock.count !== 1) {
+      skippedCount += 1;
+      console.log("[scheduler] announcement skipped", {
+        announcementId: announcement.id,
+        reason: "lock_not_acquired",
+      });
+      continue;
+    }
+
+    lockedCount += 1;
+    console.log("[scheduler] announcement locked", {
+      announcementId: announcement.id,
+      title: announcement.title,
+    });
+
     try {
+      const audience = await resolveAudience(announcement.segmentId);
+
+      console.log("[scheduler] recipients loaded", {
+        announcementId: announcement.id,
+        segment: audience.name,
+        recipientPhones: audience.recipientPhones.length,
+        hasDefaultRecipient: hasDefaultRecipient(),
+      });
+
+      if (!audience.recipientPhones.length && !hasDefaultRecipient()) {
+        console.warn("[scheduler] no recipients", {
+          announcementId: announcement.id,
+          segment: audience.name,
+        });
+
+        processed.push(
+          await markAnnouncementFailedWithLogDb({
+            announcementId: announcement.id,
+            segmentId: audience.id,
+            mode: DeliveryMode.SCHEDULED,
+            details: `${buildAnnouncementMediaPrefix(announcement)}${buildNoRecipientsMessage()}`,
+          }),
+        );
+        continue;
+      }
+
+      console.log("[scheduler] announcement sending", {
+        announcementId: announcement.id,
+        hasImage: Boolean(announcement.imageUrl),
+        hasAudio: Boolean(announcement.audioUrl),
+      });
+
       const result = await sendAnnouncementNowDb(announcement.id, DeliveryMode.SCHEDULED);
       processed.push(result.log);
+
+      const outcome = classifyDeliveryLog(result.log);
+
+      if (outcome === "blocked") {
+        console.warn("[scheduler] blocked by safe mode", {
+          announcementId: announcement.id,
+        });
+      } else if (outcome === "simulated") {
+        console.log("[scheduler] dry-run simulated", {
+          announcementId: announcement.id,
+        });
+      } else if (outcome === "sent") {
+        console.log("[scheduler] sent real", {
+          announcementId: announcement.id,
+        });
+      }
     } catch (error) {
       console.error("[scheduler] fallo al enviar comunicado programado", {
         announcementId: announcement.id,
         title: announcement.title,
         error: error instanceof Error ? error.message : error,
       });
+      console.error("[scheduler] failed", {
+        announcementId: announcement.id,
+        error: error instanceof Error ? error.message : "unknown_error",
+      });
 
       processed.push(
         isDeliveryLoggedError(error) && error.deliveryLog
           ? error.deliveryLog
-          : await createFailedDeliveryLogDb(announcement.id, error),
+          : await createFailedDeliveryLogDb(announcement.id, error, announcement.segmentId),
       );
     }
   }
 
-  return {
-    processedCount: processed.filter((log) => log.status === "SUCCESS").length,
+  const completedAt = new Date();
+  const result = buildSchedulerRunResult({
+    source,
+    startedAt,
+    completedAt,
+    dueCount: dueAnnouncements.length,
+    lockedCount,
+    skippedCount,
     processed,
-  };
+  });
+
+  await prisma.schedulerRun.update({
+    where: {
+      id: run.id,
+    },
+    data: {
+      completedAt,
+      dueCount: result.dueCount,
+      lockedCount: result.lockedCount,
+      processedCount: result.processedCount,
+      sentCount: result.sentCount,
+      failedCount: result.failedCount,
+      blockedCount: result.blockedCount,
+      simulatedCount: result.simulatedCount,
+      skippedCount: result.skippedCount,
+      details: JSON.stringify({
+        processedLogIds: processed.map((log) => log.id),
+      }),
+    },
+  });
+
+  console.log("[scheduler] completed", {
+    source,
+    dueCount: result.dueCount,
+    lockedCount: result.lockedCount,
+    processedCount: result.processedCount,
+    sentCount: result.sentCount,
+    failedCount: result.failedCount,
+    blockedCount: result.blockedCount,
+    simulatedCount: result.simulatedCount,
+    skippedCount: result.skippedCount,
+  });
+
+  return result;
 }
 
 export async function listAnnouncements(): Promise<AnnouncementSummary[]> {
@@ -1233,13 +1596,19 @@ export async function getSchedulerData(): Promise<SchedulerData> {
   return withMockFallback(getSchedulerDataDb, mockStore.getSchedulerData);
 }
 
+export async function getSchedulerStatus(): Promise<SchedulerStatus> {
+  return withMockFallback(getSchedulerStatusDb, mockStore.getSchedulerStatus);
+}
+
 export async function getMetricsData(): Promise<MetricsData> {
   return withMockFallback(getMetricsDataDb, mockStore.getMetricsData);
 }
 
-export async function processScheduledAnnouncements() {
+export async function processScheduledAnnouncements(
+  options: ProcessScheduledOptions = {},
+): Promise<SchedulerRunResult> {
   return withMockFallback(
-    processScheduledAnnouncementsDb,
-    mockStore.processScheduledAnnouncements,
+    () => processScheduledAnnouncementsDb(options),
+    () => mockStore.processScheduledAnnouncements(options),
   );
 }

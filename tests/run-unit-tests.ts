@@ -10,6 +10,7 @@ import "./server/assistant-session.test";
 import "./server/auth.test";
 import "./server/middleware.test";
 import "./server/message-service.test";
+import "./server/scheduler-service.test";
 import "./server/intent-classifier.test";
 import "./server/conversation-router.test";
 import "./server/whatsapp-reply-style.test";

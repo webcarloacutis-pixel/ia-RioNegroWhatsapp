@@ -40,7 +40,10 @@ function m4aBytes() {
 }
 
 function createFile(bytes: Uint8Array, name: string, type: string) {
-  return new File([bytes], name, { type });
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+
+  return new File([buffer], name, { type });
 }
 
 test("uploadAnnouncementImage valida y simula Cloudinary sin usar credenciales reales", async () => {

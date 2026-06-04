@@ -28,6 +28,7 @@ import {
   updateAssistantContext,
   updateAssistantProfile,
 } from "@/server/assistant-session";
+import { analyzeCitizenAlertIntent } from "@/server/citizen-report-service";
 import { generateOpenAIText, getOpenAIModel, isOpenAIConfigured } from "@/server/openai-service";
 import { listAnnouncements, listKnowledgeEntries } from "@/server/panel-service";
 import {
@@ -1456,6 +1457,70 @@ function buildPlaceReply(placeMatches: OfficialPlace[], language: AssistantLangu
   return [copy.placeManyTitle, formatBulletList(placeMatches.map(formatPlace))].join("\n\n");
 }
 
+function sourceMatchesPrivateService(message: string, sourceText: string) {
+  const normalizedMessage = normalizeText(message);
+  const normalizedSource = normalizeText(sourceText);
+
+  if (/(veterinari|mascota|gato|perro)/.test(normalizedMessage)) {
+    return /(veterinari|mascota|gato|perro)/.test(normalizedSource);
+  }
+
+  if (/(farmacia|drogueria)/.test(normalizedMessage)) {
+    return /(farmacia|drogueria)/.test(normalizedSource);
+  }
+
+  if (/(taxi|grua|hotel|restaurante|clinica|hospital)/.test(normalizedMessage)) {
+    return /(taxi|grua|hotel|restaurante|clinica|hospital)/.test(normalizedSource);
+  }
+
+  return false;
+}
+
+function buildPrivateServiceFallback(message: string) {
+  const normalized = normalizeText(message);
+
+  if (/(veterinari|mascota|gato|perro)/.test(normalized)) {
+    const animal = /perro/.test(normalized)
+      ? "perro"
+      : /gato/.test(normalized)
+        ? "gato"
+        : "mascota";
+
+    return [
+      "No tengo informacion oficial sobre veterinarias 24 horas en este momento.",
+      "",
+      `Si tu ${animal} esta enfermo, te recomiendo contactar directamente una clinica veterinaria cercana o buscar un servicio veterinario de urgencias.`,
+    ].join("\n");
+  }
+
+  return "No tengo informacion oficial sobre eso en este momento.";
+}
+
+function buildPrivateServiceReply(message: string, knowledgeEntries: KnowledgeEntrySummary[]) {
+  const relevantEntries = knowledgeEntries.filter((entry) =>
+    sourceMatchesPrivateService(message, `${entry.question} ${entry.answer} ${entry.category}`),
+  );
+  const options = relevantEntries
+    .map((entry) =>
+      [entry.question?.trim(), entry.answer?.trim()]
+        .filter(Boolean)
+        .join(". "),
+    )
+    .filter((entry): entry is string => Boolean(entry));
+
+  if (!options.length) {
+    return buildPrivateServiceFallback(message);
+  }
+
+  return [
+    "Estas son las opciones oficiales que tengo registradas:",
+    "",
+    options.slice(0, 3).join("\n"),
+    "",
+    "Te recomiendo llamar o verificar disponibilidad antes de ir.",
+  ].join("\n");
+}
+
 function buildHoursReply(placeMatches: OfficialPlace[], language: AssistantLanguage) {
   const copy = getCopy(language);
   const match = placeMatches[0];
@@ -1984,6 +2049,15 @@ function buildDeterministicReply(
   retrieval: RetrievalBundle,
 ): DraftReplyResult {
   const copy = getCopy(intent.language);
+  const alertIntent = analyzeCitizenAlertIntent({ text: message });
+
+  if (alertIntent.intent === "PRIVATE_SERVICE_QUERY") {
+    return {
+      reply: buildPrivateServiceReply(message, retrieval.knowledgeEntries),
+      route: "KNOWLEDGE_BASE",
+      usedOpenAI: false,
+    };
+  }
 
   if (intent.thanksIntent) {
     return {
@@ -2055,6 +2129,14 @@ function buildDeterministicReply(
   if (retrieval.placeMatches.length && (intent.locationIntent || intent.topic === "UNKNOWN")) {
     return {
       reply: buildPlaceReply(retrieval.placeMatches, intent.language),
+      route: "KNOWLEDGE_BASE",
+      usedOpenAI: false,
+    };
+  }
+
+  if (intent.topic === "UNKNOWN" && retrieval.knowledgeEntries.length) {
+    return {
+      reply: retrieval.knowledgeEntries[0].answer,
       route: "KNOWLEDGE_BASE",
       usedOpenAI: false,
     };
@@ -2137,11 +2219,16 @@ function buildDeterministicReply(
 }
 
 function shouldUseOpenAI(
+  message: string,
   intent: ResolvedIntent,
   retrieval: RetrievalBundle,
   allowOpenAI: boolean,
 ) {
   if (!allowOpenAI || !isOpenAIConfigured()) {
+    return false;
+  }
+
+  if (analyzeCitizenAlertIntent({ text: message }).intent === "PRIVATE_SERVICE_QUERY") {
     return false;
   }
 
@@ -2184,7 +2271,7 @@ async function resolveReply(input: {
     input.retrieval,
   );
 
-  if (!shouldUseOpenAI(input.intent, input.retrieval, input.allowOpenAI)) {
+  if (!shouldUseOpenAI(input.message, input.intent, input.retrieval, input.allowOpenAI)) {
     return deterministic;
   }
 

@@ -130,6 +130,53 @@ export type DeliveryLogSummary = {
   createdAt: string;
 };
 
+export type SchedulerRunSummary = {
+  id: string | null;
+  source: string;
+  startedAt: string | null;
+  completedAt: string | null;
+  dueCount: number;
+  lockedCount: number;
+  processedCount: number;
+  sentCount: number;
+  failedCount: number;
+  blockedCount: number;
+  simulatedCount: number;
+  skippedCount: number;
+  details: string | null;
+};
+
+export type SchedulerRunResult = {
+  source: string;
+  startedAt: string;
+  completedAt: string;
+  dueCount: number;
+  lockedCount: number;
+  processedCount: number;
+  sentCount: number;
+  failedCount: number;
+  blockedCount: number;
+  simulatedCount: number;
+  skippedCount: number;
+  processed: DeliveryLogSummary[];
+};
+
+export type SchedulerStatus = {
+  schedulerEnabled: boolean;
+  workerExpected: boolean;
+  intervalSeconds: number;
+  lastRunAt: string | null;
+  lastRun: SchedulerRunSummary | null;
+  pendingScheduled: number;
+  overdueScheduled: number;
+  serverTimeUtc: string;
+  serverTimeBogota: string;
+  safeMode: boolean;
+  dryRun: boolean;
+  ultramsgMock: boolean;
+  hasDefaultRecipient: boolean;
+};
+
 export type DashboardData = {
   stats: {
     users: number;
@@ -152,6 +199,7 @@ export type DashboardData = {
 export type SchedulerData = {
   scheduledAnnouncements: AnnouncementSummary[];
   recentLogs: DeliveryLogSummary[];
+  status: SchedulerStatus;
 };
 
 export type MetricsData = {
@@ -264,6 +312,12 @@ export type QaScenario = {
   input: string;
   expectedBehavior: string;
   expectedIntent?: string;
+  expectedShouldCreateAlert?: boolean;
+  expectedAlertCategory?: string;
+  expectedAlertPriority?: CitizenReportPriority;
+  expectedAlertLocation?: string;
+  expectedAskedConfirmation?: boolean;
+  expectedUsedKnowledgeBase?: boolean;
   expectedKeywords?: string[];
   acceptableKeywords?: string[][];
   forbiddenKeywords?: string[];
@@ -300,6 +354,13 @@ export type QaScenarioResult = {
   input: string;
   botReply: string;
   expectedBehavior: string;
+  detectedIntent?: string;
+  shouldCreateAlert?: boolean;
+  alertCategory?: string | null;
+  alertPriority?: CitizenReportPriority | null;
+  extractedLocation?: string | null;
+  usedKnowledgeBase?: boolean;
+  askedConfirmation?: boolean;
   expectedKeywords: string[];
   forbiddenKeywords: string[];
   matchedKeywords: string[];

@@ -45,6 +45,56 @@ function userAskedForList(userMessage: string) {
   );
 }
 
+function buildPrivateServiceUnknownReply(userMessage: string) {
+  const normalized = normalizeText(userMessage);
+
+  if (/(veterinari|mascota|gato|perro)/.test(normalized)) {
+    const animal = normalized.includes("gato")
+      ? "gato"
+      : normalized.includes("perro")
+        ? "perro"
+        : "mascota";
+
+    return [
+      "No tengo informacion oficial sobre veterinarias 24 horas en este momento.",
+      "",
+      `Si tu ${animal} esta enfermo, te recomiendo contactar directamente una clinica veterinaria cercana o buscar un servicio veterinario de urgencias.`,
+    ].join("\n");
+  }
+
+  if (/(farmacia|drogueria|taxi|grua|hotel|restaurante|clinica|hospital)/.test(normalized)) {
+    return UNKNOWN_OFFICIAL_DATA_REPLY;
+  }
+
+  return null;
+}
+
+function sourceMatchesPrivateServiceQuery(
+  userMessage: string,
+  retrievedKnowledge: Array<{ title?: string; type?: string } | string>,
+) {
+  const normalizedUserMessage = normalizeText(userMessage);
+  const sourceText = normalizeText(
+    retrievedKnowledge
+      .map((item) => (typeof item === "string" ? item : `${item.title ?? ""} ${item.type ?? ""}`))
+      .join(" "),
+  );
+
+  if (/(veterinari|mascota|gato|perro)/.test(normalizedUserMessage)) {
+    return /(veterinari|mascota|gato|perro)/.test(sourceText);
+  }
+
+  if (/(farmacia|drogueria)/.test(normalizedUserMessage)) {
+    return /(farmacia|drogueria)/.test(sourceText);
+  }
+
+  if (/(taxi|grua|hotel|restaurante|clinica|hospital)/.test(normalizedUserMessage)) {
+    return /(taxi|grua|hotel|restaurante|clinica|hospital)/.test(sourceText);
+  }
+
+  return false;
+}
+
 function isSimpleIntent(intent: ConversationalIntent, userMessage: string) {
   return (
     ["GREETING", "THANKS", "OUT_OF_SCOPE", "ABSURD_OR_UNKNOWN", "AMBIGUOUS"].includes(intent) ||
@@ -255,10 +305,26 @@ export function validateAnswerGrounding(input: {
   const normalizedUserMessage = normalizeText(input.userMessage);
   const normalizedAnswer = normalizeText(input.answer);
   const hasKnowledge = input.retrievedKnowledge.length > 0;
+  const hasKnowledgeBaseSource = input.retrievedKnowledge.some((item) => {
+    if (typeof item === "string") return true;
+    return item.type === "knowledge";
+  });
+  const privateServiceReply = buildPrivateServiceUnknownReply(input.userMessage);
+
+  if (
+    privateServiceReply &&
+    (!hasKnowledgeBaseSource || !sourceMatchesPrivateServiceQuery(input.userMessage, input.retrievedKnowledge))
+  ) {
+    return {
+      answer: privateServiceReply,
+      blocked: true,
+      reason: "Consulta privada sin fuente oficial recuperada.",
+    };
+  }
 
   if (input.officialDataRequested && !hasKnowledge) {
     return {
-      answer: UNKNOWN_OFFICIAL_DATA_REPLY,
+      answer: privateServiceReply ?? UNKNOWN_OFFICIAL_DATA_REPLY,
       blocked: true,
       reason: "La pregunta pide dato oficial, pero no hay fuente recuperada.",
     };

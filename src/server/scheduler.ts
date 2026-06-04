@@ -3,7 +3,18 @@ import "dotenv/config";
 import { getErrorMessage } from "@/lib/errors";
 import { processScheduledAnnouncements } from "@/server/panel-service";
 
-const POLL_INTERVAL_MS = 15_000;
+function getSchedulerIntervalMs() {
+  const configured = Number(process.env.SCHEDULER_INTERVAL_SECONDS);
+  const seconds = Number.isInteger(configured) && configured > 0 ? configured : 15;
+
+  return seconds * 1000;
+}
+
+function isSchedulerEnabled() {
+  return process.env.SCHEDULER_ENABLED !== "false";
+}
+
+const POLL_INTERVAL_MS = getSchedulerIntervalMs();
 let lastLoggedError = "";
 let lastLoggedAt = 0;
 
@@ -23,17 +34,19 @@ function normalizeSchedulerError(error: unknown) {
 
 async function tick() {
   try {
-    const result = await processScheduledAnnouncements();
+    const result = await processScheduledAnnouncements({ source: "worker" });
     lastLoggedError = "";
     lastLoggedAt = 0;
 
-    if (result.processedCount > 0) {
-      console.log(
-        `[scheduler] ${result.processedCount} comunicado(s) enviados en este ciclo.`,
-      );
-    } else {
-      console.log("[scheduler] Sin comunicados pendientes para enviar.");
-    }
+    console.log("[scheduler] tick summary", {
+      dueCount: result.dueCount,
+      processedCount: result.processedCount,
+      sentCount: result.sentCount,
+      failedCount: result.failedCount,
+      blockedCount: result.blockedCount,
+      simulatedCount: result.simulatedCount,
+      skippedCount: result.skippedCount,
+    });
   } catch (error) {
     const message = normalizeSchedulerError(error);
     const now = Date.now();
@@ -47,12 +60,21 @@ async function tick() {
   }
 }
 
-console.log(
-  `[scheduler] Worker iniciado. Revisando comunicados cada ${POLL_INTERVAL_MS / 1000} segundos.`,
-);
+console.log("[scheduler] started", {
+  enabled: isSchedulerEnabled(),
+  intervalSeconds: POLL_INTERVAL_MS / 1000,
+});
 
-void tick();
-const interval = setInterval(() => void tick(), POLL_INTERVAL_MS);
+let interval: NodeJS.Timeout;
+
+if (isSchedulerEnabled()) {
+  void tick();
+  interval = setInterval(() => void tick(), POLL_INTERVAL_MS);
+} else {
+  interval = setInterval(() => {
+    console.log("[scheduler] disabled by SCHEDULER_ENABLED=false");
+  }, 60_000);
+}
 
 function shutdown(signal: string) {
   console.log(`[scheduler] Deteniendo worker por senal ${signal}.`);

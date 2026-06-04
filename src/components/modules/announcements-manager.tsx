@@ -90,8 +90,21 @@ const ALLOWED_AUDIO_EXTENSIONS = new Set(["mp3", "m4a", "ogg", "oga", "wav", "we
 function getAnnouncementStatusTone(status: AnnouncementSummary["status"]) {
   if (status === "SENT" || status === "SENT_REAL") return "success";
   if (status === "FAILED" || status === "BLOCKED_BY_SAFE_MODE") return "danger";
+  if (status === "SENDING") return "info";
   if (status === "SENT_SIMULATED") return "warning";
   return "warning";
+}
+
+function getAnnouncementStatusNotice(status: AnnouncementSummary["status"]) {
+  if (status === "BLOCKED_BY_SAFE_MODE") {
+    return "No se envio real porque WHATSAPP_SAFE_MODE esta activo.";
+  }
+
+  if (status === "FAILED") {
+    return "Si fallo por destinatarios, revisa que el segmento tenga numeros o que ULTRAMSG_DEFAULT_TO este configurado.";
+  }
+
+  return null;
 }
 
 export function AnnouncementsManager({
@@ -731,6 +744,12 @@ export function AnnouncementsManager({
                   </div>
                 ) : null}
 
+                {getAnnouncementStatusNotice(announcement.status) ? (
+                  <div className="mt-4 rounded-lg border border-border bg-muted/20 p-3 text-sm font-semibold text-foreground">
+                    {getAnnouncementStatusNotice(announcement.status)}
+                  </div>
+                ) : null}
+
                 <div className="mt-4 flex flex-wrap gap-4 text-sm text-muted">
                   <span>{formatDateTime(announcement.scheduledAt)}</span>
                   <span>-</span>
@@ -752,6 +771,7 @@ export function AnnouncementsManager({
                     variant="ghost"
                     className="gap-2"
                     onClick={() => handleSimulate(announcement.id)}
+                    disabled={announcement.status === "SENDING"}
                   >
                     <Sparkles className="size-4" />
                     Simular envio
@@ -760,6 +780,7 @@ export function AnnouncementsManager({
                     variant="primary"
                     className="gap-2"
                     onClick={() => handleSendNow(announcement)}
+                    disabled={announcement.status === "SENDING"}
                   >
                     <Send className="size-4" />
                     Enviar ahora

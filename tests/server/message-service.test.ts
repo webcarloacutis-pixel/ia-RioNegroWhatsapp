@@ -355,40 +355,25 @@ test("sendMessage bloquea envio real que supera maximo de destinatarios", async 
   }
 });
 
-test("sendMessage bloquea envio real basado solo en ULTRAMSG_DEFAULT_TO", async () => {
-  const previousDryRun = process.env.WHATSAPP_DRY_RUN;
-  const previousSafeMode = process.env.WHATSAPP_SAFE_MODE;
-  const previousToken = process.env.ULTRAMSG_TOKEN;
-  const previousBaseUrl = process.env.ULTRAMSG_BASE_URL;
+test("ULTRAMSG_DEFAULT_TO cuenta como destinatario explicito para envio real", () => {
   const previousDefaultTo = process.env.ULTRAMSG_DEFAULT_TO;
 
-  process.env.WHATSAPP_DRY_RUN = "false";
-  process.env.WHATSAPP_SAFE_MODE = "false";
-  process.env.ULTRAMSG_TOKEN = "token-test";
-  process.env.ULTRAMSG_BASE_URL = "https://api.ultramsg.com/instance-test";
   process.env.ULTRAMSG_DEFAULT_TO = "+573001111111";
 
   try {
-    await assert.rejects(
-      () =>
-        sendMessage({
-          message: "Comunicado real sin destinatarios explicitos",
-          segment: {
-            id: "seg-default",
-            name: "Segmento sin telefonos",
-            estimatedUsers: 1,
-            recipientPhones: [],
-          },
-          scheduledAt: new Date("2026-04-20T10:00:00.000Z"),
-          mode: "MANUAL",
-        }),
-      /destinatarios explicitos/i,
+    assert.equal(
+      messageServiceInternals.hasExplicitMassMessageRecipients({
+        segment: {
+          id: "seg-default",
+          name: "Segmento sin telefonos",
+          estimatedUsers: 1,
+          recipientPhones: [],
+        },
+        to: "",
+      }),
+      true,
     );
   } finally {
-    process.env.WHATSAPP_DRY_RUN = previousDryRun;
-    process.env.WHATSAPP_SAFE_MODE = previousSafeMode;
-    process.env.ULTRAMSG_TOKEN = previousToken;
-    process.env.ULTRAMSG_BASE_URL = previousBaseUrl;
     process.env.ULTRAMSG_DEFAULT_TO = previousDefaultTo;
   }
 });

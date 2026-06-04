@@ -242,7 +242,11 @@ function getMaxRealMassMessageRecipients() {
 }
 
 function hasExplicitMassMessageRecipients(input: Pick<SendMessageInput, "segment" | "to">) {
-  return Boolean(input.to?.trim() || input.segment?.recipientPhones?.length);
+  return Boolean(
+    input.to?.trim() ||
+      input.segment?.recipientPhones?.length ||
+      getUltraMsgDefaultTo(),
+  );
 }
 
 function assertRealMassMessagePolicy(input: Pick<SendMessageInput, "segment" | "to"> & {
@@ -944,6 +948,8 @@ export const messageServiceInternals = {
   buildImageCaption,
   canResolveUltraMsgBaseUrl,
   getUltraMsgBaseUrl,
+  getUltraMsgDefaultTo,
+  hasExplicitMassMessageRecipients,
   isUltraMsgConfigured,
   isWhatsAppDryRunMode,
   isWhatsAppSafeMode,

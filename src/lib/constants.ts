@@ -12,11 +12,13 @@ export const ANNOUNCEMENT_TYPE_VALUES = DEFAULT_ANNOUNCEMENT_TYPES;
 export const ANNOUNCEMENT_STATUS_VALUES = [
   "DRAFT",
   "SCHEDULED",
+  "SENDING",
   "SENT",
   "SENT_REAL",
   "SENT_SIMULATED",
   "BLOCKED_BY_SAFE_MODE",
   "FAILED",
+  "CANCELLED",
 ] as const;
 
 export const DELIVERY_MODE_VALUES = ["DEMO", "MANUAL", "SCHEDULED"] as const;
@@ -93,11 +95,13 @@ export const STATUS_LABELS: Record<
 > = {
   DRAFT: "Borrador",
   SCHEDULED: "Programado",
+  SENDING: "Enviando",
   SENT: "Enviado",
   SENT_REAL: "Enviado real",
   SENT_SIMULATED: "Simulado",
   BLOCKED_BY_SAFE_MODE: "Bloqueado por modo seguro",
   FAILED: "Fallido",
+  CANCELLED: "Cancelado",
 };
 
 export const DELIVERY_MODE_LABELS: Record<

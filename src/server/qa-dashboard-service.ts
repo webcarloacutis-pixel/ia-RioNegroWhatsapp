@@ -17,6 +17,8 @@ import type {
 } from "@/lib/types";
 import type { qaScenarioInputSchema, qaScenarioPatchSchema } from "@/lib/validations";
 import { chatWithAssistant, resetConversation } from "@/server/rionegro-assistant";
+import { analyzeCitizenAlertIntent } from "@/server/citizen-report-service";
+import { analyzeConversationIntent } from "@/server/conversation-router";
 
 type QaScenarioInput = z.infer<typeof qaScenarioInputSchema>;
 type QaScenarioPatch = z.infer<typeof qaScenarioPatchSchema>;
@@ -398,7 +400,14 @@ export function evaluateScenarioResult(input: {
   runId?: string;
   createdAt?: string;
   detectedIntent?: string;
-  metadata?: Record<string, unknown>;
+  metadata?: {
+    shouldCreateAlert?: boolean;
+    alertCategory?: string | null;
+    alertPriority?: string | null;
+    extractedLocation?: string | null;
+    usedKnowledgeBase?: boolean;
+    askedConfirmation?: boolean;
+  };
 }): QaScenarioResult {
   const runId = input.runId ?? `qa-run-${randomUUID()}`;
   const createdAt = input.createdAt ?? nowIso();
@@ -447,9 +456,82 @@ export function evaluateScenarioResult(input: {
     ? includesText(input.botReply, input.scenario.mustPreserveTopic)
     : true;
   const differences: string[] = [];
+  const detectedIntent = input.detectedIntent;
+  const shouldCreateAlert = input.metadata?.shouldCreateAlert;
+  const alertCategory = input.metadata?.alertCategory ?? null;
+  const alertPriority = input.metadata?.alertPriority ?? null;
+  const extractedLocation = input.metadata?.extractedLocation ?? null;
+  const usedKnowledgeBase = input.metadata?.usedKnowledgeBase;
+  const askedConfirmation = input.metadata?.askedConfirmation;
 
   if (missingKeywords.length) {
     differences.push(`Faltan palabras esperadas: ${missingKeywords.join(", ")}.`);
+  }
+
+  if (input.scenario.expectedIntent && detectedIntent !== input.scenario.expectedIntent) {
+    differences.push(
+      `Intencion esperada ${input.scenario.expectedIntent}, detectada ${detectedIntent ?? "sin dato"}.`,
+    );
+  }
+
+  if (
+    input.scenario.expectedShouldCreateAlert !== undefined &&
+    shouldCreateAlert !== input.scenario.expectedShouldCreateAlert
+  ) {
+    differences.push(
+      `shouldCreateAlert esperado ${input.scenario.expectedShouldCreateAlert}, detectado ${String(
+        shouldCreateAlert,
+      )}.`,
+    );
+  }
+
+  if (
+    input.scenario.expectedAlertCategory &&
+    !includesText(alertCategory ?? "", input.scenario.expectedAlertCategory)
+  ) {
+    differences.push(
+      `Categoria esperada ${input.scenario.expectedAlertCategory}, detectada ${alertCategory ?? "sin dato"}.`,
+    );
+  }
+
+  if (
+    input.scenario.expectedAlertPriority &&
+    alertPriority !== input.scenario.expectedAlertPriority
+  ) {
+    differences.push(
+      `Prioridad esperada ${input.scenario.expectedAlertPriority}, detectada ${alertPriority ?? "sin dato"}.`,
+    );
+  }
+
+  if (
+    input.scenario.expectedAlertLocation &&
+    !includesText(extractedLocation ?? "", input.scenario.expectedAlertLocation)
+  ) {
+    differences.push(
+      `Ubicacion esperada ${input.scenario.expectedAlertLocation}, detectada ${extractedLocation ?? "sin dato"}.`,
+    );
+  }
+
+  if (
+    input.scenario.expectedAskedConfirmation !== undefined &&
+    askedConfirmation !== input.scenario.expectedAskedConfirmation
+  ) {
+    differences.push(
+      `askedConfirmation esperado ${input.scenario.expectedAskedConfirmation}, detectado ${String(
+        askedConfirmation,
+      )}.`,
+    );
+  }
+
+  if (
+    input.scenario.expectedUsedKnowledgeBase !== undefined &&
+    usedKnowledgeBase !== input.scenario.expectedUsedKnowledgeBase
+  ) {
+    differences.push(
+      `usedKnowledgeBase esperado ${input.scenario.expectedUsedKnowledgeBase}, detectado ${String(
+        usedKnowledgeBase,
+      )}.`,
+    );
   }
 
   if (missingAcceptableGroups.length) {
@@ -538,6 +620,19 @@ export function evaluateScenarioResult(input: {
     detectedForbiddenKeywords.length ||
       forbiddenConcepts.matched.length ||
       !input.botReply.trim() ||
+      (input.scenario.expectedIntent !== undefined && detectedIntent !== input.scenario.expectedIntent) ||
+      (input.scenario.expectedShouldCreateAlert !== undefined &&
+        shouldCreateAlert !== input.scenario.expectedShouldCreateAlert) ||
+      (input.scenario.expectedAlertCategory !== undefined &&
+        !includesText(alertCategory ?? "", input.scenario.expectedAlertCategory)) ||
+      (input.scenario.expectedAlertPriority !== undefined &&
+        alertPriority !== input.scenario.expectedAlertPriority) ||
+      (input.scenario.expectedAlertLocation !== undefined &&
+        !includesText(extractedLocation ?? "", input.scenario.expectedAlertLocation)) ||
+      (input.scenario.expectedAskedConfirmation !== undefined &&
+        askedConfirmation !== input.scenario.expectedAskedConfirmation) ||
+      (input.scenario.expectedUsedKnowledgeBase !== undefined &&
+        usedKnowledgeBase !== input.scenario.expectedUsedKnowledgeBase) ||
       missingKeywords.length ||
       missingAcceptableGroups.length ||
       requiredConcepts.missing.length ||
@@ -565,6 +660,13 @@ export function evaluateScenarioResult(input: {
     input: input.scenario.input,
     botReply: input.botReply,
     expectedBehavior: input.scenario.expectedBehavior,
+    detectedIntent,
+    shouldCreateAlert,
+    alertCategory,
+    alertPriority: alertPriority as QaScenarioResult["alertPriority"],
+    extractedLocation,
+    usedKnowledgeBase,
+    askedConfirmation,
     expectedKeywords,
     forbiddenKeywords,
     matchedKeywords,
@@ -588,6 +690,8 @@ export function evaluateQaScenarioResult(input: {
   responseTimeMs: number;
   runId?: string;
   createdAt?: string;
+  detectedIntent?: string;
+  metadata?: Parameters<typeof evaluateScenarioResult>[0]["metadata"];
 }) {
   return evaluateScenarioResult({
     scenario: input.scenario,
@@ -595,6 +699,8 @@ export function evaluateQaScenarioResult(input: {
     responseTimeMs: input.responseTimeMs,
     runId: input.runId,
     createdAt: input.createdAt,
+    detectedIntent: input.detectedIntent,
+    metadata: input.metadata,
   });
 }
 
@@ -778,6 +884,7 @@ async function runScenario(scenario: QaScenario, runId: string, createdAt: strin
         .filter(Boolean);
   const steps = messages.length ? messages : [scenario.input];
   let reply = "";
+  let usedKnowledgeBase = false;
 
   resetConversation(sessionId);
 
@@ -789,6 +896,10 @@ async function runScenario(scenario: QaScenario, runId: string, createdAt: strin
     for (const message of steps) {
       const result = await chatWithAssistant(sessionId, message);
       reply = result.reply;
+      usedKnowledgeBase =
+        usedKnowledgeBase ||
+        result.meta.route === "KNOWLEDGE_BASE" ||
+        result.meta.sources.length > 0;
     }
   } catch (error) {
     reply = `QA execution error: ${error instanceof Error ? error.message : "unknown_error"}`;
@@ -800,12 +911,24 @@ async function runScenario(scenario: QaScenario, runId: string, createdAt: strin
     }
   }
 
+  const alertAnalysis = analyzeCitizenAlertIntent({ text: scenario.input });
+  const conversationAnalysis = analyzeConversationIntent({ userMessage: scenario.input });
+
   return evaluateQaScenarioResult({
     scenario,
     reply,
     responseTimeMs: Date.now() - startedAt,
     runId,
     createdAt,
+    detectedIntent: alertAnalysis.intent,
+    metadata: {
+      shouldCreateAlert: alertAnalysis.shouldCreateAlert,
+      alertCategory: alertAnalysis.category ?? null,
+      alertPriority: alertAnalysis.priority ?? null,
+      extractedLocation: alertAnalysis.location ?? null,
+      usedKnowledgeBase: usedKnowledgeBase || conversationAnalysis.needsKnowledgeBase,
+      askedConfirmation: alertAnalysis.shouldAskConfirmation || conversationAnalysis.needsClarifyingQuestion,
+    },
   });
 }
 

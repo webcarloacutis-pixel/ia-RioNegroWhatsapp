@@ -8,7 +8,10 @@ import {
   normalizeAnnouncementType,
 } from "@/lib/constants";
 import { AppError } from "@/lib/errors";
-import { parseBogotaDateTimeLocalToUtcDate } from "@/lib/format";
+import {
+  formatDateTimeForBogotaDisplay,
+  parseBogotaDateTimeLocalToUtcDate,
+} from "@/lib/format";
 import {
   buildOfficialAnnouncements,
   buildOfficialKnowledgeEntries,
@@ -21,6 +24,9 @@ import type {
   KnowledgeEntrySummary,
   MetricsData,
   SchedulerData,
+  SchedulerRunResult,
+  SchedulerRunSummary,
+  SchedulerStatus,
   SegmentSummary,
 } from "@/lib/types";
 import { sendMessage } from "@/server/messageService";
@@ -58,6 +64,10 @@ type KnowledgeInput = {
   question: string;
   answer: string;
   category: string;
+};
+
+type ProcessScheduledOptions = {
+  source?: "worker" | "admin" | "cron";
 };
 
 type MockSegment = {
@@ -118,11 +128,29 @@ type MockDeliveryLog = {
   createdAt: Date;
 };
 
+type MockSchedulerRun = {
+  id: string;
+  source: string;
+  startedAt: Date;
+  completedAt: Date | null;
+  dueCount: number;
+  lockedCount: number;
+  processedCount: number;
+  sentCount: number;
+  failedCount: number;
+  blockedCount: number;
+  simulatedCount: number;
+  skippedCount: number;
+  details: string | null;
+  createdAt: Date;
+};
+
 type MockState = {
   segments: MockSegment[];
   announcements: MockAnnouncement[];
   knowledgeEntries: MockKnowledgeEntry[];
   deliveryLogs: MockDeliveryLog[];
+  schedulerRuns: MockSchedulerRun[];
 };
 
 const globalForMockStore = globalThis as unknown as {
@@ -243,6 +271,125 @@ function buildAnnouncementMediaPrefix(input: {
   return parts.length ? `${parts.join("")} ` : "";
 }
 
+function isEnvTrue(value: string | undefined) {
+  return value === "true";
+}
+
+function getSchedulerEnabled() {
+  return process.env.SCHEDULER_ENABLED !== "false";
+}
+
+function getSchedulerIntervalSeconds() {
+  const configured = Number(process.env.SCHEDULER_INTERVAL_SECONDS);
+
+  return Number.isInteger(configured) && configured > 0 ? configured : 15;
+}
+
+function hasDefaultRecipient() {
+  return Boolean(process.env.ULTRAMSG_DEFAULT_TO?.trim());
+}
+
+function isDryRunMode() {
+  return (
+    isEnvTrue(process.env.WHATSAPP_DRY_RUN) ||
+    isEnvTrue(process.env.ULTRAMSG_MOCK) ||
+    isEnvTrue(process.env.SIMULATION_MODE)
+  );
+}
+
+function isSafeMode() {
+  return isEnvTrue(process.env.WHATSAPP_SAFE_MODE);
+}
+
+function buildNoRecipientsMessage() {
+  return "NO_RECIPIENTS: No se envio porque no hay destinatarios en el segmento ni ULTRAMSG_DEFAULT_TO.";
+}
+
+function serializeSchedulerRun(run: MockSchedulerRun | null): SchedulerRunSummary | null {
+  if (!run) {
+    return null;
+  }
+
+  return {
+    id: run.id,
+    source: run.source,
+    startedAt: run.startedAt.toISOString(),
+    completedAt: run.completedAt?.toISOString() ?? null,
+    dueCount: run.dueCount,
+    lockedCount: run.lockedCount,
+    processedCount: run.processedCount,
+    sentCount: run.sentCount,
+    failedCount: run.failedCount,
+    blockedCount: run.blockedCount,
+    simulatedCount: run.simulatedCount,
+    skippedCount: run.skippedCount,
+    details: run.details,
+  };
+}
+
+function classifyDeliveryLog(log: DeliveryLogSummary) {
+  const details = log.details ?? "";
+
+  if (details.includes("[BLOCKED_BY_SAFE_MODE]")) {
+    return "blocked" as const;
+  }
+
+  if (details.includes("[SENT_SIMULATED]")) {
+    return "simulated" as const;
+  }
+
+  if (details.includes("[SENT_REAL]")) {
+    return "sent" as const;
+  }
+
+  if (log.status === "FAILED") {
+    return "failed" as const;
+  }
+
+  return "sent" as const;
+}
+
+function buildSchedulerRunResult(input: {
+  source: string;
+  startedAt: Date;
+  completedAt: Date;
+  dueCount: number;
+  lockedCount: number;
+  skippedCount: number;
+  processed: DeliveryLogSummary[];
+}): SchedulerRunResult {
+  const result: SchedulerRunResult = {
+    source: input.source,
+    startedAt: input.startedAt.toISOString(),
+    completedAt: input.completedAt.toISOString(),
+    dueCount: input.dueCount,
+    lockedCount: input.lockedCount,
+    processedCount: input.processed.length,
+    sentCount: 0,
+    failedCount: 0,
+    blockedCount: 0,
+    simulatedCount: 0,
+    skippedCount: input.skippedCount,
+    processed: input.processed,
+  };
+
+  for (const log of input.processed) {
+    const outcome = classifyDeliveryLog(log);
+
+    if (outcome === "sent") {
+      result.sentCount += 1;
+    } else if (outcome === "simulated") {
+      result.simulatedCount += 1;
+    } else if (outcome === "blocked") {
+      result.blockedCount += 1;
+    } else {
+      result.failedCount += 1;
+    }
+  }
+
+  return result;
+}
+
 function initializeState(): MockState {
   const now = new Date();
 
@@ -342,6 +489,7 @@ function initializeState(): MockState {
     announcements,
     knowledgeEntries,
     deliveryLogs,
+    schedulerRuns: [],
   };
 }
 
@@ -351,6 +499,16 @@ function getState() {
   }
 
   return globalForMockStore.__rionegroMockStore;
+}
+
+export function resetMockStoreForTests() {
+  globalForMockStore.__rionegroMockStore = {
+    segments: [],
+    announcements: [],
+    knowledgeEntries: [],
+    deliveryLogs: [],
+    schedulerRuns: [],
+  };
 }
 
 function getSegmentById(segmentId: string | null) {
@@ -583,6 +741,7 @@ export async function deleteAnnouncement(id: string) {
 export async function simulateAnnouncementSend(id: string) {
   const announcement = getAnnouncementOrThrow(id);
   const audience = await resolveAudience(announcement.segmentId);
+
   const result = await sendMessage({
     title: announcement.title,
     message: announcement.message,
@@ -622,6 +781,24 @@ export async function sendAnnouncementNow(
   const announcement = getAnnouncementOrThrow(id);
 
   const audience = await resolveAudience(announcement.segmentId);
+
+  if (!audience.recipientPhones.length && !hasDefaultRecipient() && mode !== "DEMO") {
+    const message = buildNoRecipientsMessage();
+
+    announcement.status = "FAILED" as AnnouncementStatus;
+    announcement.sentAt = null;
+    announcement.updatedAt = new Date();
+    createLog({
+      announcementId: announcement.id,
+      segmentId: audience.id,
+      mode,
+      status: "FAILED",
+      deliveredCount: 0,
+      details: `${buildAnnouncementMediaPrefix(announcement)}${message}`,
+    });
+    throw new AppError(message, 502);
+  }
+
   const result = await sendMessage({
     title: announcement.title,
     message: announcement.message,
@@ -641,6 +818,9 @@ export async function sendAnnouncementNow(
   }).catch((error) => {
     const message =
       error instanceof Error ? error.message : "No se pudo enviar el comunicado.";
+    const details = `${buildAnnouncementMediaPrefix(announcement)}${
+      /sin destinatarios/i.test(message) ? buildNoRecipientsMessage() : message
+    }`;
     announcement.status = "FAILED" as AnnouncementStatus;
     announcement.sentAt = null;
     announcement.updatedAt = new Date();
@@ -650,7 +830,7 @@ export async function sendAnnouncementNow(
       mode,
       status: "FAILED",
       deliveredCount: 0,
-      details: `${buildAnnouncementMediaPrefix(announcement)}${message}`,
+      details,
     });
     throw new AppError(message, 502);
   });
@@ -838,10 +1018,39 @@ export async function getSchedulerData(): Promise<SchedulerData> {
 
   return {
     scheduledAnnouncements: [...state.announcements]
-      .filter((item) => item.status === "SCHEDULED")
+      .filter((item) => item.status === "SCHEDULED" || item.status === "SENDING")
       .sort((left, right) => left.scheduledAt.getTime() - right.scheduledAt.getTime())
       .map(serializeAnnouncement),
     recentLogs: state.deliveryLogs.slice(0, 8).map(serializeDeliveryLog),
+    status: await getSchedulerStatus(),
+  };
+}
+
+export async function getSchedulerStatus(): Promise<SchedulerStatus> {
+  const state = getState();
+  const now = new Date();
+  const lastRun =
+    [...state.schedulerRuns].sort(
+      (left, right) => right.createdAt.getTime() - left.createdAt.getTime(),
+    )[0] ?? null;
+  const runSummary = serializeSchedulerRun(lastRun);
+
+  return {
+    schedulerEnabled: getSchedulerEnabled(),
+    workerExpected: getSchedulerEnabled(),
+    intervalSeconds: getSchedulerIntervalSeconds(),
+    lastRunAt: runSummary?.completedAt ?? runSummary?.startedAt ?? null,
+    lastRun: runSummary,
+    pendingScheduled: state.announcements.filter((item) => item.status === "SCHEDULED").length,
+    overdueScheduled: state.announcements.filter(
+      (item) => item.status === "SCHEDULED" && item.scheduledAt.getTime() <= now.getTime(),
+    ).length,
+    serverTimeUtc: now.toISOString(),
+    serverTimeBogota: formatDateTimeForBogotaDisplay(now),
+    safeMode: isSafeMode(),
+    dryRun: isDryRunMode(),
+    ultramsgMock: isEnvTrue(process.env.ULTRAMSG_MOCK),
+    hasDefaultRecipient: hasDefaultRecipient(),
   };
 }
 
@@ -894,22 +1103,128 @@ export async function getMetricsData(): Promise<MetricsData> {
   };
 }
 
-export async function processScheduledAnnouncements() {
+export async function processScheduledAnnouncements(
+  options: ProcessScheduledOptions = {},
+): Promise<SchedulerRunResult> {
   const state = getState();
+  const source = options.source ?? "worker";
+  const startedAt = new Date();
+  const run: MockSchedulerRun = {
+    id: createId("run"),
+    source,
+    startedAt,
+    completedAt: null,
+    dueCount: 0,
+    lockedCount: 0,
+    processedCount: 0,
+    sentCount: 0,
+    failedCount: 0,
+    blockedCount: 0,
+    simulatedCount: 0,
+    skippedCount: 0,
+    details: null,
+    createdAt: startedAt,
+  };
+
+  state.schedulerRuns.unshift(run);
+
+  console.log("[scheduler] tick", {
+    source,
+    startedAt: startedAt.toISOString(),
+  });
+
   const dueAnnouncements = [...state.announcements]
     .filter(
       (announcement) =>
         announcement.status === "SCHEDULED" &&
-        announcement.scheduledAt.getTime() <= Date.now(),
+        announcement.scheduledAt.getTime() <= startedAt.getTime(),
     )
     .sort((left, right) => left.scheduledAt.getTime() - right.scheduledAt.getTime());
 
+  console.log("[scheduler] due announcements found", {
+    source,
+    count: dueAnnouncements.length,
+  });
+
   const processed: DeliveryLogSummary[] = [];
+  let lockedCount = 0;
+  let skippedCount = 0;
 
   for (const announcement of dueAnnouncements) {
+    if (announcement.status !== "SCHEDULED") {
+      skippedCount += 1;
+      console.log("[scheduler] announcement skipped", {
+        announcementId: announcement.id,
+        reason: "lock_not_acquired",
+      });
+      continue;
+    }
+
+    announcement.status = "SENDING" as AnnouncementStatus;
+    announcement.updatedAt = new Date();
+    lockedCount += 1;
+
+    console.log("[scheduler] announcement locked", {
+      announcementId: announcement.id,
+      title: announcement.title,
+    });
+
     try {
+      const audience = await resolveAudience(announcement.segmentId);
+
+      console.log("[scheduler] recipients loaded", {
+        announcementId: announcement.id,
+        segment: audience.name,
+        recipientPhones: audience.recipientPhones.length,
+        hasDefaultRecipient: hasDefaultRecipient(),
+      });
+
+      if (!audience.recipientPhones.length && !hasDefaultRecipient()) {
+        console.warn("[scheduler] no recipients", {
+          announcementId: announcement.id,
+          segment: audience.name,
+        });
+
+        announcement.status = "FAILED" as AnnouncementStatus;
+        announcement.sentAt = null;
+        announcement.updatedAt = new Date();
+
+        const failedLog = createLog({
+          announcementId: announcement.id,
+          segmentId: audience.id,
+          mode: "SCHEDULED",
+          status: "FAILED",
+          deliveredCount: 0,
+          details: `${buildAnnouncementMediaPrefix(announcement)}${buildNoRecipientsMessage()}`,
+        });
+        processed.push(serializeDeliveryLog(failedLog));
+        continue;
+      }
+
+      console.log("[scheduler] announcement sending", {
+        announcementId: announcement.id,
+        hasImage: Boolean(announcement.imageUrl),
+        hasAudio: Boolean(announcement.audioUrl),
+      });
+
       const result = await sendAnnouncementNow(announcement.id, "SCHEDULED");
       processed.push(result.log);
+
+      const outcome = classifyDeliveryLog(result.log);
+
+      if (outcome === "blocked") {
+        console.warn("[scheduler] blocked by safe mode", {
+          announcementId: announcement.id,
+        });
+      } else if (outcome === "simulated") {
+        console.log("[scheduler] dry-run simulated", {
+          announcementId: announcement.id,
+        });
+      } else if (outcome === "sent") {
+        console.log("[scheduler] sent real", {
+          announcementId: announcement.id,
+        });
+      }
     } catch (error) {
       const failedLog = createLog({
         announcementId: announcement.id,
@@ -917,17 +1232,62 @@ export async function processScheduledAnnouncements() {
         mode: "SCHEDULED",
         status: "FAILED",
         deliveredCount: 0,
-        details: error instanceof Error ? error.message : "No se pudo enviar el comunicado programado.",
+        details:
+          error instanceof Error && /sin destinatarios/i.test(error.message)
+            ? buildNoRecipientsMessage()
+            : error instanceof Error
+              ? error.message
+              : "No se pudo enviar el comunicado programado.",
       });
       announcement.status = "FAILED" as AnnouncementStatus;
       announcement.sentAt = null;
       announcement.updatedAt = new Date();
       processed.push(serializeDeliveryLog(failedLog));
+
+      console.error("[scheduler] failed", {
+        announcementId: announcement.id,
+        error: error instanceof Error ? error.message : "unknown_error",
+      });
     }
   }
 
-  return {
-    processedCount: processed.filter((item) => item.status === "SUCCESS").length,
+  const completedAt = new Date();
+  const result = buildSchedulerRunResult({
+    source,
+    startedAt,
+    completedAt,
+    dueCount: dueAnnouncements.length,
+    lockedCount,
+    skippedCount,
     processed,
-  };
+  });
+
+  Object.assign(run, {
+    completedAt,
+    dueCount: result.dueCount,
+    lockedCount: result.lockedCount,
+    processedCount: result.processedCount,
+    sentCount: result.sentCount,
+    failedCount: result.failedCount,
+    blockedCount: result.blockedCount,
+    simulatedCount: result.simulatedCount,
+    skippedCount: result.skippedCount,
+    details: JSON.stringify({
+      processedLogIds: processed.map((log) => log.id),
+    }),
+  });
+
+  console.log("[scheduler] completed", {
+    source,
+    dueCount: result.dueCount,
+    lockedCount: result.lockedCount,
+    processedCount: result.processedCount,
+    sentCount: result.sentCount,
+    failedCount: result.failedCount,
+    blockedCount: result.blockedCount,
+    simulatedCount: result.simulatedCount,
+    skippedCount: result.skippedCount,
+  });
+
+  return result;
 }

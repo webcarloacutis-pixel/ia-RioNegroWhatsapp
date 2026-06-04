@@ -438,12 +438,24 @@ export function generateGroundedAnswer(input: {
 export function buildClarifyingQuestion(message: string) {
   const normalized = normalizeText(message);
 
+  if (/(perro|gato|mascota)/.test(normalized) && /(ayuda|urgente|emergencia|herido)/.test(normalized)) {
+    return "Entiendo. Es una emergencia con tu mascota o quieres registrar una alerta ciudadana? Si es una alerta, dime que paso y en que sector.";
+  }
+
   if (/(impuesto|impuestos|pago|pagos|rentas)/.test(normalized)) {
     return "Claro. Te refieres al impuesto predial, industria y comercio u otro pago?";
   }
 
   if (/(tramite|tramites)/.test(normalized)) {
     return "Claro. Que tramite necesitas hacer?";
+  }
+
+  if (/hueco/.test(normalized) && /(denuncia|reporte|reportar|reporto)/.test(normalized)) {
+    return "Claro. Cuentame donde esta el hueco y, si puedes, envia una foto para registrarlo correctamente.";
+  }
+
+  if (/(olor raro|problema|algo paso|vi algo peligroso|necesito ayuda)/.test(normalized)) {
+    return "Entiendo. Quieres que registre esto como alerta ciudadana? Si es asi, dime que paso, el sector exacto y envia una foto si puedes.";
   }
 
   if (/(denuncia|reporte|reportar)/.test(normalized)) {
@@ -478,6 +490,30 @@ function getReportSubject(analysis: AnalyzedUserMessageIntent) {
     return "el accidente";
   }
 
+  if (normalizedCategory.includes("animal")) {
+    return "el reporte de animal herido";
+  }
+
+  if (normalizedCategory.includes("incendio")) {
+    return "el incendio";
+  }
+
+  if (normalizedCategory.includes("seguridad")) {
+    return "la alerta de seguridad";
+  }
+
+  if (normalizedCategory.includes("fuga de gas")) {
+    return "la fuga de gas";
+  }
+
+  if (normalizedCategory.includes("inundacion")) {
+    return "la inundacion";
+  }
+
+  if (normalizedCategory.includes("derrumbe") || normalizedCategory.includes("deslizamiento")) {
+    return "el derrumbe";
+  }
+
   if (normalizedCategory.includes("arbol")) {
     return "el caso de arbol caido";
   }
@@ -489,15 +525,31 @@ export function buildCitizenReportAssistantPrompt(
   analysis: AnalyzedUserMessageIntent,
   message = "",
 ) {
+  const location = extractLocationFromReportText(message);
+
   if (analysis.intent === "EMERGENCY_REPORT") {
+    if (!location) {
+      return [
+        "Gracias por avisar. Registramos el reporte como posible situacion urgente para revision.",
+        "",
+        `Dime por favor la ubicacion exacta o el sector donde ocurre. Si puedes, envia tambien una foto del lugar. Si hay personas heridas o riesgo inmediato, comunicate tambien con ${getEmergencyContactReference()}.`,
+      ].join("\n");
+    }
+
+    if (normalizeText(analysis.reason).includes("accidente")) {
+      return [
+        `Gracias por reportarlo. Ya registramos el accidente ${buildLocationPhrase(location)} para revision.`,
+        "",
+        `Si puedes, envianos una foto del lugar o un punto de referencia mas exacto. Si hay personas heridas o riesgo inmediato, comunicate tambien con ${getEmergencyContactReference()}.`,
+      ].join("\n");
+    }
+
     return [
-      "Gracias por avisar. Registramos el reporte como posible situacion urgente.",
+      `Gracias por avisar. Registramos ${getReportSubject(analysis)} ${buildLocationPhrase(location)} como posible situacion urgente.`,
       "",
-      `Si hay personas heridas o riesgo inmediato, comunicate tambien con ${getEmergencyContactReference()}.`,
+      `Si puedes, envianos una foto del lugar o un punto de referencia mas exacto. Si hay personas heridas o riesgo inmediato, comunicate tambien con ${getEmergencyContactReference()}.`,
     ].join("\n");
   }
-
-  const location = extractLocationFromReportText(message);
 
   if (location) {
     return [

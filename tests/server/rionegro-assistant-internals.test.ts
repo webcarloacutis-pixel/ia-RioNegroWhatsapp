@@ -191,6 +191,22 @@ test("pregunta fuera de alcance responde que no tiene informacion oficial", asyn
   assert.doesNotMatch(result.reply, /dependencias|Secretaria|tramites relacionados/i);
 });
 
+test("consulta de veterinaria por mascota enferma no crea reporte ni inventa negocios", async () => {
+  resetConversation("unit-private-vet");
+  const result = await chatWithAssistant(
+    "unit-private-vet",
+    "Mi gato se enfermo y necesito llevarlo al veterinario 24 horas.",
+  );
+
+  assert.match(result.reply, /Veterinaria|Cvpets|Clinica|24 horas/i);
+  assert.doesNotMatch(result.reply, /registramos|reporte registrado|caso creado/i);
+  assert.equal(result.meta.usedOpenAI, false);
+  assert.equal(result.meta.route, "KNOWLEDGE_BASE");
+  assert.ok(
+    result.meta.sources?.some((source) => /Veterinaria|Cvpets/i.test(source.title ?? "")),
+  );
+});
+
 test("pide aclaracion unica cuando la consulta municipal es ambigua", async () => {
   resetConversation("unit-ambiguous-taxes");
   const result = await chatWithAssistant(

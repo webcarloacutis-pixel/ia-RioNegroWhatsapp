@@ -1,6 +1,6 @@
 import { buildOfficialKnowledgeEntries, institutionalServices } from "@/lib/rionegro-content";
 import { officialPlaces } from "@/lib/rionegro-places";
-import { detectCitizenReportIntent } from "@/server/citizen-report-service";
+import { analyzeCitizenAlertIntent } from "@/server/citizen-report-service";
 
 export type ConversationalIntent =
   | "OUT_OF_SCOPE"
@@ -261,7 +261,15 @@ export function analyzeUserMessageIntent(
   const reportInfoRequest = isReportInformationRequest(normalized);
   const reportMessageType =
     context.messageType === "image" && normalized ? "chat" : context.messageType ?? "chat";
-  const reportIntent = detectCitizenReportIntent(message, reportMessageType);
+  const alertIntent = analyzeCitizenAlertIntent({
+    text: message,
+    messageType: reportMessageType,
+    hasImage: context.hasImage,
+    conversationContext: {
+      lastIntent: context.lastIntent,
+      lastTopic: context.lastTopic,
+    },
+  });
   const hasMunicipalScope = includesAny(normalized, MUNICIPAL_SCOPE_HINTS);
   const officialDataRequested = includesAny(normalized, OFFICIAL_DATA_HINTS);
   const hasAbsurdHint = includesAny(normalized, ABSURD_OR_OUT_OF_SCOPE_HINTS);
@@ -338,31 +346,31 @@ export function analyzeUserMessageIntent(
     };
   }
 
-  if (reportIntent.isReport && !reportInfoRequest) {
+  if (alertIntent.shouldCreateAlert && !reportInfoRequest) {
     return {
-      intent: reportIntent.isUrgentSituation ? "EMERGENCY_REPORT" : "CITIZEN_REPORT",
-      confidence: reportIntent.isUrgentSituation ? 0.96 : 0.92,
+      intent: alertIntent.intent === "EMERGENCY_ALERT" ? "EMERGENCY_REPORT" : "CITIZEN_REPORT",
+      confidence: alertIntent.confidence,
       shouldUseKnowledgeBase: false,
       shouldCreateCitizenReport: true,
       shouldAskClarifyingQuestion: false,
       shouldRefuseBecauseUnknown: false,
-      reason: `Mensaje describe un hecho ciudadano: ${reportIntent.category}.`,
+      reason: `Mensaje describe un hecho ciudadano: ${alertIntent.category ?? "Reporte"}.`,
       officialDataRequested: false,
       isReportInformationRequest: false,
     };
   }
 
-  if (reportInfoRequest) {
+  if (alertIntent.intent === "PRIVATE_SERVICE_QUERY") {
     return {
-      intent: "AMBIGUOUS",
-      confidence: 0.87,
-      shouldUseKnowledgeBase: false,
+      intent: "KNOWLEDGE_BASE_QUERY",
+      confidence: alertIntent.confidence,
+      shouldUseKnowledgeBase: true,
       shouldCreateCitizenReport: false,
-      shouldAskClarifyingQuestion: true,
+      shouldAskClarifyingQuestion: false,
       shouldRefuseBecauseUnknown: false,
-      reason: "Pregunta como reportar; se pide el hecho y el sector antes de crear caso.",
-      officialDataRequested: false,
-      isReportInformationRequest: true,
+      reason: alertIntent.reason,
+      officialDataRequested: true,
+      isReportInformationRequest: false,
     };
   }
 
@@ -377,6 +385,48 @@ export function analyzeUserMessageIntent(
       reason: "Consulta municipal incompleta; falta precisar tramite, pago o servicio.",
       officialDataRequested: false,
       isReportInformationRequest: reportInfoRequest,
+    };
+  }
+
+  if (alertIntent.intent === "INFORMATION_QUERY") {
+    return {
+      intent: "KNOWLEDGE_BASE_QUERY",
+      confidence: alertIntent.confidence,
+      shouldUseKnowledgeBase: true,
+      shouldCreateCitizenReport: false,
+      shouldAskClarifyingQuestion: false,
+      shouldRefuseBecauseUnknown: false,
+      reason: alertIntent.reason,
+      officialDataRequested: true,
+      isReportInformationRequest: false,
+    };
+  }
+
+  if (alertIntent.intent === "AMBIGUOUS_POSSIBLE_ALERT") {
+    return {
+      intent: "AMBIGUOUS",
+      confidence: alertIntent.confidence,
+      shouldUseKnowledgeBase: false,
+      shouldCreateCitizenReport: false,
+      shouldAskClarifyingQuestion: true,
+      shouldRefuseBecauseUnknown: false,
+      reason: alertIntent.reason,
+      officialDataRequested: false,
+      isReportInformationRequest: false,
+    };
+  }
+
+  if (reportInfoRequest || alertIntent.intent === "HOW_TO_REPORT") {
+    return {
+      intent: "AMBIGUOUS",
+      confidence: Math.max(0.87, alertIntent.confidence),
+      shouldUseKnowledgeBase: false,
+      shouldCreateCitizenReport: false,
+      shouldAskClarifyingQuestion: true,
+      shouldRefuseBecauseUnknown: false,
+      reason: alertIntent.reason,
+      officialDataRequested: false,
+      isReportInformationRequest: true,
     };
   }
 

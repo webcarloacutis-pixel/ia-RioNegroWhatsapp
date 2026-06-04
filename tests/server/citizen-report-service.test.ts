@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  analyzeCitizenAlertIntent,
   detectCitizenReportIntent,
   extractLocationFromReportText,
   handleCitizenReport,
@@ -35,6 +36,58 @@ test("no marca preguntas generales de la Alcaldia como reportes", () => {
   assert.equal(intent.isReport, false);
 });
 
+test("clasificador de alertas separa servicios privados de reportes reales", () => {
+  const cat = analyzeCitizenAlertIntent({
+    text: "Mi gato se enfermo y necesito llevarlo al veterinario 24 horas.",
+  });
+  const vet = analyzeCitizenAlertIntent({ text: "Necesito una veterinaria 24 horas." });
+  const pharmacy = analyzeCitizenAlertIntent({ text: "Donde hay farmacia abierta?" });
+
+  assert.equal(cat.intent, "PRIVATE_SERVICE_QUERY");
+  assert.equal(cat.shouldCreateAlert, false);
+  assert.equal(cat.shouldSearchKnowledgeBase, true);
+  assert.equal(vet.intent, "PRIVATE_SERVICE_QUERY");
+  assert.equal(vet.shouldCreateAlert, false);
+  assert.equal(pharmacy.intent, "PRIVATE_SERVICE_QUERY");
+  assert.equal(pharmacy.shouldCreateAlert, false);
+});
+
+test("clasificador de alertas detecta animales en via sin confundir mascota enferma", () => {
+  const sickPet = analyzeCitizenAlertIntent({
+    text: "Mi perro esta enfermo y necesito ayuda.",
+  });
+  const catInRoad = analyzeCitizenAlertIntent({
+    text: "Hay un gato atropellado en la via San Antonio.",
+  });
+  const dogInRoad = analyzeCitizenAlertIntent({
+    text: "Atropellaron un perro en Llanogrande.",
+  });
+
+  assert.equal(sickPet.intent, "PRIVATE_SERVICE_QUERY");
+  assert.equal(sickPet.shouldCreateAlert, false);
+  assert.equal(catInRoad.intent, "CITIZEN_ALERT");
+  assert.equal(catInRoad.shouldCreateAlert, true);
+  assert.equal(catInRoad.category, "Animal en via");
+  assert.equal(catInRoad.priority, "high");
+  assert.match(catInRoad.location ?? "", /San Antonio/i);
+  assert.equal(dogInRoad.intent, "CITIZEN_ALERT");
+  assert.equal(dogInRoad.category, "Animal en via");
+  assert.match(dogInRoad.location ?? "", /Llanogrande/i);
+});
+
+test("clasificador pide confirmacion en ayudas ambiguas", () => {
+  const urgentDog = analyzeCitizenAlertIntent({
+    text: "Necesito ayuda urgente con mi perro.",
+  });
+  const weirdSmell = analyzeCitizenAlertIntent({ text: "Hay un olor raro." });
+
+  assert.equal(urgentDog.intent, "AMBIGUOUS_POSSIBLE_ALERT");
+  assert.equal(urgentDog.shouldCreateAlert, false);
+  assert.equal(urgentDog.shouldAskConfirmation, true);
+  assert.equal(weirdSmell.intent, "AMBIGUOUS_POSSIBLE_ALERT");
+  assert.equal(weirdSmell.shouldAskConfirmation, true);
+});
+
 test("no confunde solicitudes de comunicados con denuncias ciudadanas", () => {
   const intent = detectCitizenReportIntent("Hay un comunicado para enviar");
 
@@ -45,7 +98,7 @@ test("pide ubicacion cuando el reporte no trae sector claro", () => {
   const intent = detectCitizenReportIntent("Hay un hueco peligroso");
 
   assert.equal(intent.isReport, true);
-  assert.equal(intent.category, "Hueco en vía");
+  assert.equal(intent.category, "Hueco en via");
   assert.equal(intent.priority, "normal");
   assert.equal(intent.needsLocation, true);
 });
@@ -54,7 +107,7 @@ test("detecta reportes de arbol caido con sector escrito como via", () => {
   const intent = detectCitizenReportIntent("Se cayo un arbol via Ojos de Agua");
 
   assert.equal(intent.isReport, true);
-  assert.equal(intent.category, "Árbol caído");
+  assert.equal(intent.category, "Arbol caido");
   assert.equal(intent.priority, "high");
   assert.equal(intent.needsLocation, false);
   assert.match(intent.location ?? "", /Ojos de Agua/i);
@@ -81,6 +134,18 @@ test("no crea intencion de reporte para preguntas sobre como reportar", () => {
   assert.equal(reportarHueco.isReport, false);
   assert.equal(denuncia.isReport, false);
   assert.equal(transito.isReport, false);
+});
+
+test("diferencia como reportar de quiero reportar un incidente con ubicacion", () => {
+  const howTo = analyzeCitizenAlertIntent({ text: "Como reporto un hueco?" });
+  const actual = analyzeCitizenAlertIntent({ text: "Quiero reportar un hueco en San Antonio." });
+
+  assert.equal(howTo.intent, "HOW_TO_REPORT");
+  assert.equal(howTo.shouldCreateAlert, false);
+  assert.equal(actual.intent, "CITIZEN_ALERT");
+  assert.equal(actual.shouldCreateAlert, true);
+  assert.equal(actual.category, "Hueco en via");
+  assert.match(actual.location ?? "", /San Antonio/i);
 });
 
 test("handleCitizenReport registra emergencia y usa telefono configurado si existe", async () => {
@@ -145,6 +210,17 @@ test("handleCitizenReport registra accidente con sector y pide foto o referencia
     assert.match(result.reply, /Llanogrande/i);
     assert.match(result.reply, /foto|referencia/i);
   }
+});
+
+test("handleCitizenReport no registra consultas privadas sobre veterinaria", async () => {
+  const result = await handleCitizenReport({
+    text: "Mi gato esta enfermo y necesito veterinaria 24 horas.",
+    messageType: "chat",
+    recipient: "+573001112248",
+    whatsappMessageId: `unit-private-vet-${Date.now()}`,
+  });
+
+  assert.equal(result.handled, false);
 });
 
 test("handleCitizenReport conserva via San Antonio como ubicacion parcial", async () => {

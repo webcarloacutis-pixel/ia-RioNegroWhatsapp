@@ -26,11 +26,13 @@ enum AnnouncementType {
 enum AnnouncementStatus {
   DRAFT
   SCHEDULED
+  SENDING
   SENT
   SENT_REAL
   SENT_SIMULATED
   BLOCKED_BY_SAFE_MODE
   FAILED
+  CANCELLED
 }
 
 enum DeliveryMode {
@@ -176,6 +178,26 @@ model DeliveryLog {
   createdAt      DateTime       @default(now())
 
   @@index([createdAt])
+}
+
+model SchedulerRun {
+  id             String    @id @default(cuid())
+  source         String    @default("worker")
+  startedAt      DateTime
+  completedAt    DateTime?
+  dueCount       Int       @default(0)
+  lockedCount    Int       @default(0)
+  processedCount Int       @default(0)
+  sentCount      Int       @default(0)
+  failedCount    Int       @default(0)
+  blockedCount   Int       @default(0)
+  simulatedCount Int       @default(0)
+  skippedCount   Int       @default(0)
+  details        String?   @db.Text
+  createdAt      DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([source, createdAt])
 }
 
 model AssistantQueryLog {

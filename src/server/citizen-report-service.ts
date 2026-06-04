@@ -63,6 +63,42 @@ export type CitizenReportIntent = {
   matchedKeywords: string[];
 };
 
+export type CitizenAlertIntent =
+  | "INFORMATION_QUERY"
+  | "PRIVATE_SERVICE_QUERY"
+  | "HOW_TO_REPORT"
+  | "CITIZEN_ALERT"
+  | "EMERGENCY_ALERT"
+  | "AMBIGUOUS_POSSIBLE_ALERT"
+  | "NOT_ALERT";
+
+export type CitizenAlertIntentAnalysis = {
+  intent: CitizenAlertIntent;
+  shouldCreateAlert: boolean;
+  shouldAskConfirmation: boolean;
+  shouldAskForLocation: boolean;
+  shouldAskForPhoto: boolean;
+  shouldSearchKnowledgeBase: boolean;
+  category?: string;
+  priority?: CitizenReportPriority;
+  location?: string;
+  detectedIncident?: string;
+  reason: string;
+  confidence: number;
+};
+
+type CitizenAlertIntentInput = {
+  text: string;
+  messageType?: string;
+  hasImage?: boolean;
+  caption?: string | null;
+  conversationContext?: {
+    state?: string | null;
+    lastIntent?: string | null;
+    lastTopic?: string | null;
+  } | null;
+};
+
 type HandleCitizenReportInput = {
   text: string;
   messageType: string;
@@ -218,7 +254,7 @@ const REPORT_INFORMATION_REQUEST_PATTERNS = [
   /^(?:donde|como)\b.*\b(?:transito|movilidad|inspeccion|policia|fiscalia)\b/,
 ];
 
-const CLASSIFICATION_RULES: Array<{
+export const CLASSIFICATION_RULES: Array<{
   pattern: RegExp;
   category: string;
   priority: CitizenReportPriority;
@@ -355,6 +391,7 @@ function normalizeText(value: string) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[Â¿?Â¡!.,;:()[\]{}"]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -569,6 +606,331 @@ function isReportInformationRequest(normalizedText: string) {
   return REPORT_INFORMATION_REQUEST_PATTERNS.some((pattern) => pattern.test(normalizedText));
 }
 
+const PRIVATE_SERVICE_PATTERN =
+  /\b(?:veterinari[ao]s?|farmacias?|taxi|taxis|gruas?|clinicas?|hospital(?:es)?|hoteles?|restaurantes?|droguerias?|comercio|negocio|taller(?:es)?)\b/;
+
+const PRIVATE_HELP_PATTERN =
+  /\b(?:mi|mis)\s+(?:gato|gata|perro|perra|mascota|mama|madre|papa|padre|hijo|hija|familiar)\b.*\b(?:enferm|urgencia|ayuda|atencion|hospital|clinica|veterinari|medico)\b/;
+
+const SERVICE_QUERY_PATTERN =
+  /\b(?:donde|necesito|busco|buscar|hay|queda|abiert[ao]s?|24\s*horas|urgencias?|llevarlo|llevarla)\b/;
+
+const HOW_TO_REPORT_PATTERN =
+  /^(?:como|que hago|donde|cual|puedo|debo|necesito saber|quiero saber|me puedes decir)\b.*\b(?:denuncia|denunciar|reporte|reportar|reporto|hueco|accidente|choque|arbol caido|incendio)\b/;
+
+const AMBIGUOUS_ALERT_PATTERNS = [
+  /\bnecesito\s+ayuda(?:\s+urgente)?\b/,
+  /\bayuda\s+urgente\b/,
+  /\bhay\s+(?:un\s+)?problema\b/,
+  /\balgo\s+paso\b/,
+  /\bpaso\s+algo\b/,
+  /\bhay\s+un\s+olor\s+raro\b/,
+  /\bvi\s+algo\s+peligroso\b/,
+  /\bhay\s+(?:un\s+)?perro\s+herido\b/,
+  /\bhay\s+(?:un\s+)?animal\s+herido\b/,
+];
+
+const PUBLIC_CONTEXT_PATTERN =
+  /\b(?:via|vial|carretera|autopista|calle|anden|parque|barrio|sector|vereda|glorieta|entrada|puente|colegio|hospital|aeropuerto|centro|llanogrande|san antonio|ojos de agua)\b/;
+
+const PERSONAL_PET_PATTERN =
+  /\b(?:mi|mis)\s+(?:gato|gata|perro|perra|mascota)\b/;
+
+const ALERT_RULES: Array<{
+  pattern: RegExp;
+  category: string;
+  priority: CitizenReportPriority;
+  type: string;
+  incident: string;
+  requiresPublicContext?: boolean;
+}> = [
+  {
+    pattern: /\b(?:disparos|tiros|balacera|pelea con armas|amenaza armada)\b/,
+    category: "Seguridad",
+    priority: "urgent",
+    type: "seguridad",
+    incident: "seguridad",
+  },
+  {
+    pattern: /\b(?:incendio|llamas|se esta quemando|humo de una vivienda|humo de una casa)\b/,
+    category: "Incendio",
+    priority: "urgent",
+    type: "emergencia",
+    incident: "incendio",
+  },
+  {
+    pattern: /\b(?:explosion|estallido|bomba|atentado)\b/,
+    category: "Explosion",
+    priority: "urgent",
+    type: "emergencia",
+    incident: "explosion",
+  },
+  {
+    pattern: /\b(?:fuga de gas|olor a gas|huele mucho a gas|cilindro danado)\b/,
+    category: "Fuga de gas",
+    priority: "urgent",
+    type: "emergencia",
+    incident: "fuga de gas",
+  },
+  {
+    pattern: /\b(?:inundacion|agua entrando|creciente|quebrada desbordada|agua por todas partes)\b/,
+    category: "Inundacion",
+    priority: "urgent",
+    type: "emergencia",
+    incident: "inundacion",
+  },
+  {
+    pattern: /\b(?:derrumbe|deslizamiento|tierra en la via|caida de banca)\b/,
+    category: "Derrumbe",
+    priority: "urgent",
+    type: "emergencia",
+    incident: "derrumbe",
+  },
+  {
+    pattern:
+      /\b(?:(?:atropellaron|atropellad[oa])\s+(?:un\s+|una\s+)?(?:perro|gato|animal)|(?:perro|gato|animal|caballo|ganado|vaca|reses).*(?:atropellad[oa]?|herid[oa]?|muert[oa]?|suelto|bloqueando|agresiv|atacando))\b/,
+    category: "Animal en via",
+    priority: "high",
+    type: "transito",
+    incident: "animal en via",
+  },
+  {
+    pattern:
+      /\b(?:accidente|choque|se chocaron|moto se cayo|moto caida|carro volcado|volcado|persona herida|personas heridas|heridos?)\b/,
+    category: "Accidente",
+    priority: "urgent",
+    type: "transito",
+    incident: "accidente",
+  },
+  {
+    pattern:
+      /\b(?:(?:se\s+)?cayo\s+(?:un\s+)?(?:arbol|palo|rama)|(?:arbol|palo|rama).*(?:caido|bloqueando))\b/,
+    category: "Arbol caido",
+    priority: "high",
+    type: "emergencia",
+    incident: "arbol caido",
+  },
+  {
+    pattern: /\b(?:poste caido|se cayo.*poste|cable(?:s)? en el suelo|cable(?:s)? caido|cable(?:s)? colgando)\b/,
+    category: "Poste o cable caido",
+    priority: "high",
+    type: "infraestructura",
+    incident: "poste o cable caido",
+  },
+  {
+    pattern: /\b(?:semaforo(?:s)? (?:no sirve|apagado|danado)|semaforo danado)\b/,
+    category: "Semaforo danado",
+    priority: "high",
+    type: "transito",
+    incident: "semaforo danado",
+  },
+  {
+    pattern: /\b(?:hueco|crater|via danada|calle rota|calle vuelta nada)\b/,
+    category: "Hueco en via",
+    priority: "normal",
+    type: "infraestructura",
+    incident: "hueco en via",
+  },
+  {
+    pattern:
+      /\b(?:(?:carro|moto|vehiculo).*(?:bloqueando|atravesado|mal parquead|obstruyendo)|moto en el anden|carro bloqueando|vehiculo bloqueando)\b/,
+    category: "Vehiculo bloqueando",
+    priority: "normal",
+    type: "transito",
+    incident: "vehiculo bloqueando",
+  },
+  {
+    pattern: /\b(?:basura|escombros|residuos)\b.*\b(?:via|calle|anden|parque|tirad[ao]s?)\b/,
+    category: "Basuras",
+    priority: "normal",
+    type: "convivencia",
+    incident: "basuras",
+  },
+  {
+    pattern: /\b(?:ruido|bulla|musica muy alta)\b/,
+    category: "Ruido",
+    priority: "low",
+    type: "convivencia",
+    incident: "ruido",
+    requiresPublicContext: true,
+  },
+];
+
+function isPrivateServiceQuery(normalizedText: string) {
+  if (!normalizedText) return false;
+  if (PRIVATE_HELP_PATTERN.test(normalizedText)) return true;
+  return PRIVATE_SERVICE_PATTERN.test(normalizedText) && SERVICE_QUERY_PATTERN.test(normalizedText);
+}
+
+function isHowToReportQuery(normalizedText: string) {
+  return HOW_TO_REPORT_PATTERN.test(normalizedText) || isReportInformationRequest(normalizedText);
+}
+
+function extractIncidentType(normalizedText: string) {
+  for (const rule of ALERT_RULES) {
+    if (!rule.pattern.test(normalizedText)) {
+      continue;
+    }
+
+    if (rule.requiresPublicContext && !PUBLIC_CONTEXT_PATTERN.test(normalizedText)) {
+      continue;
+    }
+
+    if (rule.incident === "animal en via" && PERSONAL_PET_PATTERN.test(normalizedText)) {
+      continue;
+    }
+
+    if (
+      rule.incident === "animal en via" &&
+      !PUBLIC_CONTEXT_PATTERN.test(normalizedText) &&
+      !/\b(?:atropellaron|atropellad[oa])\b/.test(normalizedText)
+    ) {
+      continue;
+    }
+
+    return rule;
+  }
+
+  return null;
+}
+
+function isActualIncidentReport(normalizedText: string) {
+  return Boolean(extractIncidentType(normalizedText));
+}
+
+function isAmbiguousPossibleAlert(normalizedText: string) {
+  if (!normalizedText) return false;
+  if (AMIGUOUS_CONFIRMATION_PATTERN.test(normalizedText)) return true;
+  return AMBIGUOUS_ALERT_PATTERNS.some((pattern) => pattern.test(normalizedText));
+}
+
+const AMIGUOUS_CONFIRMATION_PATTERN =
+  /\b(?:quiero|necesito)\s+(?:poner|crear|hacer|registrar)?\s*(?:una\s+)?(?:alerta|reporte|denuncia)\b(?!.*\b(?:en|por|via|calle|sector|barrio)\b)/;
+
+export function analyzeCitizenAlertIntent(
+  input: CitizenAlertIntentInput,
+): CitizenAlertIntentAnalysis {
+  const combinedText = [input.text, input.caption].filter(Boolean).join(" ");
+  const normalized = normalizeText(combinedText);
+  const messageType = input.messageType?.toLowerCase() ?? "chat";
+  const hasImage = Boolean(input.hasImage || messageType === "image");
+  const location = inferLocation(combinedText);
+
+  if (!normalized && hasImage) {
+    return {
+      intent: "AMBIGUOUS_POSSIBLE_ALERT",
+      shouldCreateAlert: false,
+      shouldAskConfirmation: true,
+      shouldAskForLocation: true,
+      shouldAskForPhoto: false,
+      shouldSearchKnowledgeBase: false,
+      reason: "Imagen sin descripcion suficiente; se piden datos antes de crear alerta.",
+      confidence: 0.82,
+    };
+  }
+
+  if (!normalized) {
+    return {
+      intent: "NOT_ALERT",
+      shouldCreateAlert: false,
+      shouldAskConfirmation: false,
+      shouldAskForLocation: false,
+      shouldAskForPhoto: false,
+      shouldSearchKnowledgeBase: false,
+      reason: "Mensaje sin texto util.",
+      confidence: 0.78,
+    };
+  }
+
+  if (isHowToReportQuery(normalized)) {
+    return {
+      intent: "HOW_TO_REPORT",
+      shouldCreateAlert: false,
+      shouldAskConfirmation: false,
+      shouldAskForLocation: false,
+      shouldAskForPhoto: false,
+      shouldSearchKnowledgeBase: false,
+      reason: "El usuario pregunta como reportar; todavia no describe un hecho a registrar.",
+      confidence: 0.9,
+    };
+  }
+
+  const incident = extractIncidentType(normalized);
+
+  if (incident) {
+    const shouldAskForLocation = !location;
+    return {
+      intent: incident.priority === "urgent" ? "EMERGENCY_ALERT" : "CITIZEN_ALERT",
+      shouldCreateAlert: true,
+      shouldAskConfirmation: false,
+      shouldAskForLocation,
+      shouldAskForPhoto: true,
+      shouldSearchKnowledgeBase: false,
+      category: incident.category,
+      priority: incident.priority,
+      location,
+      detectedIncident: incident.incident,
+      reason: `Describe un incidente publico observable: ${incident.incident}.`,
+      confidence: incident.priority === "urgent" ? 0.95 : 0.91,
+    };
+  }
+
+  if (isPrivateServiceQuery(normalized)) {
+    return {
+      intent: "PRIVATE_SERVICE_QUERY",
+      shouldCreateAlert: false,
+      shouldAskConfirmation: false,
+      shouldAskForLocation: false,
+      shouldAskForPhoto: false,
+      shouldSearchKnowledgeBase: true,
+      reason: "Consulta sobre servicio privado o ayuda personal; no es alerta ciudadana.",
+      confidence: 0.93,
+    };
+  }
+
+  if (isAmbiguousPossibleAlert(normalized)) {
+    return {
+      intent: "AMBIGUOUS_POSSIBLE_ALERT",
+      shouldCreateAlert: false,
+      shouldAskConfirmation: true,
+      shouldAskForLocation: !location,
+      shouldAskForPhoto: false,
+      shouldSearchKnowledgeBase: false,
+      location,
+      reason: "Puede ser una alerta, pero faltan hecho observable y confirmacion.",
+      confidence: 0.84,
+    };
+  }
+
+  if (
+    /\b(?:donde|como|cual|horario|queda|pagar|pago|tramite|predial|alcaldia|transito|atencion|telefono|direccion)\b/.test(
+      normalized,
+    )
+  ) {
+    return {
+      intent: "INFORMATION_QUERY",
+      shouldCreateAlert: false,
+      shouldAskConfirmation: false,
+      shouldAskForLocation: false,
+      shouldAskForPhoto: false,
+      shouldSearchKnowledgeBase: true,
+      reason: "Consulta informativa; se debe responder con base oficial si existe.",
+      confidence: 0.88,
+    };
+  }
+
+  return {
+    intent: "NOT_ALERT",
+    shouldCreateAlert: false,
+    shouldAskConfirmation: false,
+    shouldAskForLocation: false,
+    shouldAskForPhoto: false,
+    shouldSearchKnowledgeBase: false,
+    reason: "No describe una alerta ciudadana.",
+    confidence: 0.8,
+  };
+}
+
 function buildReportTitle(category: string, text: string) {
   const cleaned = sanitizeText(text.replace(/^(denuncia|reporte|alerta)\s*:\s*/i, ""), 70);
   return `${category}: ${cleaned || "Reporte ciudadano"}`;
@@ -583,27 +945,14 @@ export function detectCitizenReportIntent(
   messageType = "chat",
 ): CitizenReportIntent {
   const normalized = normalizeText(text);
-  const infoRequest = isReportInformationRequest(normalized);
+  const alertIntent = analyzeCitizenAlertIntent({ text, messageType });
   const matchedKeywords = getMatchedReportKeywords(normalized);
-  let category = "Otro";
-  let priority: CitizenReportPriority = "normal";
-  let type = "general";
-
-  for (const rule of CLASSIFICATION_RULES) {
-    if (rule.pattern.test(normalized)) {
-      category = rule.category;
-      priority = rule.priority;
-      type = rule.type;
-      break;
-    }
-  }
-
-  const isReport =
-    Boolean(normalized) &&
-    !infoRequest &&
-    (matchedKeywords.length > 0 ||
-      category !== "Otro" ||
-      (messageType.toLowerCase() === "image" && normalized.length > 0));
+  const category = alertIntent.category ?? "Otro";
+  const priority = alertIntent.priority ?? "normal";
+  const type =
+    ALERT_RULES.find((rule) => rule.category === category && rule.priority === priority)?.type ??
+    "general";
+  const isReport = alertIntent.shouldCreateAlert;
   const location = inferLocation(text);
 
   return {
@@ -613,9 +962,9 @@ export function detectCitizenReportIntent(
     priority,
     title: buildReportTitle(category, text),
     location,
-    needsLocation: isReport && !location,
-    needsImage: isReport,
-    isUrgentSituation: URGENT_SITUATION_PATTERN.test(normalized),
+    needsLocation: alertIntent.shouldAskForLocation,
+    needsImage: alertIntent.shouldAskForPhoto,
+    isUrgentSituation: alertIntent.priority === "urgent" || URGENT_SITUATION_PATTERN.test(normalized),
     matchedKeywords,
   };
 }
@@ -660,6 +1009,14 @@ function buildKnownLocationReportReply(intent: CitizenReportIntent) {
     ].join("\n");
   }
 
+  if (category.includes("animal")) {
+    return [
+      `Gracias por avisar. Ya registramos el reporte de animal herido ${locationPhrase} para revision.`,
+      "",
+      "Si puedes, envianos una foto del lugar o un punto de referencia mas exacto.",
+    ].join("\n");
+  }
+
   return [
     `Gracias por reportarlo. Ya registramos el caso ${locationPhrase} para revision.`,
     "",
@@ -675,14 +1032,22 @@ function buildCitizenReportReply(intent: CitizenReportIntent, hasImage: boolean)
       return [
         "Gracias por avisar. Registramos el reporte como posible situación urgente para revisión.",
         "",
-        `Dime por favor la ubicación exacta o el sector donde ocurre. Si hay personas heridas o riesgo inmediato, comunícate también con ${emergencyLine}.`,
+        `Dime por favor la ubicación exacta o el sector donde ocurre. Si puedes, envía tambien una foto del lugar. Si hay personas heridas o riesgo inmediato, comunícate también con ${emergencyLine}.`,
+      ].join("\n");
+    }
+
+    if (intent.category === "Accidente" && intent.location) {
+      return [
+        `Gracias por reportarlo. Ya registramos el accidente ${buildLocationPhrase(intent.location)} para revision.`,
+        "",
+        `Si puedes, envíanos una foto del lugar o un punto de referencia más exacto. Si hay personas heridas o riesgo inmediato, comunícate también con ${emergencyLine}.`,
       ].join("\n");
     }
 
     return [
       "Gracias por avisar. Registramos el reporte como posible situación urgente para revisión.",
       "",
-      `Si hay personas heridas o riesgo inmediato, por favor comunícate también con ${emergencyLine}.`,
+      `Si puedes, envíanos una foto del lugar o un punto de referencia más exacto. Si hay personas heridas o riesgo inmediato, por favor comunícate también con ${emergencyLine}.`,
     ].join("\n");
   }
 
@@ -1356,6 +1721,12 @@ export const citizenReportInternals = {
   detectCitizenReportIntent,
   extractLocationFromReportText,
   isReportInformationRequest,
+  isPrivateServiceQuery,
+  isHowToReportQuery,
+  isActualIncidentReport,
+  isAmbiguousPossibleAlert,
+  extractIncidentType,
+  analyzeCitizenAlertIntent,
   classifyCitizenReport,
   handleCitizenReport,
 };

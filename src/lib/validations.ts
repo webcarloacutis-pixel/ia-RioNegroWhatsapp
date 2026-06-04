@@ -254,6 +254,20 @@ export const qaScenarioInputSchema = z.object({
     .trim()
     .max(80, "La intencion esperada es demasiado larga.")
     .optional(),
+  expectedShouldCreateAlert: z.boolean().optional(),
+  expectedAlertCategory: z
+    .string()
+    .trim()
+    .max(80, "La categoria esperada es demasiado larga.")
+    .optional(),
+  expectedAlertPriority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+  expectedAlertLocation: z
+    .string()
+    .trim()
+    .max(120, "La ubicacion esperada es demasiado larga.")
+    .optional(),
+  expectedAskedConfirmation: z.boolean().optional(),
+  expectedUsedKnowledgeBase: z.boolean().optional(),
   expectedKeywords: qaKeywordListSchema,
   acceptableKeywords: qaKeywordGroupSchema,
   forbiddenKeywords: qaKeywordListSchema,
