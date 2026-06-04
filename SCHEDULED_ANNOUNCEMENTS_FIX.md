@@ -28,6 +28,8 @@ FAILED
 
 Si faltan destinatarios, queda `FAILED` y el `DeliveryLog` contiene `NO_RECIPIENTS`.
 
+`SENT_REAL` solo se marca cuando UltraMsg devuelve una senal positiva de envio, como `sent=true`, `success`, `ok`, `queued` o un identificador de mensaje. Si UltraMsg responde con `sent=false`, `status=false`, `error` o no confirma el envio, el comunicado queda `FAILED`.
+
 ## Worker de Render
 
 El worker `rionegro-panel-scheduler` es importante porque procesa la cola aunque nadie tenga abierto el dashboard.
@@ -73,6 +75,8 @@ SCHEDULER_ENABLED=true
 ```
 
 `ULTRAMSG_DEFAULT_TO` puede usarse como destinatario de prueba para Cobertura general. Tambien puedes crear un segmento con numeros reales y elegir ese segmento al crear el comunicado.
+
+Cobertura general no crea una lista masiva automaticamente. Para enviar a muchas personas debes cargar esos numeros en un segmento y seleccionar ese segmento en el comunicado.
 
 ## Como probar manualmente
 

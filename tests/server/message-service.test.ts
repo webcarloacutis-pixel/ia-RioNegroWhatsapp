@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 
 import {
   sendMessage,
@@ -8,6 +9,44 @@ import {
   sendWhatsAppText,
   messageServiceInternals,
 } from "@/server/messageService";
+
+async function withFakeUltraMsgServer(
+  handler: (request: { url?: string; body: string }) => unknown,
+  run: (baseUrl: string) => Promise<void>,
+) {
+  const server = createServer((request, response) => {
+    let body = "";
+
+    request.setEncoding("utf8");
+    request.on("data", (chunk) => {
+      body += chunk;
+    });
+    request.on("end", () => {
+      const payload = handler({ url: request.url, body });
+      response.writeHead(200, { "Content-Type": "application/json" });
+      response.end(JSON.stringify(payload));
+    });
+  });
+
+  await new Promise<void>((resolve) => {
+    server.listen(0, "127.0.0.1", resolve);
+  });
+
+  const address = server.address();
+
+  if (!address || typeof address === "string") {
+    server.close();
+    throw new Error("No se pudo iniciar servidor UltraMsg falso.");
+  }
+
+  try {
+    await run(`http://127.0.0.1:${address.port}`);
+  } finally {
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+    });
+  }
+}
 
 test("normalizeRecipient normaliza numeros colombianos", () => {
   assert.equal(messageServiceInternals.normalizeRecipient("310 885 3250"), "+573108853250");
@@ -285,6 +324,88 @@ test("sendMessage con audio respeta WHATSAPP_SAFE_MODE sin dry-run", async () =>
 
   process.env.WHATSAPP_DRY_RUN = previousDryRun;
   process.env.WHATSAPP_SAFE_MODE = previousSafeMode;
+});
+
+test("sendWhatsAppText falla si UltraMsg no confirma el envio", async () => {
+  const previousDryRun = process.env.WHATSAPP_DRY_RUN;
+  const previousSafeMode = process.env.WHATSAPP_SAFE_MODE;
+  const previousToken = process.env.ULTRAMSG_TOKEN;
+  const previousBaseUrl = process.env.ULTRAMSG_BASE_URL;
+
+  process.env.WHATSAPP_DRY_RUN = "false";
+  process.env.WHATSAPP_SAFE_MODE = "false";
+  process.env.ULTRAMSG_TOKEN = "token-test";
+
+  try {
+    await withFakeUltraMsgServer(
+      () => ({
+        sent: false,
+        error: "invalid number",
+      }),
+      async (baseUrl) => {
+        process.env.ULTRAMSG_BASE_URL = baseUrl;
+
+        await assert.rejects(
+          () =>
+            sendWhatsAppText({
+              to: "+573001330213",
+              message: "Prueba real fallida",
+            }),
+          /UltraMsg rechazo el envio text: invalid number/i,
+        );
+      },
+    );
+  } finally {
+    process.env.WHATSAPP_DRY_RUN = previousDryRun;
+    process.env.WHATSAPP_SAFE_MODE = previousSafeMode;
+    process.env.ULTRAMSG_TOKEN = previousToken;
+    process.env.ULTRAMSG_BASE_URL = previousBaseUrl;
+  }
+});
+
+test("sendMessage real solo marca enviado cuando UltraMsg confirma", async () => {
+  const previousDryRun = process.env.WHATSAPP_DRY_RUN;
+  const previousSafeMode = process.env.WHATSAPP_SAFE_MODE;
+  const previousToken = process.env.ULTRAMSG_TOKEN;
+  const previousBaseUrl = process.env.ULTRAMSG_BASE_URL;
+
+  process.env.WHATSAPP_DRY_RUN = "false";
+  process.env.WHATSAPP_SAFE_MODE = "false";
+  process.env.ULTRAMSG_TOKEN = "token-test";
+
+  try {
+    await withFakeUltraMsgServer(
+      () => ({
+        sent: "true",
+        id: "msg-test-1",
+      }),
+      async (baseUrl) => {
+        process.env.ULTRAMSG_BASE_URL = baseUrl;
+
+        const result = await sendMessage({
+          message: "Comunicado real confirmado",
+          segment: {
+            id: "seg-confirmed",
+            name: "Prueba confirmada",
+            estimatedUsers: 1,
+            recipientPhones: ["+573001330213"],
+          },
+          scheduledAt: new Date("2026-04-20T10:00:00.000Z"),
+          mode: "MANUAL",
+        });
+
+        assert.equal(result.sent, true);
+        assert.equal(result.simulated, false);
+        assert.equal(result.deliveredCount, 1);
+        assert.match(result.log, /Enviado por UltraMsg/i);
+      },
+    );
+  } finally {
+    process.env.WHATSAPP_DRY_RUN = previousDryRun;
+    process.env.WHATSAPP_SAFE_MODE = previousSafeMode;
+    process.env.ULTRAMSG_TOKEN = previousToken;
+    process.env.ULTRAMSG_BASE_URL = previousBaseUrl;
+  }
 });
 
 test("sendMessage falla claramente cuando no hay destinatarios", async () => {

@@ -253,6 +253,12 @@ export function SchedulerManager({ data }: SchedulerManagerProps) {
                   </span>
                 </div>
 
+                {!announcement.segment ? (
+                  <p className="mt-3 text-sm font-medium text-muted">
+                    Cobertura general usa ULTRAMSG_DEFAULT_TO; para envio masivo real selecciona un segmento con numeros.
+                  </p>
+                ) : null}
+
                 <div className="mt-5 flex flex-wrap gap-3">
                   <Button
                     variant="ghost"

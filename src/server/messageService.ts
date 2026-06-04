@@ -158,6 +158,128 @@ function maskRecipient(value: string) {
   return digits.length <= 4 ? "****" : `****${digits.slice(-4)}`;
 }
 
+function redactUltraMsgDetail(value: string) {
+  return value
+    .replace(/token=[^&\s]+/gi, "token=[redacted]")
+    .replace(/\b\d{8,}\b/g, (match) => maskRecipient(match));
+}
+
+function getRecord(value: unknown) {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function normalizeBooleanFlag(value: unknown) {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    if (value === 1) return true;
+    if (value === 0) return false;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+
+    if (["true", "1", "yes", "ok", "success", "sent", "queued"].includes(normalized)) {
+      return true;
+    }
+
+    if (["false", "0", "no", "error", "failed", "failure", "invalid"].includes(normalized)) {
+      return false;
+    }
+  }
+
+  return null;
+}
+
+function getStringField(record: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return null;
+}
+
+function hasPositiveUltraMsgSignal(record: Record<string, unknown>) {
+  const flagKeys = ["sent", "success", "ok", "status", "valid"];
+
+  for (const key of flagKeys) {
+    const parsed = normalizeBooleanFlag(record[key]);
+
+    if (parsed === true) {
+      return true;
+    }
+  }
+
+  if (getStringField(record, ["id", "messageId", "message_id", "referenceId", "reference_id"])) {
+    return true;
+  }
+
+  const message = getStringField(record, ["message", "result", "description"]);
+
+  return Boolean(message && /\b(sent|success|ok|queued)\b/i.test(message));
+}
+
+function getUltraMsgFailureReason(data: unknown): string | null {
+  if (Array.isArray(data)) {
+    const failed: string | undefined = data
+      .map(getUltraMsgFailureReason)
+      .find((message): message is string => Boolean(message));
+
+    return failed ?? null;
+  }
+
+  const record = getRecord(data);
+
+  if (!record) {
+    return "respuesta vacia o invalida.";
+  }
+
+  const explicitError = getStringField(record, [
+    "error",
+    "errors",
+    "errorMessage",
+    "error_message",
+    "reason",
+  ]);
+
+  if (explicitError) {
+    return redactUltraMsgDetail(explicitError);
+  }
+
+  for (const key of ["sent", "success", "ok", "status", "valid"]) {
+    const parsed = normalizeBooleanFlag(record[key]);
+
+    if (parsed === false) {
+      const detail = getStringField(record, ["message", "description", "result"]);
+      return redactUltraMsgDetail(detail ?? `${key}=false`);
+    }
+  }
+
+  const message = getStringField(record, ["message", "description", "result"]);
+
+  if (message && /\b(error|failed|failure|invalid|rejected|not sent|no enviado)\b/i.test(message)) {
+    return redactUltraMsgDetail(message);
+  }
+
+  return hasPositiveUltraMsgSignal(record) ? null : "UltraMsg no confirmo el envio.";
+}
+
+function assertUltraMsgAccepted(data: unknown, type: "text" | "image" | "audio") {
+  const failureReason = getUltraMsgFailureReason(data);
+
+  if (failureReason) {
+    throw new Error(`UltraMsg rechazo el envio ${type}: ${failureReason}`);
+  }
+}
+
 function reserveSafeInboundReply(input: {
   inboundReply?: boolean;
   inboundMessageId?: string;
@@ -326,6 +448,9 @@ export async function sendWhatsAppText({
     },
     data,
   });
+  const responseData = response.data;
+
+  assertUltraMsgAccepted(responseData, "text");
 
   safeReservation.markSent();
 
@@ -334,7 +459,7 @@ export async function sendWhatsAppText({
     type: "text",
   });
 
-  return response.data;
+  return responseData;
 }
 
 export async function sendWhatsAppAudio({
@@ -411,6 +536,9 @@ export async function sendWhatsAppAudio({
     },
     data,
   });
+  const responseData = response.data;
+
+  assertUltraMsgAccepted(responseData, "audio");
 
   safeReservation.markSent();
 
@@ -419,7 +547,7 @@ export async function sendWhatsAppAudio({
     type: "audio",
   });
 
-  return response.data;
+  return responseData;
 }
 
 export async function sendWhatsAppImage({
@@ -495,6 +623,9 @@ export async function sendWhatsAppImage({
     },
     data,
   });
+  const responseData = response.data;
+
+  assertUltraMsgAccepted(responseData, "image");
 
   safeReservation.markSent();
 
@@ -503,7 +634,7 @@ export async function sendWhatsAppImage({
     type: "image",
   });
 
-  return response.data;
+  return responseData;
 }
 
 export async function sendWhatsAppTextAfterAudioFailure({
@@ -556,6 +687,9 @@ export async function sendWhatsAppTextAfterAudioFailure({
     },
     data,
   });
+  const responseData = response.data;
+
+  assertUltraMsgAccepted(responseData, "text");
 
   safeReservation.markSent();
 
@@ -565,7 +699,7 @@ export async function sendWhatsAppTextAfterAudioFailure({
     fallback: "audio_failed",
   });
 
-  return response.data;
+  return responseData;
 }
 
 async function sendMessageMock({
@@ -868,7 +1002,7 @@ async function sendMessageUltraMsg({
   if (!responses.length) {
     throw new Error(
       failures.length
-        ? `UltraMsg no pudo enviar a ningun destinatario: ${failures.join(", ")}.`
+        ? `UltraMsg no pudo enviar a ningun destinatario: ${failures.map(maskRecipient).join(", ")}.`
         : "UltraMsg no pudo enviar el mensaje.",
     );
   }
@@ -877,9 +1011,9 @@ async function sendMessageUltraMsg({
     mode,
     scheduledAt: scheduledAt.toISOString(),
     segment: targetName,
-    to: recipients,
+    to: recipients.map(maskRecipient),
     body: responses,
-    failures,
+    failures: failures.map(maskRecipient),
   });
 
   return {
@@ -894,12 +1028,12 @@ async function sendMessageUltraMsg({
     deliveredCount: responses.length,
     log:
       failures.length > 0
-        ? `Enviado por UltraMsg a ${responses.length} destinatario(s)${mediaSuffix}. Fallaron: ${failures.join(", ")}`
+        ? `Enviado por UltraMsg a ${responses.length} destinatario(s)${mediaSuffix}. Fallaron: ${failures.map(maskRecipient).join(", ")}`
         : imageFallbacks.length > 0
           ? `Imagen no enviada a ${imageFallbacks.length} destinatario(s); se envio texto de respaldo.`
         : dryRun
           ? `Dry-run UltraMsg OK para ${responses.length} destinatario(s)${mediaSuffix}.`
-          : `Enviado por UltraMsg a ${recipients.join(", ")}${mediaSuffix}`,
+          : `Enviado por UltraMsg a ${recipients.map(maskRecipient).join(", ")}${mediaSuffix}`,
   };
 }
 

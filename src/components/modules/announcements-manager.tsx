@@ -401,6 +401,10 @@ export function AnnouncementsManager({
       `Vas a enviar "${announcement.title}" ahora.${
         announcement.imageUrl ? "\nIncluye flyer adjunto." : ""
       }${announcement.audioUrl ? "\nIncluye audio adjunto." : ""
+      }${
+        announcement.segment
+          ? ""
+          : "\nCobertura general usa ULTRAMSG_DEFAULT_TO; no es una lista automatica de todos los ciudadanos."
       }\nDeseas continuar?`,
     );
     if (!confirmed) return;
@@ -757,6 +761,12 @@ export function AnnouncementsManager({
                   <span>-</span>
                   <span>{announcement.segment?.name ?? "Cobertura general"}</span>
                 </div>
+
+                {!announcement.segment ? (
+                  <p className="mt-3 text-sm font-medium text-muted">
+                    Cobertura general envia a ULTRAMSG_DEFAULT_TO si esta configurado; para envio masivo real usa un segmento con numeros.
+                  </p>
+                ) : null}
 
                 <div className="mt-5 flex flex-wrap gap-3">
                   <Button
