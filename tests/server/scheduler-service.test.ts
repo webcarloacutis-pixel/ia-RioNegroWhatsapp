@@ -380,6 +380,42 @@ test("cron endpoint procesa con secret valido", async () => {
   );
 });
 
+test("cron endpoint acepta secret por header", async () => {
+  resetMockStoreForTests();
+
+  await withEnv(
+    {
+      CRON_SECRET: "secret-correcto",
+      DATABASE_URL: undefined,
+      DIRECT_URL: undefined,
+      WHATSAPP_DRY_RUN: "true",
+      WHATSAPP_SAFE_MODE: "false",
+      ULTRAMSG_MOCK: "false",
+      ULTRAMSG_DEFAULT_TO: "",
+    },
+    async () => {
+      const segment = await createTestSegment();
+      await createTestAnnouncement({
+        segmentId: segment.id,
+        scheduledAt: dateTimeLocalFromNow(-60 * 1000),
+      });
+
+      const response = await cronGet(
+        new Request("http://localhost/api/cron/process-scheduled-announcements", {
+          headers: {
+            "x-cron-secret": "secret-correcto",
+          },
+        }),
+      );
+      const payload = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(payload.ok, true);
+      assert.equal(payload.processed, 1);
+    },
+  );
+});
+
 test("admin scheduler run requiere sesion", async () => {
   const response = await adminRunPost(
     new Request("http://localhost/api/admin/scheduler/run", { method: "POST" }),

@@ -6,7 +6,9 @@ export const runtime = "nodejs";
 
 export async function GET(request: Request) {
   const configuredSecret = process.env.CRON_SECRET?.trim();
-  const providedSecret = new URL(request.url).searchParams.get("secret")?.trim();
+  const urlSecret = new URL(request.url).searchParams.get("secret")?.trim();
+  const headerSecret = request.headers.get("x-cron-secret")?.trim();
+  const providedSecret = headerSecret || urlSecret;
 
   if (!configuredSecret || providedSecret !== configuredSecret) {
     return NextResponse.json(

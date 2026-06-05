@@ -48,7 +48,7 @@ Configura estas variables en Render Environment:
 ```env
 CRON_SECRET=un-secreto-largo
 SCHEDULER_ENABLED=true
-SCHEDULER_INTERVAL_SECONDS=15
+SCHEDULER_INTERVAL_SECONDS=60
 ```
 
 No pongas `CRON_SECRET` en GitHub.
@@ -57,6 +57,12 @@ URL del cron:
 
 ```text
 https://TU_DOMINIO.onrender.com/api/cron/process-scheduled-announcements?secret=CRON_SECRET
+```
+
+Si tu herramienta de cron permite headers, tambien puedes llamar la URL sin query string y enviar:
+
+```text
+x-cron-secret: CRON_SECRET
 ```
 
 Frecuencia recomendada: cada 1 o 5 minutos.
