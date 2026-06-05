@@ -30,6 +30,7 @@ import type {
   SchedulerStatus,
   SegmentSummary,
 } from "@/lib/types";
+import { getChannelRuntimeStatus } from "@/server/channel-status-service";
 import * as mockStore from "@/server/mock-store";
 import { serializeAnnouncement, serializeDeliveryLog, serializeKnowledgeEntry, serializeSegment } from "@/server/serializers";
 import { sendMessage } from "@/server/messageService";
@@ -1085,6 +1086,7 @@ async function getDashboardDataDb(): Promise<DashboardData> {
     typeUsage,
     recentLogs,
     trendLogs,
+    segmentsWithRecipients,
   ] = await Promise.all([
     prisma.segment.aggregate({
       _sum: {
@@ -1133,6 +1135,13 @@ async function getDashboardDataDb(): Promise<DashboardData> {
         createdAt: true,
       },
     }),
+    prisma.segment.count({
+      where: {
+        recipientPhones: {
+          isEmpty: false,
+        },
+      },
+    }),
   ]);
 
   return {
@@ -1142,6 +1151,7 @@ async function getDashboardDataDb(): Promise<DashboardData> {
       activeAnnouncements: activeAnnouncementsCount,
       segments: segmentStats._count,
     },
+    channelStatus: getChannelRuntimeStatus({ segmentsWithRecipients }),
     messageTrend: buildTrendFromLogs(trendLogs),
     typeBreakdown: buildTypeBreakdown(typeUsage),
     upcomingAnnouncements: upcoming.map(serializeAnnouncement),

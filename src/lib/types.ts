@@ -130,6 +130,23 @@ export type DeliveryLogSummary = {
   createdAt: string;
 };
 
+export type ChannelRuntimeStatus = {
+  mode: "real" | "blocked" | "simulated" | "unconfigured";
+  label: string;
+  description: string;
+  badgeTone: "info" | "success" | "warning" | "danger";
+  safeMode: boolean;
+  dryRun: boolean;
+  ultramsgMock: boolean;
+  simulationMode: boolean;
+  ultraMsgConfigured: boolean;
+  defaultRecipientConfigured: boolean;
+  schedulerEnabled: boolean;
+  segmentsWithRecipients: number;
+  hasRecipientSource: boolean;
+  realSendingReady: boolean;
+};
+
 export type SchedulerRunSummary = {
   id: string | null;
   source: string;
@@ -184,6 +201,7 @@ export type DashboardData = {
     activeAnnouncements: number;
     segments: number;
   };
+  channelStatus: ChannelRuntimeStatus;
   messageTrend: Array<{
     label: string;
     deliveries: number;

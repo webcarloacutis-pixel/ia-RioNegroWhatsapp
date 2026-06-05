@@ -23,6 +23,7 @@ import { toast } from "sonner";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import type { ChannelRuntimeStatus } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 const navigation = [
@@ -41,10 +42,11 @@ const navigation = [
 
 type AppShellProps = {
   adminEmail: string;
+  channelStatus: ChannelRuntimeStatus;
   children: React.ReactNode;
 };
 
-export function AppShell({ adminEmail, children }: AppShellProps) {
+export function AppShell({ adminEmail, channelStatus, children }: AppShellProps) {
   const pathname = usePathname();
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -122,7 +124,7 @@ export function AppShell({ adminEmail, children }: AppShellProps) {
               Canal Oficial Inteligente
             </h1>
             <p className="mt-2 text-sm text-white/70">
-              Panel listo para comunicados, demo y futura integracion con bot.
+              Panel listo para comunicados, metricas y bot de WhatsApp.
             </p>
           </div>
           <button
@@ -178,11 +180,20 @@ export function AppShell({ adminEmail, children }: AppShellProps) {
         </nav>
 
         <div className="mt-auto rounded-[28px] border border-white/12 bg-white/7 p-4">
-          <Badge className="bg-[#d6f4f1] text-[#0f665f]">Modo demo activo</Badge>
+          <Badge tone={channelStatus.badgeTone}>{channelStatus.label}</Badge>
           <p className="mt-3 text-sm text-white/78">
-            Los envios se simulan con logs y feedback visual. `messageService` ya queda listo
-            para conectar tu bot despues.
+            {channelStatus.description}
           </p>
+          <div className="mt-3 space-y-1 text-xs text-white/60">
+            <p>UltraMsg: {channelStatus.ultraMsgConfigured ? "configurado" : "incompleto"}</p>
+            <p>Scheduler: {channelStatus.schedulerEnabled ? "habilitado" : "apagado"}</p>
+            <p>
+              Destinatarios:{" "}
+              {channelStatus.hasRecipientSource
+                ? "segmentos o default configurados"
+                : "faltan numeros"}
+            </p>
+          </div>
         </div>
       </aside>
 

@@ -25,10 +25,24 @@ type DashboardOverviewProps = {
 
 const pieColors = ["#173f73", "#0d7b82", "#f2b24d", "#1f8f62", "#c77d4f"];
 
+function EmptyBlock({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="flex min-h-[220px] items-center rounded-[24px] border border-dashed border-border bg-surface px-5 py-6">
+      <div>
+        <p className="font-semibold text-foreground">{title}</p>
+        <p className="mt-2 text-sm leading-6 text-muted">{body}</p>
+      </div>
+    </div>
+  );
+}
+
 export function DashboardOverview({
   data,
   pendingCitizenReports = 0,
 }: DashboardOverviewProps) {
+  const hasDeliveryActivity = data.messageTrend.some((item) => item.deliveries > 0);
+  const hasTypeActivity = data.typeBreakdown.some((item) => item.value > 0);
+
   return (
     <div className="space-y-6">
       {pendingCitizenReports > 0 ? (
@@ -55,25 +69,42 @@ export function DashboardOverview({
           <div className="max-w-3xl">
             <Badge tone="info">Centro de operaciones</Badge>
             <h1 className="mt-4 text-4xl text-foreground">
-              Controla comunicados oficiales, simulaciones y conocimiento ciudadano desde un solo lugar.
+              Controla comunicados oficiales, metricas y conocimiento ciudadano desde un solo lugar.
             </h1>
             <p className="mt-4 text-base leading-8 text-muted">
-              Este panel esta orientado a demo institucional: muestra impacto, orden operativo y deja lista la futura integracion con tu bot de WhatsApp.
+              Esta vista usa los registros reales de comunicados, segmentos, entregas y reportes para mostrar el estado operativo del canal.
             </p>
           </div>
           <div className="rounded-[28px] border border-border bg-white/70 px-5 py-4">
             <p className="text-sm font-semibold text-muted">Estado del canal</p>
-            <p className="mt-2 text-2xl font-semibold text-foreground">Modo demo activo</p>
-            <p className="mt-2 text-sm text-muted">
-              Los envios se procesan con logs y audiencias simuladas.
+            <div className="mt-2">
+              <Badge tone={data.channelStatus.badgeTone}>{data.channelStatus.label}</Badge>
+            </div>
+            <p className="mt-3 text-base font-semibold text-foreground">
+              {data.channelStatus.realSendingReady ? "Envio real habilitado" : "Revisa configuracion antes de enviar real"}
             </p>
+            <p className="mt-2 text-sm text-muted">
+              {data.channelStatus.description}
+            </p>
+            <div className="mt-4 grid gap-2 text-xs text-muted sm:grid-cols-2">
+              <span>Safe mode: {data.channelStatus.safeMode ? "activo" : "inactivo"}</span>
+              <span>Dry-run: {data.channelStatus.dryRun ? "activo" : "inactivo"}</span>
+              <span>UltraMsg: {data.channelStatus.ultraMsgConfigured ? "configurado" : "incompleto"}</span>
+              <span>Scheduler: {data.channelStatus.schedulerEnabled ? "habilitado" : "apagado"}</span>
+              <span>
+                Segmentos con numeros: {formatCompactNumber(data.channelStatus.segmentsWithRecipients)}
+              </span>
+              <span>
+                Default TO: {data.channelStatus.defaultRecipientConfigured ? "configurado" : "faltante"}
+              </span>
+            </div>
           </div>
         </div>
       </section>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <StatCard
-          label="Usuarios simulados"
+          label="Audiencia estimada"
           value={formatCompactNumber(data.stats.users)}
           note="Cobertura total calculada a partir de los segmentos registrados."
           badge="Segmentado"
@@ -81,13 +112,13 @@ export function DashboardOverview({
         <StatCard
           label="Mensajes gestionados"
           value={formatCompactNumber(data.stats.messages)}
-          note="Incluye envios demo, manuales y programados."
+          note="Incluye envios reales, simulados, manuales y programados."
           badge="Operativo"
         />
         <StatCard
           label="Comunicados activos"
           value={formatCompactNumber(data.stats.activeAnnouncements)}
-          note="Piezas listas para ser simuladas o enviadas."
+          note="Piezas programadas pendientes de procesamiento."
           badge="Programados"
         />
         <StatCard
@@ -107,25 +138,32 @@ export function DashboardOverview({
             <h2 className="mt-2 text-2xl text-foreground">Actividad de los ultimos 7 dias</h2>
           </div>
           <div className="h-80 min-h-[320px] w-full min-w-[280px] overflow-hidden">
-            <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={320}>
-              <AreaChart data={data.messageTrend}>
-                <defs>
-                  <linearGradient id="dashboardTrend" x1="0" x2="0" y1="0" y2="1">
-                    <stop offset="0%" stopColor="#173f73" stopOpacity={0.36} />
-                    <stop offset="100%" stopColor="#173f73" stopOpacity={0.02} />
-                  </linearGradient>
-                </defs>
-                <CartesianGrid vertical={false} stroke="rgba(22,36,51,0.08)" />
-                <Tooltip />
-                <Area
-                  type="monotone"
-                  dataKey="deliveries"
-                  stroke="#173f73"
-                  strokeWidth={3}
-                  fill="url(#dashboardTrend)"
-                />
-              </AreaChart>
-            </ResponsiveContainer>
+            {hasDeliveryActivity ? (
+              <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={320}>
+                <AreaChart data={data.messageTrend}>
+                  <defs>
+                    <linearGradient id="dashboardTrend" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" stopColor="#173f73" stopOpacity={0.36} />
+                      <stop offset="100%" stopColor="#173f73" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid vertical={false} stroke="rgba(22,36,51,0.08)" />
+                  <Tooltip />
+                  <Area
+                    type="monotone"
+                    dataKey="deliveries"
+                    stroke="#173f73"
+                    strokeWidth={3}
+                    fill="url(#dashboardTrend)"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <EmptyBlock
+                title="Sin entregas registradas"
+                body="Cuando envies o simules comunicados, esta grafica mostrara la actividad de los ultimos 7 dias."
+              />
+            )}
           </div>
         </PanelCard>
 
@@ -137,23 +175,30 @@ export function DashboardOverview({
             <h2 className="mt-2 text-2xl text-foreground">Uso por tipo de comunicado</h2>
           </div>
           <div className="h-80 min-h-[320px] w-full min-w-[280px] overflow-hidden">
-            <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={320}>
-              <PieChart>
-                <Pie
-                  data={data.typeBreakdown}
-                  dataKey="value"
-                  nameKey="label"
-                  innerRadius={65}
-                  outerRadius={108}
-                  paddingAngle={4}
-                >
-                  {data.typeBreakdown.map((entry, index) => (
-                    <Cell key={entry.label} fill={pieColors[index % pieColors.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            {hasTypeActivity ? (
+              <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={320}>
+                <PieChart>
+                  <Pie
+                    data={data.typeBreakdown}
+                    dataKey="value"
+                    nameKey="label"
+                    innerRadius={65}
+                    outerRadius={108}
+                    paddingAngle={4}
+                  >
+                    {data.typeBreakdown.map((entry, index) => (
+                      <Cell key={entry.label} fill={pieColors[index % pieColors.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <EmptyBlock
+                title="Sin tipos registrados"
+                body="Crea comunicados para ver la distribucion por categoria."
+              />
+            )}
           </div>
           <div className="grid gap-2">
             {data.typeBreakdown.map((item, index) => (
@@ -184,6 +229,12 @@ export function DashboardOverview({
             <h2 className="mt-2 text-2xl text-foreground">Comunicados listos para salir</h2>
           </div>
           <div className="space-y-4">
+            {data.upcomingAnnouncements.length === 0 ? (
+              <EmptyBlock
+                title="No hay comunicados programados"
+                body="Los comunicados con estado Programado apareceran aqui con su fecha en hora Colombia."
+              />
+            ) : null}
             {data.upcomingAnnouncements.map((announcement) => (
               <article
                 key={announcement.id}
@@ -220,6 +271,12 @@ export function DashboardOverview({
             <h2 className="mt-2 text-2xl text-foreground">Ultimos movimientos del canal</h2>
           </div>
           <div className="space-y-3">
+            {data.recentLogs.length === 0 ? (
+              <EmptyBlock
+                title="Sin movimientos recientes"
+                body="Los envios manuales, programados y simulaciones apareceran en esta bitacora."
+              />
+            ) : null}
             {data.recentLogs.map((log) => (
               <div key={log.id} className="rounded-[24px] bg-surface px-4 py-4">
                 <div className="flex items-center justify-between gap-3">

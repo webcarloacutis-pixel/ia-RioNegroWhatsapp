@@ -8,6 +8,7 @@ import "./lib/url-security.test";
 import "./lib/validations.test";
 import "./server/assistant-session.test";
 import "./server/auth.test";
+import "./server/channel-status-service.test";
 import "./server/middleware.test";
 import "./server/message-service.test";
 import "./server/scheduler-service.test";

@@ -29,6 +29,7 @@ import type {
   SchedulerStatus,
   SegmentSummary,
 } from "@/lib/types";
+import { getChannelRuntimeStatus } from "@/server/channel-status-service";
 import { sendMessage } from "@/server/messageService";
 
 type AnnouncementInput = {
@@ -990,6 +991,9 @@ export async function getDashboardData(): Promise<DashboardData> {
   const scheduledAnnouncements = state.announcements.filter(
     (item) => item.status === "SCHEDULED",
   );
+  const segmentsWithRecipients = state.segments.filter(
+    (segment) => segment.recipientPhones.length > 0,
+  ).length;
 
   return {
     stats: {
@@ -998,6 +1002,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       activeAnnouncements: scheduledAnnouncements.length,
       segments: state.segments.length,
     },
+    channelStatus: getChannelRuntimeStatus({ segmentsWithRecipients }),
     messageTrend: buildTrendFromLogs(state.deliveryLogs),
     typeBreakdown: buildTypeBreakdown(
       state.announcements.map((item) => ({
