@@ -201,6 +201,22 @@ test("knowledgeInputSchema acepta metadatos administrativos", () => {
   assert.ok(payload.lastVerifiedAt instanceof Date);
 });
 
+test("knowledgeInputSchema acepta ficha simple sin metadatos tecnicos", () => {
+  const payload = knowledgeInputSchema.parse({
+    question: "Donde queda el restaurante Las Delicias?",
+    answer: "El restaurante Las Delicias queda en el centro de Rionegro.",
+    category: "Restaurantes",
+  });
+
+  assert.equal(payload.question, "Donde queda el restaurante Las Delicias?");
+  assert.equal(payload.answer, "El restaurante Las Delicias queda en el centro de Rionegro.");
+  assert.equal(payload.category, "Restaurantes");
+  assert.equal(payload.sourceType, "manual_admin");
+  assert.equal(payload.confidence, 0.8);
+  assert.deepEqual(payload.tags, []);
+  assert.deepEqual(payload.aliases, []);
+});
+
 test("knowledgeInputSchema rechaza confianza fuera de rango", () => {
   assert.throws(() =>
     knowledgeInputSchema.parse({

@@ -16,6 +16,7 @@ import {
   Search,
   ShieldCheck,
   Tags,
+  Trash2,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -29,9 +30,12 @@ import { clientLogger } from "@/lib/client-logger";
 import {
   KNOWLEDGE_CATEGORY_SUGGESTIONS,
   KNOWLEDGE_INTENT_SUGGESTIONS,
-  KNOWLEDGE_SOURCE_TYPES,
 } from "@/lib/constants";
 import { formatDate } from "@/lib/format";
+import {
+  getKnowledgeCategoryLabel,
+  getKnowledgeIntentLabel,
+} from "@/lib/knowledge-metadata";
 import { cn } from "@/lib/utils";
 import type {
   KnowledgeEntrySummary,
@@ -105,7 +109,7 @@ const emptyForm: KnowledgeFormState = {
   isOfficial: false,
   isActive: true,
   needsReview: false,
-  confidence: 0.7,
+  confidence: 0.8,
   lastVerifiedAt: "",
 };
 
@@ -141,7 +145,7 @@ function toFormState(entry?: KnowledgeEntrySummary): KnowledgeFormState {
     intent: entry.intent ?? "",
     shortAnswer: entry.shortAnswer ?? "",
     tagsText: entry.tags.join(", "),
-    aliasesText: entry.aliases.join(", "),
+    aliasesText: entry.aliases.join("\n"),
     sourceUrl: entry.sourceUrl ?? "",
     sourceName: entry.sourceName ?? "",
     sourceType: entry.sourceType,
@@ -246,6 +250,7 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [detailEntry, setDetailEntry] = useState<KnowledgeEntrySummary | null>(null);
   const [editingEntry, setEditingEntry] = useState<KnowledgeEntrySummary | null>(null);
+  const [deletingEntry, setDeletingEntry] = useState<KnowledgeEntrySummary | null>(null);
   const [isEditorOpen, setIsEditorOpen] = useState(false);
   const [form, setForm] = useState<KnowledgeFormState>(emptyForm);
   const [bulkCategory, setBulkCategory] = useState<string>(KNOWLEDGE_CATEGORY_SUGGESTIONS[0]);
@@ -395,6 +400,25 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
     }
   }
 
+  async function handleDelete(entry: KnowledgeEntrySummary) {
+    try {
+      await apiRequest<{ id: string }>(`/api/knowledge/${entry.id}`, {
+        method: "DELETE",
+      });
+      toast.success("Ficha eliminada correctamente.");
+      setDeletingEntry(null);
+      setDetailEntry((current) => (current?.id === entry.id ? null : current));
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        next.delete(entry.id);
+        return next;
+      });
+      await reload();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo eliminar la ficha.");
+    }
+  }
+
   async function handleBulk(action: "activate" | "deactivate" | "markReviewed" | "changeCategory") {
     if (!selectedIds.size) return;
 
@@ -417,8 +441,8 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
     }
   }
 
-  async function handleTestAnswer(entryId?: string) {
-    const question = testQuestion.trim();
+  async function handleTestAnswer(entryId?: string, questionOverride?: string) {
+    const question = (questionOverride ?? testQuestion).trim();
     if (!question) {
       toast.error("Escribe una pregunta para Eva.");
       return;
@@ -431,6 +455,14 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
         body: JSON.stringify({ question, entryId }),
       });
       setTestResult(result);
+      if (questionOverride) {
+        setTestQuestion(questionOverride);
+      }
+      if (result.wouldSayUnknown) {
+        toast.warning("Eva no encontro una ficha suficientemente relacionada.");
+      } else {
+        toast.success("Eva encontro una ficha relacionada.");
+      }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "No se pudo probar con Eva.");
     }
@@ -534,7 +566,7 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
             <option value="">Categoria</option>
             {KNOWLEDGE_CATEGORY_SUGGESTIONS.map((category) => (
               <option key={category} value={category}>
-                {category}
+                {getKnowledgeCategoryLabel(category)}
               </option>
             ))}
           </Select>
@@ -546,7 +578,7 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
             <option value="">Intencion</option>
             {KNOWLEDGE_INTENT_SUGGESTIONS.map((intent) => (
               <option key={intent} value={intent}>
-                {intent}
+                {getKnowledgeIntentLabel(intent)}
               </option>
             ))}
           </Select>
@@ -606,7 +638,7 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
                 updateFilters({ category: filters.category === facet.value ? "" : facet.value })
               }
             >
-              {facet.label} {facet.count}
+              {getKnowledgeCategoryLabel(facet.label)} {facet.count}
             </button>
           ))}
         </div>
@@ -635,7 +667,7 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
             >
               {KNOWLEDGE_CATEGORY_SUGGESTIONS.map((category) => (
                 <option key={category} value={category}>
-                  {category}
+                  {getKnowledgeCategoryLabel(category)}
                 </option>
               ))}
             </Select>
@@ -676,8 +708,10 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
                   onSelect={() => toggleSelected(entry.id)}
                   onDetail={() => setDetailEntry(entry)}
                   onEdit={() => openEdit(entry)}
+                  onTest={() => handleTestAnswer(entry.id, entry.question)}
                   onToggleActive={() => handleToggleActive(entry)}
                   onMarkReviewed={() => handleMarkReviewed(entry)}
+                  onDelete={() => setDeletingEntry(entry)}
                 />
               ))}
             </div>
@@ -738,6 +772,11 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
                       <p key={item.id}>{item.question}</p>
                     ))}
                   </div>
+                ) : testResult.wouldSayUnknown ? (
+                  <p className="mt-3 text-xs font-semibold text-[#7c5719]">
+                    Eva no encontro una ficha suficientemente relacionada. Revisa la pregunta,
+                    variantes o categoria.
+                  </p>
                 ) : null}
               </div>
             ) : null}
@@ -818,6 +857,14 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
           }}
         />
       ) : null}
+
+      {deletingEntry ? (
+        <DeleteConfirmDialog
+          entry={deletingEntry}
+          onCancel={() => setDeletingEntry(null)}
+          onConfirm={() => handleDelete(deletingEntry)}
+        />
+      ) : null}
     </div>
   );
 }
@@ -828,8 +875,10 @@ type KnowledgeCardProps = {
   onSelect: () => void;
   onDetail: () => void;
   onEdit: () => void;
+  onTest: () => void;
   onToggleActive: () => void;
   onMarkReviewed: () => void;
+  onDelete: () => void;
 };
 
 function KnowledgeCard({
@@ -838,8 +887,10 @@ function KnowledgeCard({
   onSelect,
   onDetail,
   onEdit,
+  onTest,
   onToggleActive,
   onMarkReviewed,
+  onDelete,
 }: KnowledgeCardProps) {
   return (
     <article className="rounded-[24px] border border-border bg-white p-5 shadow-sm">
@@ -853,14 +904,12 @@ function KnowledgeCard({
         />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap gap-2">
-            <Badge tone="info">{entry.category}</Badge>
-            {entry.intent ? <Badge>{entry.intent}</Badge> : null}
+            <Badge tone="info">{getKnowledgeCategoryLabel(entry.category)}</Badge>
             <Badge tone={entry.isActive ? "success" : "danger"}>
               {entry.isActive ? "Activo" : "Inactivo"}
             </Badge>
-            {entry.needsReview ? <Badge tone="warning">Requiere revision</Badge> : null}
             {entry.isOfficial ? <Badge tone="success">Oficial</Badge> : null}
-            {entry.confidence < 0.7 ? <Badge tone="warning">Baja confianza</Badge> : null}
+            {entry.needsReview ? <Badge tone="warning">Requiere revision</Badge> : null}
           </div>
           <h3 className="mt-4 text-xl font-semibold leading-7 text-foreground">{entry.question}</h3>
           <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted">
@@ -869,22 +918,9 @@ function KnowledgeCard({
         </div>
       </div>
 
-      <div className="mt-4 grid gap-2 text-sm text-muted sm:grid-cols-2">
-        <p>Fuente: {entry.sourceName ?? "Sin fuente"}</p>
-        <p>Confianza: {formatPercent(entry.confidence)}</p>
-        <p>Verificada: {entry.lastVerifiedAt ? formatDate(entry.lastVerifiedAt) : "Pendiente"}</p>
+      <div className="mt-4 text-sm text-muted">
         <p>Actualizada: {formatDate(entry.updatedAt)}</p>
       </div>
-
-      {entry.tags.length || entry.aliases.length ? (
-        <div className="mt-4 flex flex-wrap gap-2">
-          {[...entry.tags, ...entry.aliases].slice(0, 6).map((tag) => (
-            <span key={tag} className="rounded-full bg-surface px-2.5 py-1 text-xs text-muted">
-              {tag}
-            </span>
-          ))}
-        </div>
-      ) : null}
 
       <div className="mt-5 flex flex-wrap gap-2">
         <Button variant="secondary" className="gap-2" onClick={onDetail}>
@@ -894,6 +930,10 @@ function KnowledgeCard({
         <Button variant="secondary" className="gap-2" onClick={onEdit}>
           <Edit3 className="size-4" />
           Editar
+        </Button>
+        <Button variant="secondary" className="gap-2" onClick={onTest}>
+          <FlaskConical className="size-4" />
+          Probar
         </Button>
         <Button variant="secondary" className="gap-2" onClick={onToggleActive}>
           <Power className="size-4" />
@@ -905,6 +945,10 @@ function KnowledgeCard({
             Revisada
           </Button>
         ) : null}
+        <Button variant="ghost" className="gap-2 text-danger" onClick={onDelete}>
+          <Trash2 className="size-4" />
+          Eliminar
+        </Button>
       </div>
     </article>
   );
@@ -933,8 +977,8 @@ function DetailPanel({
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="flex flex-wrap gap-2">
-              <Badge tone="info">{entry.category}</Badge>
-              {entry.intent ? <Badge>{entry.intent}</Badge> : null}
+              <Badge tone="info">{getKnowledgeCategoryLabel(entry.category)}</Badge>
+              {entry.intent ? <Badge>{getKnowledgeIntentLabel(entry.intent)}</Badge> : null}
               {entry.isOfficial ? <Badge tone="success">Oficial</Badge> : null}
               {entry.needsReview ? <Badge tone="warning">Requiere revision</Badge> : null}
             </div>
@@ -1019,6 +1063,42 @@ function DetailBlock({ label, value }: { label: string; value: string }) {
   );
 }
 
+function DeleteConfirmDialog({
+  entry,
+  onCancel,
+  onConfirm,
+}: {
+  entry: KnowledgeEntrySummary;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f1d2c66] px-4 backdrop-blur-sm">
+      <div className="w-full max-w-lg rounded-[24px] border border-border bg-white p-6 shadow-2xl">
+        <Badge tone="danger">Eliminar ficha</Badge>
+        <h2 className="mt-4 text-2xl font-semibold text-foreground">
+          Eva dejara de usar esta informacion
+        </h2>
+        <p className="mt-3 text-sm leading-6 text-muted">
+          Seguro que quieres eliminar esta ficha? Esta accion quitara la informacion de la base de
+          conocimiento.
+        </p>
+        <p className="mt-4 rounded-2xl bg-surface px-4 py-3 text-sm font-semibold text-foreground">
+          {entry.question}
+        </p>
+        <div className="mt-6 flex flex-wrap justify-end gap-3">
+          <Button type="button" variant="ghost" onClick={onCancel}>
+            Cancelar
+          </Button>
+          <Button type="button" variant="danger" onClick={onConfirm}>
+            Eliminar ficha
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 type EditDialogProps = {
   entry: KnowledgeEntrySummary | null;
   form: KnowledgeFormState;
@@ -1030,26 +1110,18 @@ type EditDialogProps = {
 function EditDialog({ entry, form, setForm, onSubmit, onClose }: EditDialogProps) {
   const isOfficialScraped =
     entry?.isOfficial && (entry.sourceType === "official_website" || entry.sourceType === "scraped_official");
-  const statusFields: Array<{
-    key: "isActive" | "isOfficial" | "needsReview";
-    label: string;
-  }> = [
-    { key: "isActive", label: "Activo" },
-    { key: "isOfficial", label: "Oficial" },
-    { key: "needsReview", label: "Requiere revision" },
-  ];
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-[#0f1d2c66] px-4 py-8 backdrop-blur-sm">
       <form
-        className="mx-auto max-w-4xl rounded-[28px] border border-border bg-white p-6 shadow-2xl"
+        className="mx-auto max-w-3xl rounded-[24px] border border-border bg-white p-6 shadow-2xl"
         onSubmit={onSubmit}
       >
         <div className="flex items-start justify-between gap-4">
           <div>
             <Badge tone="info">{entry ? "Editar" : "Nueva ficha"}</Badge>
             <h2 className="mt-3 text-3xl font-semibold text-foreground">
-              {entry ? entry.question : "Ficha de conocimiento"}
+              {entry ? "Editar ficha" : "Agregar informacion para Eva"}
             </h2>
           </div>
           <button
@@ -1067,14 +1139,15 @@ function EditDialog({ entry, form, setForm, onSubmit, onClose }: EditDialogProps
           </div>
         ) : null}
 
-        <div className="mt-6 grid gap-4 md:grid-cols-2">
+        <div className="mt-6 grid gap-5">
           <label className="space-y-2 md:col-span-2">
-            <span className="text-sm font-semibold text-foreground">Titulo</span>
+            <span className="text-sm font-semibold text-foreground">Pregunta o tema</span>
             <Input
               value={form.question}
               onChange={(event) =>
                 setForm((current) => ({ ...current, question: event.target.value }))
               }
+              placeholder="Ej. Donde queda el restaurante Las Delicias?"
               required
             />
           </label>
@@ -1089,153 +1162,52 @@ function EditDialog({ entry, form, setForm, onSubmit, onClose }: EditDialogProps
             >
               {KNOWLEDGE_CATEGORY_SUGGESTIONS.map((category) => (
                 <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </Select>
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-foreground">Intencion</span>
-            <Select
-              value={form.intent}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, intent: event.target.value }))
-              }
-            >
-              <option value="">Sin intencion</option>
-              {KNOWLEDGE_INTENT_SUGGESTIONS.map((intent) => (
-                <option key={intent} value={intent}>
-                  {intent}
+                  {getKnowledgeCategoryLabel(category)}
                 </option>
               ))}
             </Select>
           </label>
 
           <label className="space-y-2 md:col-span-2">
-            <span className="text-sm font-semibold text-foreground">Respuesta corta</span>
-            <Textarea
-              value={form.shortAnswer}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, shortAnswer: event.target.value }))
-              }
-            />
-          </label>
-
-          <label className="space-y-2 md:col-span-2">
-            <span className="text-sm font-semibold text-foreground">Contenido completo</span>
+            <span className="text-sm font-semibold text-foreground">Respuesta que Eva debe dar</span>
             <Textarea
               className="min-h-[180px]"
               value={form.answer}
               onChange={(event) =>
                 setForm((current) => ({ ...current, answer: event.target.value }))
               }
+              placeholder="Ej. El restaurante Las Delicias queda en el centro de Rionegro..."
               required
             />
           </label>
 
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-foreground">Tags</span>
-            <Input
-              value={form.tagsText}
+          <label className="flex items-center gap-3 rounded-2xl border border-border px-4 py-3">
+            <input
+              type="checkbox"
+              className="size-4 accent-primary"
+              checked={form.isActive}
               onChange={(event) =>
-                setForm((current) => ({ ...current, tagsText: event.target.value }))
+                setForm((current) => ({ ...current, isActive: event.target.checked }))
               }
             />
+            <span className="text-sm font-semibold text-foreground">
+              Eva puede usar esta informacion
+            </span>
           </label>
 
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-foreground">Aliases</span>
-            <Input
+          <label className="space-y-2 md:col-span-2">
+            <span className="text-sm font-semibold text-foreground">
+              Otras formas en que la gente puede preguntar
+            </span>
+            <Textarea
+              className="min-h-[110px]"
               value={form.aliasesText}
               onChange={(event) =>
                 setForm((current) => ({ ...current, aliasesText: event.target.value }))
               }
+              placeholder={"ubicacion restaurante las delicias\ndonde esta las delicias\ncomo llego al restaurante las delicias"}
             />
           </label>
-
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-foreground">Fuente</span>
-            <Input
-              value={form.sourceName}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, sourceName: event.target.value }))
-              }
-            />
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-foreground">URL fuente</span>
-            <Input
-              value={form.sourceUrl}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, sourceUrl: event.target.value }))
-              }
-            />
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-foreground">Tipo de fuente</span>
-            <Select
-              value={form.sourceType}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, sourceType: event.target.value }))
-              }
-            >
-              {KNOWLEDGE_SOURCE_TYPES.map((sourceType) => (
-                <option key={sourceType} value={sourceType}>
-                  {sourceTypeLabel(sourceType)}
-                </option>
-              ))}
-            </Select>
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-foreground">Confianza</span>
-            <Input
-              type="number"
-              min="0"
-              max="1"
-              step="0.01"
-              value={form.confidence}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, confidence: Number(event.target.value) }))
-              }
-            />
-          </label>
-
-          <label className="space-y-2">
-            <span className="text-sm font-semibold text-foreground">Ultima verificacion</span>
-            <Input
-              type="datetime-local"
-              value={form.lastVerifiedAt}
-              onChange={(event) =>
-                setForm((current) => ({ ...current, lastVerifiedAt: event.target.value }))
-              }
-            />
-          </label>
-        </div>
-
-        <div className="mt-5 grid gap-3 sm:grid-cols-3">
-          {statusFields.map(({ key, label }) => (
-            <label
-              key={key}
-              className="flex items-center gap-3 rounded-2xl border border-border px-4 py-3"
-            >
-              <input
-                type="checkbox"
-                className="size-4 accent-primary"
-                checked={form[key]}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    [key]: event.target.checked,
-                  }))
-                }
-              />
-              <span className="text-sm font-semibold text-foreground">{label}</span>
-            </label>
-          ))}
         </div>
 
         <div className="mt-6 flex flex-wrap justify-end gap-3">

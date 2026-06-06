@@ -3,6 +3,7 @@ import test from "node:test";
 import "./lib/api.test";
 import "./lib/constants.test";
 import "./lib/format.test";
+import "./lib/knowledge-metadata.test";
 import "./lib/logger.test";
 import "./lib/rionegro-content.test";
 import "./lib/url-security.test";

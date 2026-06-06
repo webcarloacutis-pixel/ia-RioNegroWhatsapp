@@ -283,7 +283,7 @@ export const knowledgeInputSchema = z.object({
     .number()
     .min(0, "La confianza no puede ser menor a 0.")
     .max(1, "La confianza no puede ser mayor a 1.")
-    .default(0.7),
+    .default(0.8),
   lastVerifiedAt: nullableKnowledgeDateSchema.default(null),
 });
 

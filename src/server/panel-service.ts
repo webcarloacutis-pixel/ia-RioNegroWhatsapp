@@ -18,6 +18,10 @@ import {
   formatDateTimeForBogotaDisplay,
   parseBogotaDateTimeLocalToUtcDate,
 } from "@/lib/format";
+import {
+  generateKnowledgeMetadata,
+  scoreKnowledgeEntry,
+} from "@/lib/knowledge-metadata";
 import { classifyPrismaError, logger, sanitizeError } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import type {
@@ -1097,7 +1101,11 @@ function cleanFilter(value?: string | null) {
   return cleaned || null;
 }
 
-function buildKnowledgeWhere(input: KnowledgeListFilters = {}) {
+function buildKnowledgeWhere(
+  input: KnowledgeListFilters = {},
+  options: { includeSearch?: boolean } = {},
+) {
+  const includeSearch = options.includeSearch ?? true;
   const where: Prisma.KnowledgeBaseEntryWhereInput = {};
   const q = cleanFilter(input.q);
   const category = cleanFilter(input.category);
@@ -1116,7 +1124,7 @@ function buildKnowledgeWhere(input: KnowledgeListFilters = {}) {
   if (input.lowConfidence) where.confidence = { lt: LOW_CONFIDENCE_THRESHOLD };
   if (tag) where.tags = { has: tag };
 
-  if (q) {
+  if (includeSearch && q) {
     where.OR = [
       { question: { contains: q, mode: "insensitive" } },
       { answer: { contains: q, mode: "insensitive" } },
@@ -1275,12 +1283,13 @@ async function listKnowledgeDashboardDb(
 ): Promise<KnowledgeListResult> {
   const page = normalizeKnowledgePage(input.page);
   const pageSize = normalizeKnowledgePageSize(input.pageSize);
-  const where = buildKnowledgeWhere(input);
+  const hasSearch = Boolean(input.q?.trim());
+  const where = buildKnowledgeWhere(input, { includeSearch: !hasSearch });
 
   logger.info("knowledge", "prisma query started", {
     page,
     pageSize,
-    hasSearch: Boolean(input.q?.trim()),
+    hasSearch,
     category: input.category,
     intent: input.intent,
     isActive: input.isActive,
@@ -1288,18 +1297,30 @@ async function listKnowledgeDashboardDb(
   });
 
   try {
-    const [items, total, facets, summary, conflicts] = await Promise.all([
+    const [rawItems, totalFromDb, facets, summary, conflicts] = await Promise.all([
       prisma.knowledgeBaseEntry.findMany({
         where,
         orderBy: [{ needsReview: "desc" }, { updatedAt: "desc" }],
-        skip: (page - 1) * pageSize,
-        take: pageSize,
+        skip: hasSearch ? 0 : (page - 1) * pageSize,
+        take: hasSearch ? 1000 : pageSize,
       }),
-      prisma.knowledgeBaseEntry.count({ where }),
+      hasSearch ? Promise.resolve(0) : prisma.knowledgeBaseEntry.count({ where }),
       getKnowledgeFacetsDb(),
       getKnowledgeDashboardSummaryDb(),
       listKnowledgeConflictsDb(),
     ]);
+    const rankedItems = hasSearch
+      ? rawItems
+          .map(serializeKnowledgeEntry)
+          .map((item) => ({ item, score: scoreKnowledgeEntry(item, input.q ?? "") }))
+          .filter(({ score }) => score >= 25)
+          .sort((left, right) => right.score - left.score)
+          .map(({ item }) => item)
+      : rawItems.map(serializeKnowledgeEntry);
+    const total = hasSearch ? rankedItems.length : totalFromDb;
+    const items = hasSearch
+      ? rankedItems.slice((page - 1) * pageSize, page * pageSize)
+      : rankedItems;
 
     logger.info("knowledge", "prisma query success", {
       page,
@@ -1310,7 +1331,7 @@ async function listKnowledgeDashboardDb(
     });
 
     return {
-      items: items.map(serializeKnowledgeEntry),
+      items,
       pagination: {
         page,
         pageSize,
@@ -1343,9 +1364,34 @@ async function getKnowledgeEntryDb(id: string) {
   return serializeKnowledgeEntry(entry);
 }
 
+function mergeKnowledgeLists(generated: string[], provided: string[]) {
+  return Array.from(new Set([...provided, ...generated].map((item) => item.trim()).filter(Boolean)));
+}
+
+function applyGeneratedKnowledgeMetadata(input: KnowledgeInput): KnowledgeInput {
+  const generated = generateKnowledgeMetadata({
+    question: input.question,
+    answer: input.answer,
+    category: input.category,
+    userAliases: input.aliases,
+  });
+
+  return {
+    ...input,
+    intent: input.intent ?? generated.intent ?? null,
+    tags: mergeKnowledgeLists(generated.tags, input.tags),
+    aliases: mergeKnowledgeLists(generated.aliases, input.aliases),
+    sourceName: input.sourceName || generated.sourceName,
+    sourceType: input.sourceType || generated.sourceType,
+    confidence: Number.isFinite(input.confidence) ? input.confidence : generated.confidence,
+    isOfficial: input.isOfficial ?? generated.isOfficial,
+    needsReview: input.needsReview ?? generated.needsReview,
+  };
+}
+
 async function createKnowledgeEntryDb(input: KnowledgeInput) {
   const entry = await prisma.knowledgeBaseEntry.create({
-    data: input,
+    data: applyGeneratedKnowledgeMetadata(input),
   });
 
   return serializeKnowledgeEntry(entry);
@@ -1362,7 +1408,7 @@ async function updateKnowledgeEntryDb(id: string, input: KnowledgeInput) {
 
   const entry = await prisma.knowledgeBaseEntry.update({
     where: { id },
-    data: input,
+    data: applyGeneratedKnowledgeMetadata(input),
   });
 
   return serializeKnowledgeEntry(entry);
@@ -1451,74 +1497,16 @@ async function bulkUpdateKnowledgeEntriesDb(input: KnowledgeBulkActionInput) {
   };
 }
 
-function normalizeKnowledgeText(value: string) {
-  return value
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase();
-}
-
-function scoreKnowledgeItem(item: KnowledgeEntrySummary, query: string) {
-  const normalizedQuery = normalizeKnowledgeText(query);
-  const tokens = normalizedQuery.split(/\W+/).filter((token) => token.length >= 3);
-  const haystack = normalizeKnowledgeText(
-    [
-      item.question,
-      item.answer,
-      item.shortAnswer,
-      item.category,
-      item.intent,
-      item.sourceName,
-      ...item.tags,
-      ...item.aliases,
-    ]
-      .filter(Boolean)
-      .join(" "),
-  );
-
-  let score = item.confidence * 20;
-
-  if (haystack.includes(normalizedQuery)) {
-    score += 50;
-  }
-
-  for (const token of tokens) {
-    if (haystack.includes(token)) score += 10;
-  }
-
-  if (item.isOfficial) score += 10;
-  if (item.needsReview) score -= 10;
-  if (!item.isActive) score -= 50;
-
-  return Math.max(0, score);
-}
-
 async function testKnowledgeAnswerDb(
   input: KnowledgeTestAnswerInput,
 ): Promise<KnowledgeTestAnswerResult> {
   const initialCandidates = input.entryId
     ? [await getKnowledgeEntryDb(input.entryId)]
-    : (
-        await listKnowledgeDashboardDb({
-          q: input.question,
-          isActive: true,
-          page: 1,
-          pageSize: 5,
-        })
-      ).items;
-  const candidateItems = initialCandidates.length
-    ? initialCandidates
-    : (
-        await listKnowledgeDashboardDb({
-          isActive: true,
-          page: 1,
-          pageSize: 24,
-        })
-      ).items;
+    : await listKnowledgeEntriesDb();
 
-  const rankedItems = candidateItems
-    .map((item) => ({ item, score: scoreKnowledgeItem(item, input.question) }))
-    .filter(({ score }) => score >= 20)
+  const rankedItems = initialCandidates
+    .map((item) => ({ item, score: scoreKnowledgeEntry(item, input.question) }))
+    .filter(({ score }) => score >= 35)
     .sort((left, right) => right.score - left.score)
     .slice(0, 3);
 

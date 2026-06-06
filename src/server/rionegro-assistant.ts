@@ -8,6 +8,7 @@ import {
   officialAnnouncementTranslations,
 } from "@/lib/rionegro-content";
 import { buildPlaceSearchText, officialPlaces, type OfficialPlace } from "@/lib/rionegro-places";
+import { scoreKnowledgeEntry } from "@/lib/knowledge-metadata";
 import type {
   AnnouncementSummary,
   AssistantChatResult,
@@ -1056,27 +1057,22 @@ function searchKnowledgeEntries(
   language: AssistantLanguage,
   knowledgeEntries: KnowledgeEntrySummary[],
 ) {
-  const tokens = tokenize(message);
   const rankedEntries = knowledgeEntries
     .map((entry) => {
       const categoryBonus =
         topic === "INSTITUTIONAL" || topic === "FAQ"
-          ? scoreByTokens(entry.category, tokens)
+          ? scoreByTokens(entry.category, tokenize(message))
           : 0;
       const languageBonus = detectEntryLanguage(entry.question) === language ? 25 : 0;
 
-      const score =
-        scoreByTokens(entry.question, tokens) * 3 +
-        scoreByTokens(entry.answer, tokens) +
-        categoryBonus +
-        languageBonus;
+      const score = scoreKnowledgeEntry(entry, message) + categoryBonus + languageBonus;
 
       return {
         entry,
         score,
       };
     })
-    .filter((item) => item.score > 0)
+    .filter((item) => item.score >= 35)
     .sort((left, right) => right.score - left.score);
 
   const sameLanguageEntries = rankedEntries.filter(

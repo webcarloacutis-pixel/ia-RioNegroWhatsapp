@@ -5,6 +5,7 @@ import {
   type ConversationalIntent,
 } from "@/server/intent-classifier";
 import type { KnowledgeEntrySummary } from "@/lib/types";
+import { scoreKnowledgeEntry } from "@/lib/knowledge-metadata";
 import { extractLocationFromReportText } from "@/server/citizen-report-service";
 import { listKnowledgeEntriesFromDatabase } from "@/server/panel-service";
 import { getEmergencyContactReference, getEmergencyContacts } from "@/server/emergency-contacts";
@@ -314,17 +315,14 @@ export async function retrieveRelevantKnowledge(input: {
   const entries = dedupeKnowledgeEntries(storedEntries);
   const ranked = entries
     .map((entry) => {
-      const relevanceScore =
-        scoreTextByTokens(entry.question, tokens) * 3 +
-        scoreTextByTokens(entry.answer, tokens) +
-        scoreTextByTokens(entry.category, tokens);
+      const relevanceScore = scoreKnowledgeEntry(entry, input.userMessage);
 
       return {
         ...entry,
         relevanceScore,
       };
     })
-    .filter((entry) => entry.relevanceScore >= 20)
+    .filter((entry) => entry.relevanceScore >= 35)
     .sort((left, right) => right.relevanceScore - left.relevanceScore)
     .slice(0, maxItems);
 
