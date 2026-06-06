@@ -3,7 +3,6 @@ import {
   assistantRules,
   assistantSampleQuestions,
   assistantScopeMessage,
-  buildOfficialKnowledgeEntries,
   institutionalServices,
   municipalityContact,
   officialAnnouncementTranslations,
@@ -30,7 +29,7 @@ import {
 } from "@/server/assistant-session";
 import { analyzeCitizenAlertIntent } from "@/server/citizen-report-service";
 import { generateOpenAIText, getOpenAIModel, isOpenAIConfigured } from "@/server/openai-service";
-import { listAnnouncements, listKnowledgeEntries } from "@/server/panel-service";
+import { listAnnouncements, listKnowledgeEntriesFromDatabase } from "@/server/panel-service";
 import {
   analyzeConversationIntent,
   generateGroundedAnswer,
@@ -1048,33 +1047,6 @@ function mergeKnowledgeEntries(knowledgeEntries: KnowledgeEntrySummary[]) {
     merged.set(normalizeText(entry.question), entry);
   }
 
-  for (const [index, entry] of buildOfficialKnowledgeEntries().entries()) {
-    const key = normalizeText(entry.question);
-
-    if (!merged.has(key)) {
-      merged.set(key, {
-        id: `official-${index}`,
-        question: entry.question,
-        answer: entry.answer,
-        category: entry.category,
-        intent: null,
-        shortAnswer: null,
-        tags: [entry.category.toLowerCase()],
-        aliases: [],
-        sourceUrl: "https://rionegro.gov.co/",
-        sourceName: "Sitio oficial Alcaldia de Rionegro",
-        sourceType: "derived_fallback",
-        isOfficial: true,
-        isActive: true,
-        needsReview: false,
-        confidence: 0.8,
-        lastVerifiedAt: null,
-        createdAt: new Date(0).toISOString(),
-        updatedAt: new Date(0).toISOString(),
-      });
-    }
-  }
-
   return Array.from(merged.values());
 }
 
@@ -2013,7 +1985,7 @@ async function retrieveOfficialContext(
 ): Promise<RetrievalBundle> {
   const [announcements, knowledgeEntries] = await Promise.all([
     listAnnouncements(),
-    listKnowledgeEntries(),
+    listKnowledgeEntriesFromDatabase(),
   ]);
   const allKnowledgeEntries = mergeKnowledgeEntries(knowledgeEntries);
 

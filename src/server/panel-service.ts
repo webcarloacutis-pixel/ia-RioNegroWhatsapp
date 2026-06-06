@@ -2041,6 +2041,10 @@ export async function listKnowledgeEntries(): Promise<KnowledgeEntrySummary[]> {
   return withMockFallback(listKnowledgeEntriesDb, mockStore.listKnowledgeEntries);
 }
 
+export async function listKnowledgeEntriesFromDatabase(): Promise<KnowledgeEntrySummary[]> {
+  return listKnowledgeEntriesDb();
+}
+
 export async function listKnowledgeDashboard(input: KnowledgeListFilters = {}) {
   return withMockFallback(
     () => listKnowledgeDashboardDb(input),
@@ -2049,59 +2053,35 @@ export async function listKnowledgeDashboard(input: KnowledgeListFilters = {}) {
 }
 
 export async function getKnowledgeEntry(id: string) {
-  return withMockFallback(
-    () => getKnowledgeEntryDb(id),
-    () => mockStore.getKnowledgeEntry(id),
-  );
+  return getKnowledgeEntryDb(id);
 }
 
 export async function createKnowledgeEntry(input: KnowledgeInput) {
-  return withMockFallback(
-    () => createKnowledgeEntryDb(input),
-    () => mockStore.createKnowledgeEntry(input),
-  );
+  return createKnowledgeEntryDb(input);
 }
 
 export async function updateKnowledgeEntry(id: string, input: KnowledgeInput) {
-  return withMockFallback(
-    () => updateKnowledgeEntryDb(id, input),
-    () => mockStore.updateKnowledgeEntry(id, input),
-  );
+  return updateKnowledgeEntryDb(id, input);
 }
 
 export async function deleteKnowledgeEntry(id: string) {
-  return withMockFallback(
-    () => deleteKnowledgeEntryDb(id),
-    () => mockStore.deleteKnowledgeEntry(id),
-  );
+  return deleteKnowledgeEntryDb(id);
 }
 
 export async function toggleKnowledgeEntryActive(id: string) {
-  return withMockFallback(
-    () => toggleKnowledgeEntryActiveDb(id),
-    () => mockStore.toggleKnowledgeEntryActive(id),
-  );
+  return toggleKnowledgeEntryActiveDb(id);
 }
 
 export async function markKnowledgeEntryReviewed(id: string) {
-  return withMockFallback(
-    () => markKnowledgeEntryReviewedDb(id),
-    () => mockStore.markKnowledgeEntryReviewed(id),
-  );
+  return markKnowledgeEntryReviewedDb(id);
 }
 
 export async function bulkUpdateKnowledgeEntries(input: KnowledgeBulkActionInput) {
-  return withMockFallback(
-    () => bulkUpdateKnowledgeEntriesDb(input),
-    () => mockStore.bulkUpdateKnowledgeEntries(input),
-  );
+  return bulkUpdateKnowledgeEntriesDb(input);
 }
 
 export async function testKnowledgeAnswer(input: KnowledgeTestAnswerInput) {
-  return withMockFallback(
-    () => testKnowledgeAnswerDb(input),
-    () => mockStore.testKnowledgeAnswer(input),
-  );
+  return testKnowledgeAnswerDb(input);
 }
 
 export async function getDashboardData(): Promise<DashboardData> {

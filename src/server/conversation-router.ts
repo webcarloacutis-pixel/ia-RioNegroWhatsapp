@@ -5,9 +5,8 @@ import {
   type ConversationalIntent,
 } from "@/server/intent-classifier";
 import type { KnowledgeEntrySummary } from "@/lib/types";
-import { buildOfficialKnowledgeEntries } from "@/lib/rionegro-content";
 import { extractLocationFromReportText } from "@/server/citizen-report-service";
-import { listKnowledgeEntries } from "@/server/panel-service";
+import { listKnowledgeEntriesFromDatabase } from "@/server/panel-service";
 import { getEmergencyContactReference, getEmergencyContacts } from "@/server/emergency-contacts";
 import {
   UNKNOWN_OFFICIAL_DATA_REPLY,
@@ -131,39 +130,10 @@ function scoreTextByTokens(text: string, tokens: string[]) {
   return score;
 }
 
-function toKnowledgeEntrySummary(
-  entry: ReturnType<typeof buildOfficialKnowledgeEntries>[number],
-  index: number,
-): KnowledgeEntrySummary {
-  return {
-    id: `official-${index}`,
-    question: entry.question,
-    answer: entry.answer,
-    category: entry.category,
-    intent: null,
-    shortAnswer: null,
-    tags: [entry.category.toLowerCase()],
-    aliases: [],
-    sourceUrl: "https://rionegro.gov.co/",
-    sourceName: "Sitio oficial Alcaldia de Rionegro",
-    sourceType: "derived_fallback",
-    isOfficial: true,
-    isActive: true,
-    needsReview: false,
-    confidence: 0.8,
-    lastVerifiedAt: null,
-    createdAt: new Date(0).toISOString(),
-    updatedAt: new Date(0).toISOString(),
-  };
-}
-
-function mergeKnowledgeSources(
-  storedEntries: KnowledgeEntrySummary[],
-  officialEntries: KnowledgeEntrySummary[],
-) {
+function dedupeKnowledgeEntries(storedEntries: KnowledgeEntrySummary[]) {
   const merged = new Map<string, KnowledgeEntrySummary>();
 
-  for (const entry of [...officialEntries, ...storedEntries]) {
+  for (const entry of storedEntries) {
     merged.set(normalizeText(entry.question), entry);
   }
 
@@ -340,9 +310,8 @@ export async function retrieveRelevantKnowledge(input: {
     return [];
   }
 
-  const officialEntries = buildOfficialKnowledgeEntries().map(toKnowledgeEntrySummary);
-  const storedEntries = await listKnowledgeEntries();
-  const entries = mergeKnowledgeSources(storedEntries, officialEntries);
+  const storedEntries = await listKnowledgeEntriesFromDatabase();
+  const entries = dedupeKnowledgeEntries(storedEntries);
   const ranked = entries
     .map((entry) => {
       const relevanceScore =
