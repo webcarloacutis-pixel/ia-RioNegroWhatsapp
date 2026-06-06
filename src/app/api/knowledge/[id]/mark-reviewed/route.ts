@@ -1,5 +1,6 @@
 import { assertAdminApiSession } from "@/lib/auth";
-import { handleApiError, ok } from "@/lib/api";
+import { ok, withApiLogging } from "@/lib/api";
+import { logger } from "@/lib/logger";
 import { markKnowledgeEntryReviewed } from "@/server/panel-service";
 
 type RouteContext = {
@@ -8,12 +9,11 @@ type RouteContext = {
   }>;
 };
 
-export async function POST(_request: Request, context: RouteContext) {
-  try {
+export async function POST(request: Request, context: RouteContext) {
+  return withApiLogging(request, { module: "knowledge" }, async (requestId) => {
     await assertAdminApiSession();
     const { id } = await context.params;
+    logger.info("knowledge", "mark reviewed requested", { requestId, id });
     return ok(await markKnowledgeEntryReviewed(id));
-  } catch (error) {
-    return handleApiError(error);
-  }
+  });
 }

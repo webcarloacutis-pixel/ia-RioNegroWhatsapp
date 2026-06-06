@@ -18,6 +18,7 @@ import {
   formatDateTimeForBogotaDisplay,
   parseBogotaDateTimeLocalToUtcDate,
 } from "@/lib/format";
+import { classifyPrismaError, logger, sanitizeError } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import type {
   AnnouncementSummary,
@@ -475,14 +476,16 @@ async function withMockFallback<T>(
     }
 
     if (!fallbackWarningShown) {
-      console.warn(
-        "[panel-service] PostgreSQL no esta disponible. Se activa el modo demo en memoria para que el panel siga funcionando.",
+      logger.warn(
+        "panel-service",
+        "PostgreSQL no esta disponible. Se activa el modo demo en memoria para que el panel siga funcionando.",
       );
       fallbackWarningShown = true;
     }
 
-    console.warn("[dashboard] using fallback data", {
-      error: error instanceof Error ? error.message : "unknown_error",
+    logger.warn("dashboard", "using fallback demo data", {
+      reason: classifyPrismaError(error),
+      error: sanitizeError(error),
     });
 
     return runWithMock();
@@ -1274,32 +1277,58 @@ async function listKnowledgeDashboardDb(
   const pageSize = normalizeKnowledgePageSize(input.pageSize);
   const where = buildKnowledgeWhere(input);
 
-  const [items, total, facets, summary, conflicts] = await Promise.all([
-    prisma.knowledgeBaseEntry.findMany({
-      where,
-      orderBy: [{ needsReview: "desc" }, { updatedAt: "desc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.knowledgeBaseEntry.count({ where }),
-    getKnowledgeFacetsDb(),
-    getKnowledgeDashboardSummaryDb(),
-    listKnowledgeConflictsDb(),
-  ]);
+  logger.info("knowledge", "prisma query started", {
+    page,
+    pageSize,
+    hasSearch: Boolean(input.q?.trim()),
+    category: input.category,
+    intent: input.intent,
+    isActive: input.isActive,
+    needsReview: input.needsReview,
+  });
 
-  return {
-    items: items.map(serializeKnowledgeEntry),
-    pagination: {
+  try {
+    const [items, total, facets, summary, conflicts] = await Promise.all([
+      prisma.knowledgeBaseEntry.findMany({
+        where,
+        orderBy: [{ needsReview: "desc" }, { updatedAt: "desc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      prisma.knowledgeBaseEntry.count({ where }),
+      getKnowledgeFacetsDb(),
+      getKnowledgeDashboardSummaryDb(),
+      listKnowledgeConflictsDb(),
+    ]);
+
+    logger.info("knowledge", "prisma query success", {
       page,
       pageSize,
+      returned: items.length,
       total,
-      totalPages: Math.max(1, Math.ceil(total / pageSize)),
-    },
-    facets,
-    summary,
-    conflicts,
-    fallback: false,
-  };
+      fallback: false,
+    });
+
+    return {
+      items: items.map(serializeKnowledgeEntry),
+      pagination: {
+        page,
+        pageSize,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / pageSize)),
+      },
+      facets,
+      summary,
+      conflicts,
+      fallback: false,
+    };
+  } catch (error) {
+    logger.error("knowledge", "prisma query failed", {
+      classification: classifyPrismaError(error),
+      error: sanitizeError(error),
+    });
+    throw error;
+  }
 }
 
 async function getKnowledgeEntryDb(id: string) {

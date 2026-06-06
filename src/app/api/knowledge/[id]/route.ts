@@ -1,5 +1,6 @@
 import { assertAdminApiSession } from "@/lib/auth";
-import { handleApiError, ok, parseRequestBody } from "@/lib/api";
+import { ok, parseRequestBody, withApiLogging } from "@/lib/api";
+import { logger } from "@/lib/logger";
 import { knowledgeInputSchema } from "@/lib/validations";
 import {
   deleteKnowledgeEntry,
@@ -13,33 +14,37 @@ type RouteContext = {
   }>;
 };
 
-export async function GET(_request: Request, context: RouteContext) {
-  try {
+export async function GET(request: Request, context: RouteContext) {
+  return withApiLogging(request, { module: "knowledge" }, async (requestId) => {
     await assertAdminApiSession();
     const { id } = await context.params;
+    logger.info("knowledge", "detail requested", { requestId, id });
     return ok(await getKnowledgeEntry(id));
-  } catch (error) {
-    return handleApiError(error);
-  }
+  });
 }
 
 export async function PATCH(request: Request, context: RouteContext) {
-  try {
+  return withApiLogging(request, { module: "knowledge" }, async (requestId) => {
     await assertAdminApiSession();
     const { id } = await context.params;
     const payload = await parseRequestBody(request, knowledgeInputSchema);
+    logger.info("knowledge", "update requested", {
+      requestId,
+      id,
+      category: payload.category,
+      intent: payload.intent,
+      isActive: payload.isActive,
+      needsReview: payload.needsReview,
+    });
     return ok(await updateKnowledgeEntry(id, payload));
-  } catch (error) {
-    return handleApiError(error);
-  }
+  });
 }
 
-export async function DELETE(_request: Request, context: RouteContext) {
-  try {
+export async function DELETE(request: Request, context: RouteContext) {
+  return withApiLogging(request, { module: "knowledge" }, async (requestId) => {
     await assertAdminApiSession();
     const { id } = await context.params;
+    logger.warn("knowledge", "delete requested", { requestId, id });
     return ok(await deleteKnowledgeEntry(id));
-  } catch (error) {
-    return handleApiError(error);
-  }
+  });
 }

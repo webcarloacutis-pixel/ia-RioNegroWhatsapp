@@ -3,6 +3,7 @@ import { randomBytes } from "node:crypto";
 import { v2 as cloudinary, type UploadApiResponse } from "cloudinary";
 
 import { AppError } from "@/lib/errors";
+import { logger, sanitizeError } from "@/lib/logger";
 
 export const MAX_ANNOUNCEMENT_IMAGE_BYTES = 5 * 1024 * 1024;
 export const MAX_ANNOUNCEMENT_AUDIO_BYTES = 15 * 1024 * 1024;
@@ -539,19 +540,75 @@ async function uploadAudioToCloudinary(
 export async function uploadAnnouncementImage(
   file: UploadableFile,
 ): Promise<AnnouncementImageUploadResult> {
+  logger.info("uploads", "upload requested", {
+    fileType: file?.type,
+    size: file?.size,
+    provider: "cloudinary",
+    kind: "image",
+  });
   assertCloudinaryConfigured();
 
-  const image = await validateAnnouncementImageFile(file);
-  return uploadToCloudinary(image);
+  try {
+    const image = await validateAnnouncementImageFile(file);
+    logger.info("uploads", "cloudinary upload started", {
+      fileType: image.mimeType,
+      size: image.size,
+      provider: "cloudinary",
+      folder: getCloudinaryFolder(),
+    });
+    const result = await uploadToCloudinary(image);
+    logger.info("uploads", "cloudinary upload success", {
+      fileType: result.mimeType,
+      size: result.size,
+      provider: result.provider,
+      publicId: result.publicId.slice(0, 24),
+    });
+    return result;
+  } catch (error) {
+    logger.error("uploads", "cloudinary upload failed", {
+      provider: "cloudinary",
+      kind: "image",
+      error: sanitizeError(error),
+    });
+    throw error;
+  }
 }
 
 export async function uploadAnnouncementAudio(
   file: UploadableFile,
 ): Promise<AnnouncementAudioUploadResult> {
+  logger.info("uploads", "upload requested", {
+    fileType: file?.type,
+    size: file?.size,
+    provider: "cloudinary",
+    kind: "audio",
+  });
   assertCloudinaryConfigured();
 
-  const audio = await validateAnnouncementAudioFile(file);
-  return uploadAudioToCloudinary(audio);
+  try {
+    const audio = await validateAnnouncementAudioFile(file);
+    logger.info("uploads", "cloudinary upload started", {
+      fileType: audio.mimeType,
+      size: audio.size,
+      provider: "cloudinary",
+      folder: getCloudinaryAudioFolder(),
+    });
+    const result = await uploadAudioToCloudinary(audio);
+    logger.info("uploads", "cloudinary upload success", {
+      fileType: result.mimeType,
+      size: result.size,
+      provider: result.provider,
+      publicId: result.publicId.slice(0, 24),
+    });
+    return result;
+  } catch (error) {
+    logger.error("uploads", "cloudinary upload failed", {
+      provider: "cloudinary",
+      kind: "audio",
+      error: sanitizeError(error),
+    });
+    throw error;
+  }
 }
 
 export async function deleteAnnouncementAudio(publicId?: string | null) {

@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { clientLogger } from "@/lib/client-logger";
 import {
   KNOWLEDGE_CATEGORY_SUGGESTIONS,
   KNOWLEDGE_INTENT_SUGGESTIONS,
@@ -250,6 +251,7 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
   const [bulkCategory, setBulkCategory] = useState<string>(KNOWLEDGE_CATEGORY_SUGGESTIONS[0]);
   const [testQuestion, setTestQuestion] = useState("");
   const [testResult, setTestResult] = useState<KnowledgeTestAnswerResult | null>(null);
+  const [lastKnowledgeRequestId, setLastKnowledgeRequestId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const selectedItems = useMemo(
     () => data.items.filter((item) => selectedIds.has(item.id)),
@@ -260,14 +262,33 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
     const timeout = window.setTimeout(() => {
       startTransition(async () => {
         try {
+          clientLogger.info("knowledge", "loading", {
+            path: "/api/knowledge",
+            page: filters.page,
+            pageSize: filters.pageSize,
+          });
           const response = await fetch(`/api/knowledge?${buildQuery(filters)}`);
+          const requestId = response.headers.get("x-request-id");
           const payload = await response.json();
 
           if (!response.ok) {
+            clientLogger.error("knowledge", "request failed", {
+              status: response.status,
+              path: "/api/knowledge",
+              requestId: payload.requestId ?? requestId,
+              message: payload.error,
+            });
             throw new Error(payload.error ?? "No se pudo cargar la base.");
           }
 
+          setLastKnowledgeRequestId(requestId ?? payload.requestId ?? null);
           setData(payload.data);
+          if (payload.data?.fallback) {
+            clientLogger.warn("knowledge", "fallback demo shown", {
+              requestId: requestId ?? payload.requestId,
+              path: "/api/knowledge",
+            });
+          }
         } catch (error) {
           toast.error(error instanceof Error ? error.message : "No se pudo cargar la base.");
         }
@@ -299,12 +320,25 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
 
   async function apiRequest<T>(url: string, options?: RequestInit): Promise<T> {
     const response = await fetch(url, options);
+    const requestId = response.headers.get("x-request-id");
     const payload = await response.json();
 
     if (!response.ok) {
-      throw new Error(payload.error ?? "No se pudo procesar la solicitud.");
+      const diagnosticId = payload.requestId ?? requestId;
+      clientLogger.error("knowledge", "request failed", {
+        status: response.status,
+        path: url,
+        requestId: diagnosticId,
+        message: payload.error,
+      });
+      throw new Error(
+        diagnosticId
+          ? `${payload.error ?? "No se pudo procesar la solicitud."} Codigo: ${diagnosticId}`
+          : payload.error ?? "No se pudo procesar la solicitud.",
+      );
     }
 
+    setLastKnowledgeRequestId(requestId ?? payload.requestId ?? null);
     return payload.data as T;
   }
 
@@ -464,7 +498,10 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
 
         {data.fallback ? (
           <div className="mt-5 rounded-2xl border border-[#f1d7a4] bg-[#fff7e8] px-4 py-3 text-sm text-[#7c5719]">
-            Mostrando datos demo porque la base de datos no esta disponible.
+            No se pudo conectar con la base de conocimiento real. Se estan mostrando datos demo.
+            {lastKnowledgeRequestId ? (
+              <span className="ml-1 font-semibold">Codigo de diagnostico: {lastKnowledgeRequestId}</span>
+            ) : null}
           </div>
         ) : null}
       </section>

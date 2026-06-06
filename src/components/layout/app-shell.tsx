@@ -17,6 +17,7 @@ import {
   ShieldCheck,
   Send,
   Siren,
+  Stethoscope,
   X,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -38,6 +39,7 @@ const navigation = [
   { href: "/dashboard/segmentacion", label: "Segmentacion", icon: Radar },
   { href: "/dashboard/metricas", label: "Metricas", icon: BarChart3 },
   { href: "/dashboard/estado-sistema", label: "Estado del Sistema", icon: Activity },
+  { href: "/dashboard/diagnostico", label: "Diagnostico", icon: Stethoscope },
 ];
 
 type AppShellProps = {

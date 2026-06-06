@@ -901,8 +901,8 @@ export function QaDashboardPanel({ initialData }: QaDashboardPanelProps) {
           <section className="grid gap-6 xl:grid-cols-2">
             <PanelCard className="space-y-5">
               <SectionHeader eyebrow="Grafica" title="Pass Rate por categoria" />
-              <div className="h-80 min-h-[320px]">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-80 min-h-[320px] w-full min-w-[280px] overflow-hidden">
+                <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={320}>
                   <BarChart data={data.charts.passRateByCategory.length ? data.charts.passRateByCategory : chartFallback}>
                     <CartesianGrid vertical={false} stroke="rgba(22,36,51,0.08)" />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} hide />
@@ -916,8 +916,8 @@ export function QaDashboardPanel({ initialData }: QaDashboardPanelProps) {
 
             <PanelCard className="space-y-5">
               <SectionHeader eyebrow="Historico" title="Evolucion historica" />
-              <div className="h-80 min-h-[320px]">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-80 min-h-[320px] w-full min-w-[280px] overflow-hidden">
+                <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={320}>
                   <LineChart data={historicalData}>
                     <CartesianGrid vertical={false} stroke="rgba(22,36,51,0.08)" />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} />
@@ -931,8 +931,8 @@ export function QaDashboardPanel({ initialData }: QaDashboardPanelProps) {
 
             <PanelCard className="space-y-5">
               <SectionHeader eyebrow="Rendimiento" title="Tiempo de respuesta" />
-              <div className="h-80 min-h-[320px]">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-80 min-h-[320px] w-full min-w-[280px] overflow-hidden">
+                <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={320}>
                   <LineChart data={responseTimeData}>
                     <CartesianGrid vertical={false} stroke="rgba(22,36,51,0.08)" />
                     <XAxis dataKey="label" tickLine={false} axisLine={false} />
@@ -946,8 +946,8 @@ export function QaDashboardPanel({ initialData }: QaDashboardPanelProps) {
 
             <PanelCard className="space-y-5">
               <SectionHeader eyebrow="Errores" title="Distribucion de errores" />
-              <div className="h-80 min-h-[320px]">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-80 min-h-[320px] w-full min-w-[280px] overflow-hidden">
+                <ResponsiveContainer width="100%" height="100%" minWidth={280} minHeight={320}>
                   <PieChart>
                     <Tooltip content={<ChartTooltip />} />
                     <Pie

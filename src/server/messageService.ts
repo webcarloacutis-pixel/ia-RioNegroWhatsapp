@@ -1,6 +1,8 @@
 import axios from "axios";
 import qs from "qs";
 
+import { logger, maskPhone, sanitizeError } from "@/lib/logger";
+
 type SendMessageInput = {
   message: string;
   segment:
@@ -154,8 +156,7 @@ function getUltraMsgToken() {
 }
 
 function maskRecipient(value: string) {
-  const digits = value.replace(/\D/g, "");
-  return digits.length <= 4 ? "****" : `****${digits.slice(-4)}`;
+  return maskPhone(value);
 }
 
 function redactUltraMsgDetail(value: string) {
@@ -299,7 +300,7 @@ function reserveSafeInboundReply(input: {
   const sentInboundIds = getSentInboundIds();
 
   if (sentInboundIds.has(input.inboundMessageId)) {
-    console.log("[whatsapp] skipped duplicate", {
+    logger.info("whatsapp", "skipped duplicate", {
       messageId: input.inboundMessageId,
       scope: "outbound_reply",
     });
@@ -396,13 +397,13 @@ export async function sendWhatsAppText({
   inboundMessageId,
 }: WhatsAppTextInput) {
   if (isWhatsAppDryRunMode()) {
-    console.log("[ultramsg] sending text", {
+    logger.info("ultramsg", "send text started", {
       to: maskRecipient(to),
       inboundReply,
       dryRun: true,
     });
 
-    console.log("[ultramsg] reply sent", {
+    logger.info("ultramsg", "send success", {
       to: maskRecipient(to),
       type: "text",
       dryRun: true,
@@ -435,7 +436,7 @@ export async function sendWhatsAppText({
     body: message,
   });
 
-  console.log("[ultramsg] sending text", {
+  logger.info("ultramsg", "send text started", {
     to: maskRecipient(to),
     inboundReply,
   });
@@ -454,9 +455,10 @@ export async function sendWhatsAppText({
 
   safeReservation.markSent();
 
-  console.log("[ultramsg] reply sent", {
+  logger.info("ultramsg", "send success", {
     to: maskRecipient(to),
     type: "text",
+    httpStatus: response.status,
   });
 
   return responseData;
@@ -476,14 +478,14 @@ export async function sendWhatsAppAudio({
   }
 
   if (isWhatsAppDryRunMode()) {
-    console.log("[ultramsg] sending audio", {
+    logger.info("ultramsg", "send audio started", {
       to: maskRecipient(to),
       inboundReply,
       announcementId,
       dryRun: true,
     });
 
-    console.log("[ultramsg] reply sent", {
+    logger.info("ultramsg", "send success", {
       to: maskRecipient(to),
       type: "audio",
       dryRun: true,
@@ -521,7 +523,7 @@ export async function sendWhatsAppAudio({
     caption,
   });
 
-  console.log("[ultramsg] sending audio", {
+  logger.info("ultramsg", "send audio started", {
     to: maskRecipient(to),
     inboundReply,
     announcementId,
@@ -542,9 +544,10 @@ export async function sendWhatsAppAudio({
 
   safeReservation.markSent();
 
-  console.log("[ultramsg] reply sent", {
+  logger.info("ultramsg", "send success", {
     to: maskRecipient(to),
     type: "audio",
+    httpStatus: response.status,
   });
 
   return responseData;
@@ -564,14 +567,14 @@ export async function sendWhatsAppImage({
   }
 
   if (isWhatsAppDryRunMode()) {
-    console.log("[ultramsg] sending image", {
+    logger.info("ultramsg", "send image started", {
       to: maskRecipient(to),
       inboundReply,
       announcementId,
       dryRun: true,
     });
 
-    console.log("[ultramsg] reply sent", {
+    logger.info("ultramsg", "send success", {
       to: maskRecipient(to),
       type: "image",
       dryRun: true,
@@ -609,7 +612,7 @@ export async function sendWhatsAppImage({
     caption,
   });
 
-  console.log("[ultramsg] sending image", {
+  logger.info("ultramsg", "send image started", {
     to: maskRecipient(to),
     inboundReply,
     announcementId,
@@ -629,9 +632,10 @@ export async function sendWhatsAppImage({
 
   safeReservation.markSent();
 
-  console.log("[ultramsg] reply sent", {
+  logger.info("ultramsg", "send success", {
     to: maskRecipient(to),
     type: "image",
+    httpStatus: response.status,
   });
 
   return responseData;
@@ -643,14 +647,14 @@ export async function sendWhatsAppTextAfterAudioFailure({
   inboundMessageId,
 }: WhatsAppTextInput) {
   if (isWhatsAppDryRunMode()) {
-    console.log("[ultramsg] sending text", {
+    logger.info("ultramsg", "send text started", {
       to: maskRecipient(to),
       inboundReply: true,
       fallback: "audio_failed",
       dryRun: true,
     });
 
-    console.log("[ultramsg] reply sent", {
+    logger.info("ultramsg", "send success", {
       to: maskRecipient(to),
       type: "text",
       fallback: "audio_failed",
@@ -673,7 +677,7 @@ export async function sendWhatsAppTextAfterAudioFailure({
     body: message,
   });
 
-  console.log("[ultramsg] sending text", {
+  logger.info("ultramsg", "send text started", {
     to: maskRecipient(to),
     inboundReply: true,
     fallback: "audio_failed",
@@ -693,10 +697,11 @@ export async function sendWhatsAppTextAfterAudioFailure({
 
   safeReservation.markSent();
 
-  console.log("[ultramsg] reply sent", {
+  logger.info("ultramsg", "send success", {
     to: maskRecipient(to),
     type: "text",
     fallback: "audio_failed",
+    httpStatus: response.status,
   });
 
   return responseData;
@@ -717,7 +722,7 @@ async function sendMessageMock({
   const hasAudio = Boolean(audioUrl?.trim());
   const mediaSuffix = formatMediaLogSuffix({ hasImage, hasAudio });
 
-  console.log("[messageService] envio mock ejecutado", {
+  logger.info("messageService", "mock send executed", {
     mode,
     scheduledAt: scheduledAt.toISOString(),
     segment: targetName,
@@ -787,7 +792,7 @@ async function sendMessageUltraMsg({
   const recipients = resolveRecipients(to || segment?.recipientPhones?.join(",") || null);
 
   if (!recipients.length) {
-    console.warn("[announcements] no recipients", {
+    logger.warn("announcements", "no recipients", {
       mode,
       segment: targetName,
     });
@@ -809,7 +814,7 @@ async function sendMessageUltraMsg({
   }
 
   if (dryRun) {
-    console.log("[announcements] dry-run simulated", {
+    logger.info("announcements", "dry-run simulated", {
       mode,
       recipients: recipients.length,
       segment: targetName,
@@ -821,7 +826,7 @@ async function sendMessageUltraMsg({
 
     try {
       if (!dryRun) {
-        console.log("[announcements] ultramsg sending", {
+        logger.info("announcements", "ultramsg send started", {
           mode,
           to: maskRecipient(recipient),
           segment: targetName,
@@ -882,12 +887,12 @@ async function sendMessageUltraMsg({
               inboundReply: false,
             });
           } catch (error) {
-            console.error("[announcements] ultramsg long caption fallback failed", {
+            logger.error("announcements", "ultramsg long caption fallback failed", {
               mode,
               scheduledAt: scheduledAt.toISOString(),
               segment: targetName,
               to: maskRecipient(recipient),
-              error: error instanceof Error ? error.message : "unknown_error",
+              error: sanitizeError(error),
             });
           }
         }
@@ -914,12 +919,12 @@ async function sendMessageUltraMsg({
       });
     } catch (error) {
       if (hasAudio) {
-        console.error("[announcements] audio announcement failed", {
+        logger.error("announcements", "audio announcement failed", {
           mode,
           scheduledAt: scheduledAt.toISOString(),
           segment: targetName,
           to: maskRecipient(recipient),
-          error: error instanceof Error ? error.message : "unknown_error",
+          error: sanitizeError(error),
         });
 
         if (!sentAudioIntro) {
@@ -938,12 +943,12 @@ async function sendMessageUltraMsg({
 
             continue;
           } catch (fallbackError) {
-            console.error("[announcements] audio text fallback failed", {
+            logger.error("announcements", "audio text fallback failed", {
               mode,
               scheduledAt: scheduledAt.toISOString(),
               segment: targetName,
               to: maskRecipient(recipient),
-              error: fallbackError instanceof Error ? fallbackError.message : "unknown_error",
+              error: sanitizeError(fallbackError),
             });
           }
         }
@@ -953,12 +958,12 @@ async function sendMessageUltraMsg({
       }
 
       if (hasImage) {
-        console.error("[announcements] ultramsg image failed", {
+        logger.error("announcements", "ultramsg image failed", {
           mode,
           scheduledAt: scheduledAt.toISOString(),
           segment: targetName,
           to: maskRecipient(recipient),
-          error: error instanceof Error ? error.message : "unknown_error",
+          error: sanitizeError(error),
         });
 
         try {
@@ -977,22 +982,22 @@ async function sendMessageUltraMsg({
 
           continue;
         } catch (fallbackError) {
-          console.error("[announcements] ultramsg image fallback failed", {
+          logger.error("announcements", "ultramsg image fallback failed", {
             mode,
             scheduledAt: scheduledAt.toISOString(),
             segment: targetName,
             to: maskRecipient(recipient),
-            error: fallbackError instanceof Error ? fallbackError.message : "unknown_error",
+            error: sanitizeError(fallbackError),
           });
         }
       }
 
-      console.error("[messageService] error UltraMsg", {
+      logger.error("messageService", "ultramsg send failed", {
         mode,
         scheduledAt: scheduledAt.toISOString(),
         segment: targetName,
         to: maskRecipient(recipient),
-        error: error instanceof Error ? error.message : "unknown_error",
+        error: sanitizeError(error),
       });
 
       failures.push(recipient);
@@ -1007,12 +1012,12 @@ async function sendMessageUltraMsg({
     );
   }
 
-  console.log("[messageService] envio UltraMsg ejecutado", {
+  logger.info("messageService", "ultramsg send completed", {
     mode,
     scheduledAt: scheduledAt.toISOString(),
     segment: targetName,
-    to: recipients.map(maskRecipient),
-    body: responses,
+    recipientCount: recipients.length,
+    responseCount: responses.length,
     failures: failures.map(maskRecipient),
   });
 
@@ -1047,7 +1052,7 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
   }
 
   if (isWhatsAppSafeMode()) {
-    console.warn("[announcements] blocked by safe mode", {
+    logger.warn("announcements", "safe mode blocked", {
       mode: input.mode,
       segment: input.segment?.name ?? "Cobertura general",
     });
@@ -1068,7 +1073,7 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
 
   if (!isUltraMsgConfigured()) {
     const error = getUltraMsgConfigError();
-    console.warn("[announcements] failed", {
+    logger.warn("announcements", "failed", {
       mode: input.mode,
       error,
     });

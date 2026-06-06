@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 
 import { createAdminSession, maskEmail, validateAdminCredentials } from "@/lib/auth";
-import { handleApiError, ok, parseRequestBody } from "@/lib/api";
+import { getOrCreateRequestId, handleApiError, ok, parseRequestBody } from "@/lib/api";
 import { AppError } from "@/lib/errors";
+import { logger } from "@/lib/logger";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { loginSchema } from "@/lib/validations";
 
@@ -12,12 +13,15 @@ const LOGIN_RATE_LIMIT = {
 };
 
 export async function POST(request: Request) {
+  const requestId = getOrCreateRequestId(request);
+
   try {
     const clientIp = getClientIp(request);
     const rateLimit = checkRateLimit(`login:${clientIp}`, LOGIN_RATE_LIMIT);
 
     if (!rateLimit.allowed) {
-      console.warn("[security] login rate limited", {
+      logger.warn("security", "login rate limited", {
+        requestId,
         ip: clientIp,
         retryAfterMs: rateLimit.retryAfterMs,
       });
@@ -26,6 +30,7 @@ export async function POST(request: Request) {
         {
           ok: false,
           error: "Demasiados intentos. Intenta de nuevo mas tarde.",
+          requestId,
         },
         {
           status: 429,
@@ -38,13 +43,15 @@ export async function POST(request: Request) {
 
     const payload = await parseRequestBody(request, loginSchema);
 
-    console.log("[security] login attempt", {
+    logger.info("security", "login attempt", {
+      requestId,
       email: maskEmail(payload.email),
       ip: clientIp,
     });
 
     if (!validateAdminCredentials(payload.email, payload.password)) {
-      console.warn("[security] login failed", {
+      logger.warn("security", "login failed", {
+        requestId,
         email: maskEmail(payload.email),
         ip: clientIp,
       });
@@ -53,15 +60,17 @@ export async function POST(request: Request) {
 
     await createAdminSession();
 
-    console.log("[security] login success", {
+    logger.info("security", "login success", {
+      requestId,
       email: maskEmail(payload.email),
       ip: clientIp,
     });
 
     return ok({
       authenticated: true,
+      requestId,
     });
   } catch (error) {
-    return handleApiError(error);
+    return handleApiError(error, { requestId, module: "security" });
   }
 }
