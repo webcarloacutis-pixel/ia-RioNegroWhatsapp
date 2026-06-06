@@ -157,12 +157,45 @@ model CitizenReportImage {
 }
 
 model KnowledgeBaseEntry {
-  id        String   @id @default(cuid())
-  question  String
-  answer    String   @db.Text
-  category  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id             String    @id @default(cuid())
+  question       String
+  answer         String    @db.Text
+  category       String
+  intent         String?
+  shortAnswer    String?   @db.Text
+  tags           String[]  @default([])
+  aliases        String[]  @default([])
+  sourceUrl      String?   @db.Text
+  sourceName     String?
+  sourceType     String    @default("manual_admin")
+  isOfficial     Boolean   @default(false)
+  isActive       Boolean   @default(true)
+  needsReview    Boolean   @default(false)
+  confidence     Float     @default(0.7)
+  lastVerifiedAt DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([category])
+  @@index([intent])
+  @@index([isActive])
+  @@index([needsReview])
+  @@index([sourceType])
+}
+
+model KnowledgeConflict {
+  id         String   @id @default(cuid())
+  topic      String
+  category   String?
+  values     Json
+  sourceUrls String[] @default([])
+  status     String   @default("open")
+  resolution String?  @db.Text
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([category])
+  @@index([status])
 }
 
 model DeliveryLog {

@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import type {
   AnnouncementSummary,
   DeliveryLogSummary,
+  KnowledgeConflictSummary,
   KnowledgeEntrySummary,
   SegmentSummary,
 } from "@/lib/types";
@@ -39,6 +40,8 @@ type SegmentWithMeta = Prisma.SegmentGetPayload<{
 }>;
 
 type KnowledgeEntry = Prisma.KnowledgeBaseEntryGetPayload<Record<string, never>>;
+
+type KnowledgeConflict = Prisma.KnowledgeConflictGetPayload<Record<string, never>>;
 
 type DeliveryLogWithRelations = Prisma.DeliveryLogGetPayload<{
   include: {
@@ -115,8 +118,36 @@ export function serializeKnowledgeEntry(
     question: entry.question,
     answer: entry.answer,
     category: entry.category,
+    intent: entry.intent ?? null,
+    shortAnswer: entry.shortAnswer ?? null,
+    tags: entry.tags ?? [],
+    aliases: entry.aliases ?? [],
+    sourceUrl: entry.sourceUrl ?? null,
+    sourceName: entry.sourceName ?? null,
+    sourceType: entry.sourceType ?? "manual_admin",
+    isOfficial: entry.isOfficial ?? false,
+    isActive: entry.isActive ?? true,
+    needsReview: entry.needsReview ?? false,
+    confidence: entry.confidence ?? 0.7,
+    lastVerifiedAt: entry.lastVerifiedAt?.toISOString() ?? null,
     createdAt: entry.createdAt.toISOString(),
     updatedAt: entry.updatedAt.toISOString(),
+  };
+}
+
+export function serializeKnowledgeConflict(
+  conflict: KnowledgeConflict,
+): KnowledgeConflictSummary {
+  return {
+    id: conflict.id,
+    topic: conflict.topic,
+    category: conflict.category,
+    values: conflict.values,
+    sourceUrls: conflict.sourceUrls,
+    status: conflict.status,
+    resolution: conflict.resolution,
+    createdAt: conflict.createdAt.toISOString(),
+    updatedAt: conflict.updatedAt.toISOString(),
   };
 }
 

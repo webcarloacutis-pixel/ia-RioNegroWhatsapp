@@ -2,6 +2,8 @@ import { z } from "zod";
 
 import {
   KNOWLEDGE_CATEGORY_SUGGESTIONS,
+  KNOWLEDGE_INTENT_SUGGESTIONS,
+  KNOWLEDGE_SOURCE_TYPES,
   normalizeAnnouncementType,
 } from "@/lib/constants";
 import { isPublicHttpUrl } from "@/lib/url-security";
@@ -32,6 +34,44 @@ const nullableTrimmedString = (max: number, message: string) =>
     .optional()
     .nullable()
     .transform((value) => value || null);
+
+const knowledgeTextListSchema = z
+  .union([z.array(z.string()), z.string(), z.null(), z.undefined()])
+  .transform((value) => {
+    const rawItems = Array.isArray(value)
+      ? value
+      : typeof value === "string"
+        ? value.split(/[,\n;]/)
+        : [];
+
+    return Array.from(
+      new Set(
+        rawItems
+          .map((item) => item.trim())
+          .filter((item) => item.length > 0)
+          .slice(0, 30),
+      ),
+    );
+  });
+
+const nullableKnowledgeDateSchema = z.preprocess(
+  (value) => {
+    if (value === null || value === undefined || value === "") {
+      return null;
+    }
+
+    if (value instanceof Date) {
+      return value;
+    }
+
+    if (typeof value === "string") {
+      return new Date(value);
+    }
+
+    return value;
+  },
+  z.date("La fecha de verificacion no es valida.").nullable(),
+);
 
 function normalizeRecipientPhone(value: string) {
   const digits = value.replace(/\D/g, "");
@@ -204,6 +244,67 @@ export const knowledgeInputSchema = z.object({
     .min(2, "La categoria es obligatoria.")
     .max(60, "La categoria es demasiado larga.")
     .default(KNOWLEDGE_CATEGORY_SUGGESTIONS[0]),
+  intent: z
+    .string()
+    .trim()
+    .max(80, "La intencion es demasiado larga.")
+    .optional()
+    .nullable()
+    .transform((value) => value || null)
+    .refine(
+      (value) =>
+        !value || (KNOWLEDGE_INTENT_SUGGESTIONS as readonly string[]).includes(value),
+      "La intencion no es valida.",
+    ),
+  shortAnswer: nullableTrimmedString(600, "La respuesta corta es demasiado larga."),
+  tags: knowledgeTextListSchema,
+  aliases: knowledgeTextListSchema,
+  sourceUrl: z
+    .string()
+    .trim()
+    .max(600, "La URL fuente es demasiado larga.")
+    .optional()
+    .nullable()
+    .transform((value) => value || null)
+    .refine((value) => !value || isPublicHttpUrl(value), "La URL fuente no es publica."),
+  sourceName: nullableTrimmedString(160, "El nombre de la fuente es demasiado largo."),
+  sourceType: z
+    .string()
+    .trim()
+    .default("manual_admin")
+    .refine(
+      (value) => (KNOWLEDGE_SOURCE_TYPES as readonly string[]).includes(value),
+      "El tipo de fuente no es valido.",
+    ),
+  isOfficial: z.boolean().default(false),
+  isActive: z.boolean().default(true),
+  needsReview: z.boolean().default(false),
+  confidence: z.coerce
+    .number()
+    .min(0, "La confianza no puede ser menor a 0.")
+    .max(1, "La confianza no puede ser mayor a 1.")
+    .default(0.7),
+  lastVerifiedAt: nullableKnowledgeDateSchema.default(null),
+});
+
+export const knowledgeBulkActionSchema = z.object({
+  ids: z.array(z.string().trim().min(1)).min(1, "Selecciona al menos una ficha.").max(100),
+  action: z.enum(["activate", "deactivate", "markReviewed", "changeCategory"]),
+  category: z
+    .string()
+    .trim()
+    .min(2, "La categoria es obligatoria.")
+    .max(60, "La categoria es demasiado larga.")
+    .optional(),
+});
+
+export const knowledgeTestAnswerSchema = z.object({
+  question: z
+    .string()
+    .trim()
+    .min(3, "Escribe una pregunta para Eva.")
+    .max(300, "La pregunta de prueba es demasiado larga."),
+  entryId: z.string().trim().optional().nullable(),
 });
 
 const qaKeywordListSchema = z

@@ -173,3 +173,41 @@ test("knowledgeInputSchema exige datos minimos", () => {
 
   assert.equal(payload.category, "Movilidad");
 });
+
+test("knowledgeInputSchema acepta metadatos administrativos", () => {
+  const payload = knowledgeInputSchema.parse({
+    question: "Donde queda la Alcaldia?",
+    answer: "La Alcaldia queda en el centro de Rionegro.",
+    category: "Ubicacion",
+    intent: "LOCATION",
+    shortAnswer: "La Alcaldia queda en el centro de Rionegro.",
+    tags: "alcaldia, ubicacion",
+    aliases: ["palacio municipal", "alcaldia"],
+    sourceUrl: "https://rionegro.gov.co/",
+    sourceName: "Sitio oficial Alcaldia de Rionegro",
+    sourceType: "official_website",
+    isOfficial: true,
+    isActive: true,
+    needsReview: true,
+    confidence: 0.9,
+    lastVerifiedAt: "2026-06-05T10:00:00.000Z",
+  });
+
+  assert.equal(payload.intent, "LOCATION");
+  assert.deepEqual(payload.tags, ["alcaldia", "ubicacion"]);
+  assert.equal(payload.isOfficial, true);
+  assert.equal(payload.needsReview, true);
+  assert.equal(payload.confidence, 0.9);
+  assert.ok(payload.lastVerifiedAt instanceof Date);
+});
+
+test("knowledgeInputSchema rechaza confianza fuera de rango", () => {
+  assert.throws(() =>
+    knowledgeInputSchema.parse({
+      question: "Donde queda la Alcaldia?",
+      answer: "La Alcaldia queda en el centro de Rionegro.",
+      category: "Ubicacion",
+      confidence: 1.5,
+    }),
+  );
+});

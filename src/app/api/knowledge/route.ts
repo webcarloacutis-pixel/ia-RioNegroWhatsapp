@@ -3,13 +3,41 @@ import { handleApiError, ok, parseRequestBody } from "@/lib/api";
 import { knowledgeInputSchema } from "@/lib/validations";
 import {
   createKnowledgeEntry,
-  listKnowledgeEntries,
+  listKnowledgeDashboard,
 } from "@/server/panel-service";
 
-export async function GET() {
+function parseBooleanParam(value: string | null) {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  return null;
+}
+
+function parseNumberParam(value: string | null) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) ? parsed : null;
+}
+
+export async function GET(request: Request) {
   try {
     await assertAdminApiSession();
-    return ok(await listKnowledgeEntries());
+    const params = new URL(request.url).searchParams;
+
+    return ok(
+      await listKnowledgeDashboard({
+        q: params.get("q"),
+        category: params.get("category"),
+        intent: params.get("intent"),
+        sourceType: params.get("sourceType"),
+        sourceName: params.get("sourceName"),
+        tag: params.get("tag"),
+        isActive: parseBooleanParam(params.get("isActive")),
+        isOfficial: parseBooleanParam(params.get("isOfficial")),
+        needsReview: parseBooleanParam(params.get("needsReview")),
+        lowConfidence: parseBooleanParam(params.get("lowConfidence")),
+        page: parseNumberParam(params.get("page")),
+        pageSize: parseNumberParam(params.get("pageSize")),
+      }),
+    );
   } catch (error) {
     return handleApiError(error);
   }

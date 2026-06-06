@@ -3,6 +3,7 @@ import {
   AnnouncementType,
   DeliveryMode,
   DeliveryStatus,
+  type Prisma,
 } from "@prisma/client";
 import { subDays } from "date-fns";
 
@@ -22,7 +23,9 @@ import type {
   AnnouncementSummary,
   DashboardData,
   DeliveryLogSummary,
+  KnowledgeListResult,
   KnowledgeEntrySummary,
+  KnowledgeTestAnswerResult,
   MetricsData,
   SchedulerData,
   SchedulerRunResult,
@@ -32,7 +35,13 @@ import type {
 } from "@/lib/types";
 import { getChannelRuntimeStatus } from "@/server/channel-status-service";
 import * as mockStore from "@/server/mock-store";
-import { serializeAnnouncement, serializeDeliveryLog, serializeKnowledgeEntry, serializeSegment } from "@/server/serializers";
+import {
+  serializeAnnouncement,
+  serializeDeliveryLog,
+  serializeKnowledgeConflict,
+  serializeKnowledgeEntry,
+  serializeSegment,
+} from "@/server/serializers";
 import { sendMessage } from "@/server/messageService";
 
 type AnnouncementInput = {
@@ -72,6 +81,44 @@ type KnowledgeInput = {
   question: string;
   answer: string;
   category: string;
+  intent: string | null;
+  shortAnswer: string | null;
+  tags: string[];
+  aliases: string[];
+  sourceUrl: string | null;
+  sourceName: string | null;
+  sourceType: string;
+  isOfficial: boolean;
+  isActive: boolean;
+  needsReview: boolean;
+  confidence: number;
+  lastVerifiedAt: Date | null;
+};
+
+export type KnowledgeListFilters = {
+  q?: string | null;
+  category?: string | null;
+  intent?: string | null;
+  sourceType?: string | null;
+  sourceName?: string | null;
+  isActive?: boolean | null;
+  isOfficial?: boolean | null;
+  needsReview?: boolean | null;
+  lowConfidence?: boolean | null;
+  tag?: string | null;
+  page?: number | null;
+  pageSize?: number | null;
+};
+
+type KnowledgeBulkActionInput = {
+  ids: string[];
+  action: "activate" | "deactivate" | "markReviewed" | "changeCategory";
+  category?: string;
+};
+
+type KnowledgeTestAnswerInput = {
+  question: string;
+  entryId?: string | null;
 };
 
 type ProcessScheduledOptions = {
@@ -1026,14 +1073,245 @@ async function deleteSegmentDb(id: string) {
   return { id };
 }
 
+const KNOWLEDGE_DEFAULT_PAGE_SIZE = 24;
+const KNOWLEDGE_MAX_PAGE_SIZE = 72;
+const LOW_CONFIDENCE_THRESHOLD = 0.7;
+
+function normalizeKnowledgePage(value?: number | null) {
+  return Number.isInteger(value) && value && value > 0 ? value : 1;
+}
+
+function normalizeKnowledgePageSize(value?: number | null) {
+  if (!Number.isInteger(value) || !value || value <= 0) {
+    return KNOWLEDGE_DEFAULT_PAGE_SIZE;
+  }
+
+  return Math.min(value, KNOWLEDGE_MAX_PAGE_SIZE);
+}
+
+function cleanFilter(value?: string | null) {
+  const cleaned = value?.trim();
+  return cleaned || null;
+}
+
+function buildKnowledgeWhere(input: KnowledgeListFilters = {}) {
+  const where: Prisma.KnowledgeBaseEntryWhereInput = {};
+  const q = cleanFilter(input.q);
+  const category = cleanFilter(input.category);
+  const intent = cleanFilter(input.intent);
+  const sourceType = cleanFilter(input.sourceType);
+  const sourceName = cleanFilter(input.sourceName);
+  const tag = cleanFilter(input.tag);
+
+  if (category) where.category = category;
+  if (intent) where.intent = intent;
+  if (sourceType) where.sourceType = sourceType;
+  if (sourceName) where.sourceName = sourceName;
+  if (typeof input.isActive === "boolean") where.isActive = input.isActive;
+  if (typeof input.isOfficial === "boolean") where.isOfficial = input.isOfficial;
+  if (typeof input.needsReview === "boolean") where.needsReview = input.needsReview;
+  if (input.lowConfidence) where.confidence = { lt: LOW_CONFIDENCE_THRESHOLD };
+  if (tag) where.tags = { has: tag };
+
+  if (q) {
+    where.OR = [
+      { question: { contains: q, mode: "insensitive" } },
+      { answer: { contains: q, mode: "insensitive" } },
+      { shortAnswer: { contains: q, mode: "insensitive" } },
+      { category: { contains: q, mode: "insensitive" } },
+      { intent: { contains: q, mode: "insensitive" } },
+      { sourceName: { contains: q, mode: "insensitive" } },
+      { sourceUrl: { contains: q, mode: "insensitive" } },
+      { sourceType: { contains: q, mode: "insensitive" } },
+      { tags: { has: q } },
+      { aliases: { has: q } },
+    ];
+  }
+
+  return where;
+}
+
+function buildFacetFromGroups<T extends { _count: { _all: number } }>(
+  groups: T[],
+  key: keyof T & string,
+) {
+  return groups
+    .map((item) => {
+      const value = item[key] as string | null | undefined;
+
+      return value
+        ? {
+            label: value,
+            value,
+            count: item._count._all,
+          }
+        : null;
+    })
+    .filter((item): item is { label: string; value: string; count: number } =>
+      Boolean(item),
+    )
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+}
+
+function buildTagFacets(entries: Array<{ tags: string[] }>) {
+  const counts = new Map<string, number>();
+
+  for (const entry of entries) {
+    for (const tag of entry.tags) {
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+  }
+
+  return Array.from(counts.entries())
+    .map(([value, count]) => ({ label: value, value, count }))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label))
+    .slice(0, 40);
+}
+
+async function getKnowledgeDashboardSummaryDb(): Promise<KnowledgeListResult["summary"]> {
+  const [
+    total,
+    active,
+    needsReview,
+    official,
+    lowConfidence,
+    categories,
+    sources,
+    latest,
+  ] = await Promise.all([
+    prisma.knowledgeBaseEntry.count(),
+    prisma.knowledgeBaseEntry.count({ where: { isActive: true } }),
+    prisma.knowledgeBaseEntry.count({ where: { needsReview: true } }),
+    prisma.knowledgeBaseEntry.count({ where: { isOfficial: true } }),
+    prisma.knowledgeBaseEntry.count({
+      where: { confidence: { lt: LOW_CONFIDENCE_THRESHOLD } },
+    }),
+    prisma.knowledgeBaseEntry.groupBy({
+      by: ["category"],
+      _count: { _all: true },
+    }),
+    prisma.knowledgeBaseEntry.groupBy({
+      by: ["sourceName"],
+      where: { sourceName: { not: null } },
+      _count: { _all: true },
+    }),
+    prisma.knowledgeBaseEntry.findFirst({
+      orderBy: { updatedAt: "desc" },
+      select: { updatedAt: true },
+    }),
+  ]);
+
+  return {
+    total,
+    active,
+    inactive: total - active,
+    needsReview,
+    official,
+    lowConfidence,
+    categories: categories.length,
+    sources: sources.length,
+    lastUpdatedAt: latest?.updatedAt.toISOString() ?? null,
+  };
+}
+
+async function getKnowledgeFacetsDb(): Promise<KnowledgeListResult["facets"]> {
+  const [categories, intents, sources, tagEntries] = await Promise.all([
+    prisma.knowledgeBaseEntry.groupBy({
+      by: ["category"],
+      _count: { _all: true },
+    }),
+    prisma.knowledgeBaseEntry.groupBy({
+      by: ["intent"],
+      where: { intent: { not: null } },
+      _count: { _all: true },
+    }),
+    prisma.knowledgeBaseEntry.groupBy({
+      by: ["sourceName"],
+      where: { sourceName: { not: null } },
+      _count: { _all: true },
+    }),
+    prisma.knowledgeBaseEntry.findMany({
+      select: { tags: true },
+      take: 1000,
+      orderBy: { updatedAt: "desc" },
+    }),
+  ]);
+
+  return {
+    categories: buildFacetFromGroups(categories, "category"),
+    intents: buildFacetFromGroups(intents, "intent"),
+    sources: buildFacetFromGroups(sources, "sourceName"),
+    tags: buildTagFacets(tagEntries),
+  };
+}
+
+async function listKnowledgeConflictsDb() {
+  const conflicts = await prisma.knowledgeConflict.findMany({
+    orderBy: { updatedAt: "desc" },
+    take: 20,
+  });
+
+  return conflicts.map(serializeKnowledgeConflict);
+}
+
 async function listKnowledgeEntriesDb(): Promise<KnowledgeEntrySummary[]> {
   const entries = await prisma.knowledgeBaseEntry.findMany({
+    where: {
+      isActive: true,
+    },
     orderBy: {
       updatedAt: "desc",
     },
   });
 
   return entries.map(serializeKnowledgeEntry);
+}
+
+async function listKnowledgeDashboardDb(
+  input: KnowledgeListFilters = {},
+): Promise<KnowledgeListResult> {
+  const page = normalizeKnowledgePage(input.page);
+  const pageSize = normalizeKnowledgePageSize(input.pageSize);
+  const where = buildKnowledgeWhere(input);
+
+  const [items, total, facets, summary, conflicts] = await Promise.all([
+    prisma.knowledgeBaseEntry.findMany({
+      where,
+      orderBy: [{ needsReview: "desc" }, { updatedAt: "desc" }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.knowledgeBaseEntry.count({ where }),
+    getKnowledgeFacetsDb(),
+    getKnowledgeDashboardSummaryDb(),
+    listKnowledgeConflictsDb(),
+  ]);
+
+  return {
+    items: items.map(serializeKnowledgeEntry),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    },
+    facets,
+    summary,
+    conflicts,
+    fallback: false,
+  };
+}
+
+async function getKnowledgeEntryDb(id: string) {
+  const entry = await prisma.knowledgeBaseEntry.findUnique({
+    where: { id },
+  });
+
+  if (!entry) {
+    throw new AppError("La entrada no existe.", 404);
+  }
+
+  return serializeKnowledgeEntry(entry);
 }
 
 async function createKnowledgeEntryDb(input: KnowledgeInput) {
@@ -1075,6 +1353,163 @@ async function deleteKnowledgeEntryDb(id: string) {
   });
 
   return { id };
+}
+
+async function toggleKnowledgeEntryActiveDb(id: string) {
+  const entry = await prisma.knowledgeBaseEntry.findUnique({
+    where: { id },
+  });
+
+  if (!entry) {
+    throw new AppError("La entrada no existe.", 404);
+  }
+
+  const updated = await prisma.knowledgeBaseEntry.update({
+    where: { id },
+    data: {
+      isActive: !entry.isActive,
+    },
+  });
+
+  return serializeKnowledgeEntry(updated);
+}
+
+async function markKnowledgeEntryReviewedDb(id: string) {
+  const exists = await prisma.knowledgeBaseEntry.findUnique({
+    where: { id },
+  });
+
+  if (!exists) {
+    throw new AppError("La entrada no existe.", 404);
+  }
+
+  const updated = await prisma.knowledgeBaseEntry.update({
+    where: { id },
+    data: {
+      needsReview: false,
+      lastVerifiedAt: new Date(),
+    },
+  });
+
+  return serializeKnowledgeEntry(updated);
+}
+
+async function bulkUpdateKnowledgeEntriesDb(input: KnowledgeBulkActionInput) {
+  const data: Prisma.KnowledgeBaseEntryUpdateManyMutationInput =
+    input.action === "activate"
+      ? { isActive: true }
+      : input.action === "deactivate"
+        ? { isActive: false }
+        : input.action === "markReviewed"
+          ? { needsReview: false, lastVerifiedAt: new Date() }
+          : { category: input.category };
+
+  if (input.action === "changeCategory" && !input.category) {
+    throw new AppError("Selecciona la categoria nueva.", 400);
+  }
+
+  const result = await prisma.knowledgeBaseEntry.updateMany({
+    where: {
+      id: {
+        in: input.ids,
+      },
+    },
+    data,
+  });
+
+  return {
+    updated: result.count,
+  };
+}
+
+function normalizeKnowledgeText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function scoreKnowledgeItem(item: KnowledgeEntrySummary, query: string) {
+  const normalizedQuery = normalizeKnowledgeText(query);
+  const tokens = normalizedQuery.split(/\W+/).filter((token) => token.length >= 3);
+  const haystack = normalizeKnowledgeText(
+    [
+      item.question,
+      item.answer,
+      item.shortAnswer,
+      item.category,
+      item.intent,
+      item.sourceName,
+      ...item.tags,
+      ...item.aliases,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+
+  let score = item.confidence * 20;
+
+  if (haystack.includes(normalizedQuery)) {
+    score += 50;
+  }
+
+  for (const token of tokens) {
+    if (haystack.includes(token)) score += 10;
+  }
+
+  if (item.isOfficial) score += 10;
+  if (item.needsReview) score -= 10;
+  if (!item.isActive) score -= 50;
+
+  return Math.max(0, score);
+}
+
+async function testKnowledgeAnswerDb(
+  input: KnowledgeTestAnswerInput,
+): Promise<KnowledgeTestAnswerResult> {
+  const initialCandidates = input.entryId
+    ? [await getKnowledgeEntryDb(input.entryId)]
+    : (
+        await listKnowledgeDashboardDb({
+          q: input.question,
+          isActive: true,
+          page: 1,
+          pageSize: 5,
+        })
+      ).items;
+  const candidateItems = initialCandidates.length
+    ? initialCandidates
+    : (
+        await listKnowledgeDashboardDb({
+          isActive: true,
+          page: 1,
+          pageSize: 24,
+        })
+      ).items;
+
+  const rankedItems = candidateItems
+    .map((item) => ({ item, score: scoreKnowledgeItem(item, input.question) }))
+    .filter(({ score }) => score >= 20)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 3);
+
+  const best = rankedItems[0];
+
+  if (!best) {
+    return {
+      answer: "No tengo informacion oficial sobre eso en este momento.",
+      usedItems: [],
+      confidence: 0.2,
+      wouldSayUnknown: true,
+    };
+  }
+
+  return {
+    answer: best.item.shortAnswer || best.item.answer,
+    usedItems: rankedItems.map(({ item }) => item),
+    confidence: Math.min(1, Math.max(best.item.confidence, best.score / 100)),
+    wouldSayUnknown: false,
+  };
 }
 
 async function getDashboardDataDb(): Promise<DashboardData> {
@@ -1577,6 +2012,20 @@ export async function listKnowledgeEntries(): Promise<KnowledgeEntrySummary[]> {
   return withMockFallback(listKnowledgeEntriesDb, mockStore.listKnowledgeEntries);
 }
 
+export async function listKnowledgeDashboard(input: KnowledgeListFilters = {}) {
+  return withMockFallback(
+    () => listKnowledgeDashboardDb(input),
+    () => mockStore.listKnowledgeDashboard(input),
+  );
+}
+
+export async function getKnowledgeEntry(id: string) {
+  return withMockFallback(
+    () => getKnowledgeEntryDb(id),
+    () => mockStore.getKnowledgeEntry(id),
+  );
+}
+
 export async function createKnowledgeEntry(input: KnowledgeInput) {
   return withMockFallback(
     () => createKnowledgeEntryDb(input),
@@ -1595,6 +2044,34 @@ export async function deleteKnowledgeEntry(id: string) {
   return withMockFallback(
     () => deleteKnowledgeEntryDb(id),
     () => mockStore.deleteKnowledgeEntry(id),
+  );
+}
+
+export async function toggleKnowledgeEntryActive(id: string) {
+  return withMockFallback(
+    () => toggleKnowledgeEntryActiveDb(id),
+    () => mockStore.toggleKnowledgeEntryActive(id),
+  );
+}
+
+export async function markKnowledgeEntryReviewed(id: string) {
+  return withMockFallback(
+    () => markKnowledgeEntryReviewedDb(id),
+    () => mockStore.markKnowledgeEntryReviewed(id),
+  );
+}
+
+export async function bulkUpdateKnowledgeEntries(input: KnowledgeBulkActionInput) {
+  return withMockFallback(
+    () => bulkUpdateKnowledgeEntriesDb(input),
+    () => mockStore.bulkUpdateKnowledgeEntries(input),
+  );
+}
+
+export async function testKnowledgeAnswer(input: KnowledgeTestAnswerInput) {
+  return withMockFallback(
+    () => testKnowledgeAnswerDb(input),
+    () => mockStore.testKnowledgeAnswer(input),
   );
 }
 

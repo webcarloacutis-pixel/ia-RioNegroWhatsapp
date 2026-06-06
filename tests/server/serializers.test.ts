@@ -96,6 +96,9 @@ test("serializeKnowledgeEntry y serializeDeliveryLog generan salidas estables", 
   } as never);
 
   assert.equal(knowledge.id, "kb-1");
+  assert.equal(knowledge.isActive, true);
+  assert.equal(knowledge.sourceType, "manual_admin");
+  assert.deepEqual(knowledge.tags, []);
   assert.equal(delivery.segmentName, "Movilidad");
   assert.equal(delivery.announcementTitle, "Boletin");
 });

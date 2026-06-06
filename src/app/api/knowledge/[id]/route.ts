@@ -3,6 +3,7 @@ import { handleApiError, ok, parseRequestBody } from "@/lib/api";
 import { knowledgeInputSchema } from "@/lib/validations";
 import {
   deleteKnowledgeEntry,
+  getKnowledgeEntry,
   updateKnowledgeEntry,
 } from "@/server/panel-service";
 
@@ -11,6 +12,16 @@ type RouteContext = {
     id: string;
   }>;
 };
+
+export async function GET(_request: Request, context: RouteContext) {
+  try {
+    await assertAdminApiSession();
+    const { id } = await context.params;
+    return ok(await getKnowledgeEntry(id));
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
 
 export async function PATCH(request: Request, context: RouteContext) {
   try {

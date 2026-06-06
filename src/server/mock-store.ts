@@ -21,7 +21,9 @@ import type {
   AnnouncementSummary,
   DashboardData,
   DeliveryLogSummary,
+  KnowledgeListResult,
   KnowledgeEntrySummary,
+  KnowledgeTestAnswerResult,
   MetricsData,
   SchedulerData,
   SchedulerRunResult,
@@ -65,6 +67,44 @@ type KnowledgeInput = {
   question: string;
   answer: string;
   category: string;
+  intent: string | null;
+  shortAnswer: string | null;
+  tags: string[];
+  aliases: string[];
+  sourceUrl: string | null;
+  sourceName: string | null;
+  sourceType: string;
+  isOfficial: boolean;
+  isActive: boolean;
+  needsReview: boolean;
+  confidence: number;
+  lastVerifiedAt: Date | null;
+};
+
+type KnowledgeListFilters = {
+  q?: string | null;
+  category?: string | null;
+  intent?: string | null;
+  sourceType?: string | null;
+  sourceName?: string | null;
+  isActive?: boolean | null;
+  isOfficial?: boolean | null;
+  needsReview?: boolean | null;
+  lowConfidence?: boolean | null;
+  tag?: string | null;
+  page?: number | null;
+  pageSize?: number | null;
+};
+
+type KnowledgeBulkActionInput = {
+  ids: string[];
+  action: "activate" | "deactivate" | "markReviewed" | "changeCategory";
+  category?: string;
+};
+
+type KnowledgeTestAnswerInput = {
+  question: string;
+  entryId?: string | null;
 };
 
 type ProcessScheduledOptions = {
@@ -114,6 +154,30 @@ type MockKnowledgeEntry = {
   question: string;
   answer: string;
   category: string;
+  intent: string | null;
+  shortAnswer: string | null;
+  tags: string[];
+  aliases: string[];
+  sourceUrl: string | null;
+  sourceName: string | null;
+  sourceType: string;
+  isOfficial: boolean;
+  isActive: boolean;
+  needsReview: boolean;
+  confidence: number;
+  lastVerifiedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+type MockKnowledgeConflict = {
+  id: string;
+  topic: string;
+  category: string | null;
+  values: unknown;
+  sourceUrls: string[];
+  status: string;
+  resolution: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -150,6 +214,7 @@ type MockState = {
   segments: MockSegment[];
   announcements: MockAnnouncement[];
   knowledgeEntries: MockKnowledgeEntry[];
+  knowledgeConflicts: MockKnowledgeConflict[];
   deliveryLogs: MockDeliveryLog[];
   schedulerRuns: MockSchedulerRun[];
 };
@@ -451,11 +516,23 @@ function initializeState(): MockState {
   });
 
   const knowledgeEntries: MockKnowledgeEntry[] = buildOfficialKnowledgeEntries().map(
-    (entry) => ({
+    (entry, index) => ({
       id: createId("kb"),
       question: entry.question,
       answer: entry.answer,
       category: entry.category,
+      intent: null,
+      shortAnswer: entry.answer.length > 220 ? `${entry.answer.slice(0, 220)}...` : entry.answer,
+      tags: [entry.category.toLowerCase()],
+      aliases: index === 0 ? ["alcaldia", "palacio municipal"] : [],
+      sourceUrl: "https://rionegro.gov.co/",
+      sourceName: "Sitio oficial Alcaldia de Rionegro",
+      sourceType: "derived_fallback",
+      isOfficial: true,
+      isActive: true,
+      needsReview: index < 3,
+      confidence: index < 3 ? 0.65 : 0.8,
+      lastVerifiedAt: null,
       createdAt: now,
       updatedAt: now,
     }),
@@ -489,6 +566,7 @@ function initializeState(): MockState {
     segments,
     announcements,
     knowledgeEntries,
+    knowledgeConflicts: [],
     deliveryLogs,
     schedulerRuns: [],
   };
@@ -507,6 +585,7 @@ export function resetMockStoreForTests() {
     segments: [],
     announcements: [],
     knowledgeEntries: [],
+    knowledgeConflicts: [],
     deliveryLogs: [],
     schedulerRuns: [],
   };
@@ -587,8 +666,34 @@ function serializeKnowledgeEntry(entry: MockKnowledgeEntry): KnowledgeEntrySumma
     question: entry.question,
     answer: entry.answer,
     category: entry.category,
+    intent: entry.intent,
+    shortAnswer: entry.shortAnswer,
+    tags: entry.tags,
+    aliases: entry.aliases,
+    sourceUrl: entry.sourceUrl,
+    sourceName: entry.sourceName,
+    sourceType: entry.sourceType,
+    isOfficial: entry.isOfficial,
+    isActive: entry.isActive,
+    needsReview: entry.needsReview,
+    confidence: entry.confidence,
+    lastVerifiedAt: entry.lastVerifiedAt?.toISOString() ?? null,
     createdAt: entry.createdAt.toISOString(),
     updatedAt: entry.updatedAt.toISOString(),
+  };
+}
+
+function serializeKnowledgeConflict(conflict: MockKnowledgeConflict) {
+  return {
+    id: conflict.id,
+    topic: conflict.topic,
+    category: conflict.category,
+    values: conflict.values,
+    sourceUrls: conflict.sourceUrls,
+    status: conflict.status,
+    resolution: conflict.resolution,
+    createdAt: conflict.createdAt.toISOString(),
+    updatedAt: conflict.updatedAt.toISOString(),
   };
 }
 
@@ -946,10 +1051,185 @@ export async function deleteSegment(id: string) {
   return { id };
 }
 
+const LOW_CONFIDENCE_THRESHOLD = 0.7;
+
+function normalizeKnowledgeText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
+function knowledgeMatchesQuery(entry: MockKnowledgeEntry, query?: string | null) {
+  const cleaned = query?.trim();
+
+  if (!cleaned) {
+    return true;
+  }
+
+  const normalizedQuery = normalizeKnowledgeText(cleaned);
+  const text = normalizeKnowledgeText(
+    [
+      entry.question,
+      entry.answer,
+      entry.shortAnswer,
+      entry.category,
+      entry.intent,
+      entry.sourceName,
+      entry.sourceUrl,
+      entry.sourceType,
+      ...entry.tags,
+      ...entry.aliases,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+
+  return text.includes(normalizedQuery);
+}
+
+function filterKnowledgeEntries(entries: MockKnowledgeEntry[], input: KnowledgeListFilters = {}) {
+  return entries.filter((entry) => {
+    if (!knowledgeMatchesQuery(entry, input.q)) return false;
+    if (input.category && entry.category !== input.category) return false;
+    if (input.intent && entry.intent !== input.intent) return false;
+    if (input.sourceType && entry.sourceType !== input.sourceType) return false;
+    if (input.sourceName && entry.sourceName !== input.sourceName) return false;
+    if (input.tag && !entry.tags.includes(input.tag)) return false;
+    if (typeof input.isActive === "boolean" && entry.isActive !== input.isActive) return false;
+    if (typeof input.isOfficial === "boolean" && entry.isOfficial !== input.isOfficial) return false;
+    if (typeof input.needsReview === "boolean" && entry.needsReview !== input.needsReview) {
+      return false;
+    }
+    if (input.lowConfidence && entry.confidence >= LOW_CONFIDENCE_THRESHOLD) return false;
+
+    return true;
+  });
+}
+
+function buildMockFacet(entries: MockKnowledgeEntry[], getValue: (entry: MockKnowledgeEntry) => string | null) {
+  const counts = new Map<string, number>();
+
+  for (const entry of entries) {
+    const value = getValue(entry);
+    if (value) counts.set(value, (counts.get(value) ?? 0) + 1);
+  }
+
+  return Array.from(counts.entries())
+    .map(([value, count]) => ({ label: value, value, count }))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label));
+}
+
+function buildMockTagFacet(entries: MockKnowledgeEntry[]) {
+  const counts = new Map<string, number>();
+
+  for (const entry of entries) {
+    for (const tag of entry.tags) {
+      counts.set(tag, (counts.get(tag) ?? 0) + 1);
+    }
+  }
+
+  return Array.from(counts.entries())
+    .map(([value, count]) => ({ label: value, value, count }))
+    .sort((left, right) => right.count - left.count || left.label.localeCompare(right.label))
+    .slice(0, 40);
+}
+
+function scoreKnowledgeItem(item: KnowledgeEntrySummary, query: string) {
+  const normalizedQuery = normalizeKnowledgeText(query);
+  const tokens = normalizedQuery.split(/\W+/).filter((token) => token.length >= 3);
+  const haystack = normalizeKnowledgeText(
+    [
+      item.question,
+      item.answer,
+      item.shortAnswer,
+      item.category,
+      item.intent,
+      item.sourceName,
+      ...item.tags,
+      ...item.aliases,
+    ]
+      .filter(Boolean)
+      .join(" "),
+  );
+
+  let score = item.confidence * 20;
+
+  if (haystack.includes(normalizedQuery)) score += 50;
+  for (const token of tokens) {
+    if (haystack.includes(token)) score += 10;
+  }
+  if (item.isOfficial) score += 10;
+  if (item.needsReview) score -= 10;
+  if (!item.isActive) score -= 50;
+
+  return Math.max(0, score);
+}
+
 export async function listKnowledgeEntries(): Promise<KnowledgeEntrySummary[]> {
   return [...getState().knowledgeEntries]
+    .filter((entry) => entry.isActive)
     .sort((left, right) => right.updatedAt.getTime() - left.updatedAt.getTime())
     .map(serializeKnowledgeEntry);
+}
+
+export async function listKnowledgeDashboard(
+  input: KnowledgeListFilters = {},
+): Promise<KnowledgeListResult> {
+  const state = getState();
+  const page = Number.isInteger(input.page) && input.page && input.page > 0 ? input.page : 1;
+  const pageSize =
+    Number.isInteger(input.pageSize) && input.pageSize && input.pageSize > 0
+      ? Math.min(input.pageSize, 72)
+      : 24;
+  const filtered = filterKnowledgeEntries(state.knowledgeEntries, input).sort(
+    (left, right) =>
+      Number(right.needsReview) - Number(left.needsReview) ||
+      right.updatedAt.getTime() - left.updatedAt.getTime(),
+  );
+  const total = filtered.length;
+  const items = filtered.slice((page - 1) * pageSize, page * pageSize);
+  const latest = [...state.knowledgeEntries].sort(
+    (left, right) => right.updatedAt.getTime() - left.updatedAt.getTime(),
+  )[0];
+  const sourceCount = new Set(
+    state.knowledgeEntries.map((entry) => entry.sourceName).filter(Boolean),
+  ).size;
+
+  return {
+    items: items.map(serializeKnowledgeEntry),
+    pagination: {
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    },
+    facets: {
+      categories: buildMockFacet(state.knowledgeEntries, (entry) => entry.category),
+      intents: buildMockFacet(state.knowledgeEntries, (entry) => entry.intent),
+      sources: buildMockFacet(state.knowledgeEntries, (entry) => entry.sourceName),
+      tags: buildMockTagFacet(state.knowledgeEntries),
+    },
+    summary: {
+      total: state.knowledgeEntries.length,
+      active: state.knowledgeEntries.filter((entry) => entry.isActive).length,
+      inactive: state.knowledgeEntries.filter((entry) => !entry.isActive).length,
+      needsReview: state.knowledgeEntries.filter((entry) => entry.needsReview).length,
+      official: state.knowledgeEntries.filter((entry) => entry.isOfficial).length,
+      lowConfidence: state.knowledgeEntries.filter(
+        (entry) => entry.confidence < LOW_CONFIDENCE_THRESHOLD,
+      ).length,
+      categories: new Set(state.knowledgeEntries.map((entry) => entry.category)).size,
+      sources: sourceCount,
+      lastUpdatedAt: latest?.updatedAt.toISOString() ?? null,
+    },
+    conflicts: state.knowledgeConflicts.map(serializeKnowledgeConflict),
+    fallback: true,
+  };
+}
+
+export async function getKnowledgeEntry(id: string) {
+  return serializeKnowledgeEntry(getKnowledgeEntryOrThrow(id));
 }
 
 export async function createKnowledgeEntry(input: KnowledgeInput) {
@@ -960,6 +1240,18 @@ export async function createKnowledgeEntry(input: KnowledgeInput) {
     question: input.question,
     answer: input.answer,
     category: input.category,
+    intent: input.intent,
+    shortAnswer: input.shortAnswer,
+    tags: input.tags,
+    aliases: input.aliases,
+    sourceUrl: input.sourceUrl,
+    sourceName: input.sourceName,
+    sourceType: input.sourceType,
+    isOfficial: input.isOfficial,
+    isActive: input.isActive,
+    needsReview: input.needsReview,
+    confidence: input.confidence,
+    lastVerifiedAt: input.lastVerifiedAt,
     createdAt: now,
     updatedAt: now,
   };
@@ -974,6 +1266,18 @@ export async function updateKnowledgeEntry(id: string, input: KnowledgeInput) {
   entry.question = input.question;
   entry.answer = input.answer;
   entry.category = input.category;
+  entry.intent = input.intent;
+  entry.shortAnswer = input.shortAnswer;
+  entry.tags = input.tags;
+  entry.aliases = input.aliases;
+  entry.sourceUrl = input.sourceUrl;
+  entry.sourceName = input.sourceName;
+  entry.sourceType = input.sourceType;
+  entry.isOfficial = input.isOfficial;
+  entry.isActive = input.isActive;
+  entry.needsReview = input.needsReview;
+  entry.confidence = input.confidence;
+  entry.lastVerifiedAt = input.lastVerifiedAt;
   entry.updatedAt = new Date();
 
   return serializeKnowledgeEntry(entry);
@@ -984,6 +1288,92 @@ export async function deleteKnowledgeEntry(id: string) {
   getKnowledgeEntryOrThrow(id);
   state.knowledgeEntries = state.knowledgeEntries.filter((item) => item.id !== id);
   return { id };
+}
+
+export async function toggleKnowledgeEntryActive(id: string) {
+  const entry = getKnowledgeEntryOrThrow(id);
+  entry.isActive = !entry.isActive;
+  entry.updatedAt = new Date();
+  return serializeKnowledgeEntry(entry);
+}
+
+export async function markKnowledgeEntryReviewed(id: string) {
+  const entry = getKnowledgeEntryOrThrow(id);
+  entry.needsReview = false;
+  entry.lastVerifiedAt = new Date();
+  entry.updatedAt = new Date();
+  return serializeKnowledgeEntry(entry);
+}
+
+export async function bulkUpdateKnowledgeEntries(input: KnowledgeBulkActionInput) {
+  const state = getState();
+  const selected = state.knowledgeEntries.filter((entry) => input.ids.includes(entry.id));
+  const now = new Date();
+
+  if (input.action === "changeCategory" && !input.category) {
+    throw new AppError("Selecciona la categoria nueva.", 400);
+  }
+
+  for (const entry of selected) {
+    if (input.action === "activate") entry.isActive = true;
+    if (input.action === "deactivate") entry.isActive = false;
+    if (input.action === "markReviewed") {
+      entry.needsReview = false;
+      entry.lastVerifiedAt = now;
+    }
+    if (input.action === "changeCategory" && input.category) entry.category = input.category;
+    entry.updatedAt = now;
+  }
+
+  return {
+    updated: selected.length,
+  };
+}
+
+export async function testKnowledgeAnswer(
+  input: KnowledgeTestAnswerInput,
+): Promise<KnowledgeTestAnswerResult> {
+  const initialCandidates = input.entryId
+    ? [serializeKnowledgeEntry(getKnowledgeEntryOrThrow(input.entryId))]
+    : (
+        await listKnowledgeDashboard({
+          q: input.question,
+          isActive: true,
+          page: 1,
+          pageSize: 5,
+        })
+      ).items;
+  const candidateItems = initialCandidates.length
+    ? initialCandidates
+    : (
+        await listKnowledgeDashboard({
+          isActive: true,
+          page: 1,
+          pageSize: 24,
+        })
+      ).items;
+  const rankedItems = candidateItems
+    .map((item) => ({ item, score: scoreKnowledgeItem(item, input.question) }))
+    .filter(({ score }) => score >= 20)
+    .sort((left, right) => right.score - left.score)
+    .slice(0, 3);
+  const best = rankedItems[0];
+
+  if (!best) {
+    return {
+      answer: "No tengo informacion oficial sobre eso en este momento.",
+      usedItems: [],
+      confidence: 0.2,
+      wouldSayUnknown: true,
+    };
+  }
+
+  return {
+    answer: best.item.shortAnswer || best.item.answer,
+    usedItems: rankedItems.map(({ item }) => item),
+    confidence: Math.min(1, Math.max(best.item.confidence, best.score / 100)),
+    wouldSayUnknown: false,
+  };
 }
 
 export async function getDashboardData(): Promise<DashboardData> {

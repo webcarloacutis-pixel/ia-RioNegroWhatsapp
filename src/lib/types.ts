@@ -114,8 +114,78 @@ export type KnowledgeEntrySummary = {
   question: string;
   answer: string;
   category: string;
+  intent: string | null;
+  shortAnswer: string | null;
+  tags: string[];
+  aliases: string[];
+  sourceUrl: string | null;
+  sourceName: string | null;
+  sourceType: string;
+  isOfficial: boolean;
+  isActive: boolean;
+  needsReview: boolean;
+  confidence: number;
+  lastVerifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
+};
+
+export type KnowledgeConflictSummary = {
+  id: string;
+  topic: string;
+  category: string | null;
+  values: unknown;
+  sourceUrls: string[];
+  status: string;
+  resolution: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type KnowledgePagination = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export type KnowledgeFacet = {
+  label: string;
+  value: string;
+  count: number;
+};
+
+export type KnowledgeDashboardSummary = {
+  total: number;
+  active: number;
+  inactive: number;
+  needsReview: number;
+  official: number;
+  lowConfidence: number;
+  categories: number;
+  sources: number;
+  lastUpdatedAt: string | null;
+};
+
+export type KnowledgeListResult = {
+  items: KnowledgeEntrySummary[];
+  pagination: KnowledgePagination;
+  facets: {
+    categories: KnowledgeFacet[];
+    intents: KnowledgeFacet[];
+    sources: KnowledgeFacet[];
+    tags: KnowledgeFacet[];
+  };
+  summary: KnowledgeDashboardSummary;
+  conflicts: KnowledgeConflictSummary[];
+  fallback: boolean;
+};
+
+export type KnowledgeTestAnswerResult = {
+  answer: string;
+  usedItems: KnowledgeEntrySummary[];
+  confidence: number;
+  wouldSayUnknown: boolean;
 };
 
 export type DeliveryLogSummary = {
