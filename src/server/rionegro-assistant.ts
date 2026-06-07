@@ -8,7 +8,16 @@ import {
   officialAnnouncementTranslations,
 } from "@/lib/rionegro-content";
 import { buildPlaceSearchText, officialPlaces, type OfficialPlace } from "@/lib/rionegro-places";
-import { scoreKnowledgeEntry } from "@/lib/knowledge-metadata";
+import {
+  detectKnowledgeTextLanguage,
+  localizeKnowledgeAnswerForLanguage,
+  scoreKnowledgeEntry,
+} from "@/lib/knowledge-metadata";
+import {
+  detectUserLanguage,
+  type SupportedLanguage,
+  type UserLanguageDetection,
+} from "@/lib/language";
 import type {
   AnnouncementSummary,
   AssistantChatResult,
@@ -45,7 +54,7 @@ import {
 } from "@/server/whatsapp-reply-style";
 
 type Timeframe = "today" | "tomorrow" | "recent" | "none";
-type AssistantLanguage = "es" | "en";
+type AssistantLanguage = SupportedLanguage;
 
 type ResolvedIntent = {
   topic: AssistantTopicValue;
@@ -57,6 +66,7 @@ type ResolvedIntent = {
   tourismIntent: boolean;
   appointmentIntent: boolean;
   hoursIntent: boolean;
+  weatherIntent: boolean;
   assistantCapabilityIntent: boolean;
   thanksIntent: boolean;
 };
@@ -181,6 +191,18 @@ const PRIVATE_CITIZEN_DATA_REPLY =
 
 const PREDIAL_DOCUMENTS_CONTEXT_REPLY =
   "Sobre el impuesto predial, no tengo informacion oficial confirmada sobre los documentos necesarios en este momento.\n\nSi quieres, puedo orientarte con la informacion oficial disponible sobre pagos o atencion de predial.";
+
+function getPromptInjectionReply(language: AssistantLanguage) {
+  return language === "en"
+    ? "I can't reveal internal instructions or change my rules because of a chat request. I can help you with official information about Rionegro."
+    : PROMPT_INJECTION_REPLY;
+}
+
+function getPrivateCitizenDataReply(language: AssistantLanguage) {
+  return language === "en"
+    ? "I can't provide private citizen data. I can help you with procedures, services, or citizen reports in Rionegro."
+    : PRIVATE_CITIZEN_DATA_REPLY;
+}
 
 function normalizeText(value: string) {
   return value
@@ -313,14 +335,15 @@ function stripLeadingConversationalPrefix(value: string) {
 function getCopy(language: AssistantLanguage) {
   if (language === "en") {
     return {
-      noData: "I do not have the exact detail right now, but I can still guide you.",
+      noData: "I don't have official information about that at the moment.",
       scope: "I can only help with official information about the municipality of Rionegro.",
-      greeting: "Hello! I can help you with Rionegro. What would you like to know?",
-      thanks: "You are very welcome.",
+      greeting: "Hi! I'm Eva. How can I help you today?",
+      thanks: "You're welcome.",
       report:
         "You can report it through the official City Hall channels or the competent authorities. If you want, I can help you find the right office.",
       outOfScope:
-        "I can help you with official information about Rionegro. If you want, ask me about places, procedures, schedules, news or municipal services.",
+        "I don't have official information about that at the moment. I can help you with municipal services, procedures, or citizen reports in Rionegro.",
+      weatherUnavailable: "I don't have real-time weather information at the moment.",
       alertsTitle: "Recent alerts in Rionegro:",
       alertsEmpty: "I do not have official alerts registered at the moment.",
       eventsTodayEmpty: "I do not have official events registered for today in Rionegro.",
@@ -383,6 +406,7 @@ function getCopy(language: AssistantLanguage) {
       "Puedes hacerlo por los canales oficiales de la Alcaldia o con la autoridad competente. Si quieres, te ayudo a ubicar la oficina adecuada.",
     outOfScope:
       "Puedo ayudarte con informacion oficial de Rionegro. Si quieres, preguntame por lugares, tramites, horarios, noticias o planes.",
+    weatherUnavailable: "No tengo informacion de clima en tiempo real en este momento.",
     alertsTitle: "Alertas recientes en Rionegro:",
     alertsEmpty: "No tengo alertas oficiales registradas en este momento.",
     eventsTodayEmpty: "Por ahora no tengo eventos oficiales registrados para hoy en Rionegro.",
@@ -481,92 +505,11 @@ function formatNumberedList(items: string[]) {
 }
 
 function detectLanguage(text: string, lastLanguage: AssistantLanguage): AssistantLanguage {
-  if (!text) {
+  if (!text.trim()) {
     return lastLanguage;
   }
 
-  const normalized = normalizeText(text);
-  let englishScore = 0;
-  let spanishScore = 0;
-
-  for (const hint of [
-    "hello",
-    "hi",
-    "good morning",
-    "good afternoon",
-    "good evening",
-    "where",
-    "what",
-    "who",
-    "when",
-    "how",
-    "history",
-    "museum",
-    "location",
-    "address",
-    "latest",
-    "news",
-    "city hall",
-    "please",
-    "thanks",
-  ]) {
-    if (normalized.includes(hint)) {
-      englishScore += hint.includes(" ") ? 2 : 1;
-    }
-  }
-
-  for (const hint of [
-    "hola",
-    "buenas",
-    "buenos dias",
-    "buenas tardes",
-    "buenas noches",
-    "donde",
-    "que",
-    "cual",
-    "quien",
-    "como",
-    "historia",
-    "museo",
-    "ubicacion",
-    "direccion",
-    "ultimas noticias",
-    "noticias",
-    "alcaldia",
-    "gracias",
-    "tramites",
-    "horario",
-  ]) {
-    if (normalized.includes(hint)) {
-      spanishScore += hint.includes(" ") ? 2 : 1;
-    }
-  }
-
-  if (/[¿¡áéíóúñ]/i.test(text)) {
-    spanishScore += 2;
-  }
-
-  if (includesAny(` ${normalized} `, [" the ", " and ", " from ", " latest ", " where "])) {
-    englishScore += 2;
-  }
-
-  if (includesAny(` ${normalized} `, [" el ", " la ", " de ", " y ", " cual ", " donde ", " historia "])) {
-    spanishScore += 2;
-  }
-
-  if (englishScore === 0 && spanishScore === 0) {
-    return lastLanguage;
-  }
-
-  if (spanishScore > englishScore) {
-    return "es";
-  }
-
-  if (englishScore > spanishScore) {
-    return "en";
-  }
-
-  return lastLanguage;
+  return detectUserLanguage({ text }).language;
 }
 
 function detectEntryLanguage(text: string): AssistantLanguage {
@@ -791,6 +734,20 @@ function hasHoursIntent(text: string) {
     "schedule",
     "what time",
     "when is it open",
+  ]);
+}
+
+function hasWeatherIntent(text: string) {
+  return includesAny(text, [
+    "clima",
+    "lluvia",
+    "esta lloviendo",
+    "va a llover",
+    "weather",
+    "raining",
+    "is it raining",
+    "will it rain",
+    "rain forecast",
   ]);
 }
 
@@ -1074,14 +1031,6 @@ function searchKnowledgeEntries(
     })
     .filter((item) => item.score >= 35)
     .sort((left, right) => right.score - left.score);
-
-  const sameLanguageEntries = rankedEntries.filter(
-    (item) => detectEntryLanguage(item.entry.question) === language,
-  );
-
-  if (sameLanguageEntries.length) {
-    return sameLanguageEntries.slice(0, 4).map((item) => item.entry);
-  }
 
   return rankedEntries.slice(0, 4).map((item) => item.entry);
 }
@@ -1441,30 +1390,40 @@ function sourceMatchesPrivateService(message: string, sourceText: string) {
   const normalizedMessage = normalizeText(message);
   const normalizedSource = normalizeText(sourceText);
 
-  if (/(veterinari|mascota|gato|perro)/.test(normalizedMessage)) {
+  if (/(veterinari|mascota|gato|perro|vet|veterinary|pet|cat|dog)/.test(normalizedMessage)) {
     return /(veterinari|mascota|gato|perro)/.test(normalizedSource);
   }
 
-  if (/(farmacia|drogueria)/.test(normalizedMessage)) {
+  if (/(farmacia|drogueria|pharmacy|drugstore)/.test(normalizedMessage)) {
     return /(farmacia|drogueria)/.test(normalizedSource);
   }
 
-  if (/(taxi|grua|hotel|restaurante|clinica|hospital)/.test(normalizedMessage)) {
+  if (/(taxi|grua|hotel|restaurante|clinica|hospital|tow truck|restaurant|clinic)/.test(normalizedMessage)) {
     return /(taxi|grua|hotel|restaurante|clinica|hospital)/.test(normalizedSource);
   }
 
   return false;
 }
 
-function buildPrivateServiceFallback(message: string) {
+function buildPrivateServiceFallback(message: string, language: AssistantLanguage) {
   const normalized = normalizeText(message);
 
-  if (/(veterinari|mascota|gato|perro)/.test(normalized)) {
-    const animal = /perro/.test(normalized)
-      ? "perro"
-      : /gato/.test(normalized)
-        ? "gato"
-        : "mascota";
+  if (/(veterinari|mascota|gato|perro|vet|veterinary|pet|cat|dog)/.test(normalized)) {
+    if (language === "en") {
+      const animal = /dog/.test(normalized)
+        ? "pet"
+        : /cat/.test(normalized)
+          ? "pet"
+          : "pet";
+
+      return [
+        "I don't have official information about 24-hour veterinary clinics at the moment.",
+        "",
+        `If your ${animal} is sick, I recommend contacting a nearby veterinary clinic or looking for an emergency veterinary service.`,
+      ].join("\n");
+    }
+
+    const animal = /perro/.test(normalized) ? "perro" : /gato/.test(normalized) ? "gato" : "mascota";
 
     return [
       "No tengo informacion oficial sobre veterinarias 24 horas en este momento.",
@@ -1473,32 +1432,46 @@ function buildPrivateServiceFallback(message: string) {
     ].join("\n");
   }
 
-  return "No tengo informacion oficial sobre eso en este momento.";
+  return language === "en"
+    ? "I don't have official information about that private service at the moment."
+    : "No tengo informacion oficial sobre eso en este momento.";
 }
 
-function buildPrivateServiceReply(message: string, knowledgeEntries: KnowledgeEntrySummary[]) {
+function buildPrivateServiceReply(
+  message: string,
+  knowledgeEntries: KnowledgeEntrySummary[],
+  language: AssistantLanguage,
+) {
   const relevantEntries = knowledgeEntries.filter((entry) =>
     sourceMatchesPrivateService(message, `${entry.question} ${entry.answer} ${entry.category}`),
   );
   const options = relevantEntries
     .map((entry) =>
-      [entry.question?.trim(), entry.answer?.trim()]
+      [entry.question?.trim(), localizeKnowledgeAnswerForLanguage(entry, language).trim()]
         .filter(Boolean)
         .join(". "),
     )
     .filter((entry): entry is string => Boolean(entry));
 
   if (!options.length) {
-    return buildPrivateServiceFallback(message);
+    return buildPrivateServiceFallback(message, language);
   }
 
-  return [
-    "Estas son las opciones oficiales que tengo registradas:",
-    "",
-    options.slice(0, 3).join("\n"),
-    "",
-    "Te recomiendo llamar o verificar disponibilidad antes de ir.",
-  ].join("\n");
+  return language === "en"
+    ? [
+        "These are the official options I have registered:",
+        "",
+        options.slice(0, 3).join("\n"),
+        "",
+        "I recommend calling or checking availability before going.",
+      ].join("\n")
+    : [
+        "Estas son las opciones oficiales que tengo registradas:",
+        "",
+        options.slice(0, 3).join("\n"),
+        "",
+        "Te recomiendo llamar o verificar disponibilidad antes de ir.",
+      ].join("\n");
 }
 
 function buildHoursReply(placeMatches: OfficialPlace[], language: AssistantLanguage) {
@@ -1849,12 +1822,16 @@ function buildInstitutionalReply(
   }
 
   if (knowledgeEntries.length === 1) {
-    return `${knowledgeEntries[0].answer}\n\n${copy.servicesFollowUp}`;
+    return `${localizeKnowledgeAnswerForLanguage(knowledgeEntries[0], language)}\n\n${copy.servicesFollowUp}`;
   }
 
   return [
     copy.institutionalTitle,
-    formatBulletList(knowledgeEntries.slice(0, 2).map((entry) => entry.answer)),
+    formatBulletList(
+      knowledgeEntries
+        .slice(0, 2)
+        .map((entry) => localizeKnowledgeAnswerForLanguage(entry, language)),
+    ),
     copy.servicesFollowUp,
   ].join("\n\n");
 }
@@ -1898,6 +1875,14 @@ async function composeHybridReply(input: {
 }) {
   const aiText = await generateOpenAIText({
     systemPrompt: [
+      "You are Eva, the WhatsApp assistant for Rionegro.",
+      "Always answer in the user's language.",
+      "If the user writes in Spanish, answer in Spanish. If the user writes in English, answer in English.",
+      "If official knowledge is stored in Spanish, you may translate or adapt it into English, but never invent official facts.",
+      "For addresses, phone numbers, emails, URLs, schedules, procedures, taxes, and official requirements, use only the knowledge base or verified constants.",
+      "If you do not have enough official information, say so clearly in the user's language.",
+      "Do not answer a different question.",
+      "Do not provide City Hall information when the user asks about weather, private services, or unrelated topics.",
       "Eres una asistente de WhatsApp de la Alcaldia de Rionegro.",
       "Tu prioridad es entender exactamente que pidio el ciudadano y responder solo eso.",
       "Responde solo con la informacion contenida en el contexto oficial proporcionado.",
@@ -1993,6 +1978,18 @@ async function retrieveOfficialContext(
   const matchedKnowledgeEntries = knowledgeMatch
     ? [knowledgeMatch]
     : searchKnowledgeEntries(message, intent.topic, intent.language, allKnowledgeEntries);
+  const usedSpanishKnowledge =
+    intent.language === "en" &&
+    matchedKnowledgeEntries.some((entry) =>
+      detectKnowledgeTextLanguage(`${entry.question} ${entry.answer}`) === "es",
+    );
+
+  console.log("[eva] bilingual knowledge search", {
+    language: intent.language,
+    queryLength: message.length,
+    matchedKnowledge: matchedKnowledgeEntries.length,
+    usedSpanishKnowledge,
+  });
   const matchedAnnouncements =
     intent.topic === "NEWS"
       ? getLatestAnnouncements(announcements, "NEWS", 5)
@@ -2033,7 +2030,7 @@ function buildDeterministicReply(
 
   if (alertIntent.intent === "PRIVATE_SERVICE_QUERY") {
     return {
-      reply: buildPrivateServiceReply(message, retrieval.knowledgeEntries),
+      reply: buildPrivateServiceReply(message, retrieval.knowledgeEntries, intent.language),
       route: "KNOWLEDGE_BASE",
       usedOpenAI: false,
     };
@@ -2042,6 +2039,14 @@ function buildDeterministicReply(
   if (intent.thanksIntent) {
     return {
       reply: copy.thanks,
+      route: "RULE_BASED",
+      usedOpenAI: false,
+    };
+  }
+
+  if (intent.weatherIntent) {
+    return {
+      reply: copy.weatherUnavailable,
       route: "RULE_BASED",
       usedOpenAI: false,
     };
@@ -2116,7 +2121,7 @@ function buildDeterministicReply(
 
   if (intent.topic === "UNKNOWN" && retrieval.knowledgeEntries.length) {
     return {
-      reply: retrieval.knowledgeEntries[0].answer,
+      reply: localizeKnowledgeAnswerForLanguage(retrieval.knowledgeEntries[0], intent.language),
       route: "KNOWLEDGE_BASE",
       usedOpenAI: false,
     };
@@ -2220,6 +2225,7 @@ function shouldUseOpenAI(
     intent.appointmentIntent ||
     intent.automotiveIntent ||
     intent.hoursIntent ||
+    intent.weatherIntent ||
     intent.thanksIntent ||
     intent.institutionalServicesIntent ||
     intent.assistantCapabilityIntent
@@ -2306,6 +2312,8 @@ function getNextContext(input: {
 function buildMeta(input: {
   topic: AssistantTopicValue;
   route: AssistantRouteValue;
+  language: AssistantLanguage;
+  languageConfidence?: number;
   usedOpenAI: boolean;
   profile: AssistantProfile;
   sources: AssistantSourceReference[];
@@ -2313,6 +2321,8 @@ function buildMeta(input: {
   return {
     topic: input.topic,
     route: input.route,
+    language: input.language,
+    languageConfidence: input.languageConfidence ?? 0.5,
     usedOpenAI: input.usedOpenAI,
     openAIEnabled: isOpenAIConfigured(),
     sources: input.sources,
@@ -2513,6 +2523,7 @@ async function resolveSingleQuery(input: {
     tourismIntent: hasTourismIntent(input.normalizedMessage),
     appointmentIntent: hasAppointmentIntent(input.normalizedMessage),
     hoursIntent: hasHoursIntent(input.normalizedMessage),
+    weatherIntent: hasWeatherIntent(input.normalizedMessage),
     assistantCapabilityIntent: hasAssistantCapabilityIntent(input.normalizedMessage),
     thanksIntent: hasThanksIntent(input.normalizedMessage),
   };
@@ -2569,20 +2580,31 @@ export async function chatWithAssistant(
 
   const currentSession = getAssistantSession(sessionId);
   const normalizedMessage = normalizeText(message);
-  const language = detectLanguage(
-    normalizedMessage,
-    currentSession.context.conversationLanguage,
-  );
+  const languageDetection: UserLanguageDetection = detectUserLanguage({
+    text: message,
+    conversationHistory: currentSession.history,
+  });
+  const language = message.trim()
+    ? languageDetection.language
+    : currentSession.context.conversationLanguage;
+
+  console.log("[eva] language detected", {
+    language,
+    confidence: languageDetection.confidence,
+    reason: languageDetection.reason,
+  });
   const subQueries = splitMultiIntentMessage(message, language);
 
   addAssistantTurn(session.id, "user", message);
 
   if (hasPrivateCitizenDataRequest(message)) {
-    const finalReply = PRIVATE_CITIZEN_DATA_REPLY;
+    const finalReply = getPrivateCitizenDataReply(language);
     const updated = addAssistantTurn(session.id, "assistant", finalReply);
     const meta = buildMeta({
       topic: "OUT_OF_SCOPE",
       route: "RULE_BASED",
+      language,
+      languageConfidence: languageDetection.confidence,
       usedOpenAI: false,
       profile: currentSession.profile,
       sources: [],
@@ -2611,11 +2633,13 @@ export async function chatWithAssistant(
   }
 
   if (hasPromptInjectionAttempt(message)) {
-    const finalReply = PROMPT_INJECTION_REPLY;
+    const finalReply = getPromptInjectionReply(language);
     const updated = addAssistantTurn(session.id, "assistant", finalReply);
     const meta = buildMeta({
       topic: "OUT_OF_SCOPE",
       route: "RULE_BASED",
+      language,
+      languageConfidence: languageDetection.confidence,
       usedOpenAI: false,
       profile: currentSession.profile,
       sources: [],
@@ -2651,6 +2675,8 @@ export async function chatWithAssistant(
     const meta = buildMeta({
       topic: conversationContextReply.topic,
       route: "RULE_BASED",
+      language,
+      languageConfidence: languageDetection.confidence,
       usedOpenAI: false,
       profile: currentSession.profile,
       sources: [],
@@ -2693,6 +2719,8 @@ export async function chatWithAssistant(
     const meta = buildMeta({
       topic: mapConversationIntentToTopic(preAssistantRoute.analysis.intent),
       route: "RULE_BASED",
+      language,
+      languageConfidence: languageDetection.confidence,
       usedOpenAI: false,
       profile: currentSession.profile,
       sources: [],
@@ -2771,6 +2799,7 @@ export async function chatWithAssistant(
     tourismIntent: hasTourismIntent(normalizedMessage),
     appointmentIntent: hasAppointmentIntent(normalizedMessage),
     hoursIntent: hasHoursIntent(normalizedMessage),
+    weatherIntent: hasWeatherIntent(normalizedMessage),
     assistantCapabilityIntent: hasAssistantCapabilityIntent(normalizedMessage),
     thanksIntent: hasThanksIntent(normalizedMessage),
   };
@@ -2816,6 +2845,8 @@ export async function chatWithAssistant(
       resolutions.find((resolution) => resolution.route === "KNOWLEDGE_BASE")?.route ??
       resolutions[0]?.route ??
       "FALLBACK",
+    language,
+    languageConfidence: languageDetection.confidence,
     usedOpenAI: resolutions.some((resolution) => resolution.usedOpenAI),
     profile: currentSession.profile,
     sources: sourceRefs,
@@ -2850,6 +2881,7 @@ export function getConversation(sessionId: string): AssistantTurn[] {
 export const assistantInternals = {
   normalizeText,
   detectLanguage,
+  detectUserLanguage,
   detectTopic,
   detectTimeframe,
   splitMultiIntentMessage,
@@ -2858,6 +2890,7 @@ export const assistantInternals = {
   hasTourismIntent,
   hasAppointmentIntent,
   hasHoursIntent,
+  hasWeatherIntent,
   hasLocationIntent,
   hasThanksIntent,
   hasAssistantCapabilityIntent,

@@ -19,9 +19,12 @@ import {
   parseBogotaDateTimeLocalToUtcDate,
 } from "@/lib/format";
 import {
+  detectKnowledgeTextLanguage,
   generateKnowledgeMetadata,
+  localizeKnowledgeAnswerForLanguage,
   scoreKnowledgeEntry,
 } from "@/lib/knowledge-metadata";
+import { detectUserLanguage } from "@/lib/language";
 import { classifyPrismaError, logger, sanitizeError } from "@/lib/logger";
 import { prisma } from "@/lib/prisma";
 import type {
@@ -1500,6 +1503,7 @@ async function bulkUpdateKnowledgeEntriesDb(input: KnowledgeBulkActionInput) {
 async function testKnowledgeAnswerDb(
   input: KnowledgeTestAnswerInput,
 ): Promise<KnowledgeTestAnswerResult> {
+  const language = detectUserLanguage({ text: input.question });
   const initialCandidates = input.entryId
     ? [await getKnowledgeEntryDb(input.entryId)]
     : await listKnowledgeEntriesDb();
@@ -1514,18 +1518,32 @@ async function testKnowledgeAnswerDb(
 
   if (!best) {
     return {
-      answer: "No tengo informacion oficial sobre eso en este momento.",
+      answer:
+        language.language === "en"
+          ? "I don't have official information about that at the moment."
+          : "No tengo informacion oficial sobre eso en este momento.",
       usedItems: [],
       confidence: 0.2,
       wouldSayUnknown: true,
+      detectedLanguage: language.language,
+      answerLanguage: language.language,
+      usedSpanishKnowledge: false,
     };
   }
 
+  const usedItems = rankedItems.map(({ item }) => item);
+  const usedSpanishKnowledge =
+    language.language === "en" &&
+    usedItems.some((item) => detectKnowledgeTextLanguage(`${item.question} ${item.answer}`) === "es");
+
   return {
-    answer: best.item.shortAnswer || best.item.answer,
-    usedItems: rankedItems.map(({ item }) => item),
+    answer: localizeKnowledgeAnswerForLanguage(best.item, language.language),
+    usedItems,
     confidence: Math.min(1, Math.max(best.item.confidence, best.score / 100)),
     wouldSayUnknown: false,
+    detectedLanguage: language.language,
+    answerLanguage: language.language,
+    usedSpanishKnowledge,
   };
 }
 

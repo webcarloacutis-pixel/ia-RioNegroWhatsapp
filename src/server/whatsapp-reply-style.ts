@@ -1,10 +1,17 @@
 import type { ConversationalIntent } from "@/server/intent-classifier";
+import { detectUserLanguage, type SupportedLanguage } from "@/lib/language";
 
 export const UNKNOWN_OFFICIAL_REPLY =
   "No tengo informacion oficial sobre eso en este momento. Puedo ayudarte con tramites, servicios o reportes ciudadanos de Rionegro.";
 
 export const UNKNOWN_OFFICIAL_DATA_REPLY =
   "No tengo informacion oficial sobre eso en este momento.";
+
+export const UNKNOWN_OFFICIAL_REPLY_EN =
+  "I don't have official information about that at the moment. I can help you with municipal services, procedures, or citizen reports in Rionegro.";
+
+export const UNKNOWN_OFFICIAL_DATA_REPLY_EN =
+  "I don't have official information about that at the moment.";
 
 const PROHIBITED_PHRASE_PATTERNS = [
   /a continuaci[oó]n te presento/gi,
@@ -45,10 +52,26 @@ function userAskedForList(userMessage: string) {
   );
 }
 
-function buildPrivateServiceUnknownReply(userMessage: string) {
+function getUnknownOfficialReply(language: SupportedLanguage) {
+  return language === "en" ? UNKNOWN_OFFICIAL_REPLY_EN : UNKNOWN_OFFICIAL_REPLY;
+}
+
+function getUnknownOfficialDataReply(language: SupportedLanguage) {
+  return language === "en" ? UNKNOWN_OFFICIAL_DATA_REPLY_EN : UNKNOWN_OFFICIAL_DATA_REPLY;
+}
+
+function buildPrivateServiceUnknownReply(userMessage: string, language: SupportedLanguage) {
   const normalized = normalizeText(userMessage);
 
-  if (/(veterinari|mascota|gato|perro)/.test(normalized)) {
+  if (/(veterinari|mascota|gato|perro|vet|veterinary|pet|cat|dog)/.test(normalized)) {
+    if (language === "en") {
+      return [
+        "I don't have official information about 24-hour veterinary clinics at the moment.",
+        "",
+        "If your pet is sick, I recommend contacting a nearby veterinary clinic or looking for an emergency veterinary service.",
+      ].join("\n");
+    }
+
     const animal = normalized.includes("gato")
       ? "gato"
       : normalized.includes("perro")
@@ -62,8 +85,8 @@ function buildPrivateServiceUnknownReply(userMessage: string) {
     ].join("\n");
   }
 
-  if (/(farmacia|drogueria|taxi|grua|hotel|restaurante|clinica|hospital)/.test(normalized)) {
-    return UNKNOWN_OFFICIAL_DATA_REPLY;
+  if (/(farmacia|drogueria|taxi|grua|hotel|restaurante|clinica|hospital|pharmacy|taxi|tow truck|restaurant|clinic)/.test(normalized)) {
+    return getUnknownOfficialDataReply(language);
   }
 
   return null;
@@ -80,15 +103,15 @@ function sourceMatchesPrivateServiceQuery(
       .join(" "),
   );
 
-  if (/(veterinari|mascota|gato|perro)/.test(normalizedUserMessage)) {
+  if (/(veterinari|mascota|gato|perro|vet|veterinary|pet|cat|dog)/.test(normalizedUserMessage)) {
     return /(veterinari|mascota|gato|perro)/.test(sourceText);
   }
 
-  if (/(farmacia|drogueria)/.test(normalizedUserMessage)) {
+  if (/(farmacia|drogueria|pharmacy|drugstore)/.test(normalizedUserMessage)) {
     return /(farmacia|drogueria)/.test(sourceText);
   }
 
-  if (/(taxi|grua|hotel|restaurante|clinica|hospital)/.test(normalizedUserMessage)) {
+  if (/(taxi|grua|hotel|restaurante|clinica|hospital|tow truck|restaurant|clinic)/.test(normalizedUserMessage)) {
     return /(taxi|grua|hotel|restaurante|clinica|hospital)/.test(sourceText);
   }
 
@@ -145,7 +168,11 @@ function containsUnrequestedDependencies(userMessage: string, answer: string) {
 }
 
 function isUnknownOfficialReply(answer: string) {
-  return normalizeText(answer).startsWith(normalizeText(UNKNOWN_OFFICIAL_DATA_REPLY));
+  const normalizedAnswer = normalizeText(answer);
+  return (
+    normalizedAnswer.startsWith(normalizeText(UNKNOWN_OFFICIAL_DATA_REPLY)) ||
+    normalizedAnswer.startsWith(normalizeText(UNKNOWN_OFFICIAL_DATA_REPLY_EN))
+  );
 }
 
 function answerLooksAlignedWithUserQuestion(input: {
@@ -157,16 +184,16 @@ function answerLooksAlignedWithUserQuestion(input: {
   const normalizedAnswer = normalizeText(input.answer);
 
   if (!normalizedAnswer) return false;
-  if (input.intent === "THANKS") return normalizedAnswer === "con mucho gusto.";
-  if (input.intent === "GREETING") return normalizedAnswer.includes("hola");
+  if (input.intent === "THANKS") return normalizedAnswer === "con mucho gusto." || normalizedAnswer === "you're welcome.";
+  if (input.intent === "GREETING") return normalizedAnswer.includes("hola") || normalizedAnswer.includes("hi");
   if (input.intent === "OUT_OF_SCOPE" || input.intent === "ABSURD_OR_UNKNOWN") {
-    return normalizedAnswer.includes("no tengo informacion oficial");
+    return normalizedAnswer.includes("no tengo informacion oficial") || normalizedAnswer.includes("official information");
   }
-  if (/(donde|direccion|ubicacion|queda)/.test(normalizedUserMessage)) {
-    return /(queda|direccion|ubicacion|carrera|calle|sede|rionegro|alcaldia)/.test(normalizedAnswer);
+  if (/(donde|direccion|ubicacion|queda|where|address|location|located|city hall)/.test(normalizedUserMessage)) {
+    return /(queda|direccion|ubicacion|carrera|calle|sede|rionegro|alcaldia|located|address|city hall|downtown)/.test(normalizedAnswer);
   }
-  if (/(impuesto|impuestos|predial|industria y comercio|pago|pagos)/.test(normalizedUserMessage)) {
-    return /(impuesto|predial|industria y comercio|pago|hacienda|rentas|no tengo informacion oficial)/.test(
+  if (/(impuesto|impuestos|predial|industria y comercio|pago|pagos|tax|taxes|property tax|payment)/.test(normalizedUserMessage)) {
+    return /(impuesto|predial|industria y comercio|pago|hacienda|rentas|property tax|tax|treasury|payment|no tengo informacion oficial|official information)/.test(
       normalizedAnswer,
     );
   }
@@ -245,15 +272,18 @@ export function formatWhatsAppReply(input: {
   sourceConfidence?: number;
 }) {
   if (input.intent === "THANKS") {
-    return "Con mucho gusto.";
+    const language = detectUserLanguage({ text: input.userMessage }).language;
+    return language === "en" ? "You're welcome." : "Con mucho gusto.";
   }
 
   if (input.intent === "GREETING") {
-    return "Hola! En que te puedo ayudar hoy?";
+    const language = detectUserLanguage({ text: input.userMessage }).language;
+    return language === "en" ? "Hi! I'm Eva. How can I help you today?" : "Hola! En que te puedo ayudar hoy?";
   }
 
   if (input.intent === "OUT_OF_SCOPE" || input.intent === "ABSURD_OR_UNKNOWN") {
-    return UNKNOWN_OFFICIAL_REPLY;
+    const language = detectUserLanguage({ text: input.userMessage }).language;
+    return getUnknownOfficialReply(language);
   }
 
   let cleaned = stripProhibitedPhrases(input.reply);
@@ -267,7 +297,7 @@ export function formatWhatsAppReply(input: {
   }
 
   if (input.sourceConfidence !== undefined && input.sourceConfidence < 0.45) {
-    return UNKNOWN_OFFICIAL_DATA_REPLY;
+    return getUnknownOfficialDataReply(detectUserLanguage({ text: input.userMessage }).language);
   }
 
   const validation = validateFinalAnswer({
@@ -277,14 +307,14 @@ export function formatWhatsAppReply(input: {
   });
 
   if (validation.containsUnrequestedDependencies || validation.containsUnsupportedOfficialFacts) {
-    return UNKNOWN_OFFICIAL_DATA_REPLY;
+    return getUnknownOfficialDataReply(detectUserLanguage({ text: input.userMessage }).language);
   }
 
   if (!validation.answersUserQuestion) {
-    return UNKNOWN_OFFICIAL_DATA_REPLY;
+    return getUnknownOfficialDataReply(detectUserLanguage({ text: input.userMessage }).language);
   }
 
-  return cleaned || UNKNOWN_OFFICIAL_DATA_REPLY;
+  return cleaned || getUnknownOfficialDataReply(detectUserLanguage({ text: input.userMessage }).language);
 }
 
 export function validateAnswerGrounding(input: {
@@ -294,9 +324,11 @@ export function validateAnswerGrounding(input: {
   intent: ConversationalIntent;
   officialDataRequested?: boolean;
 }) {
+  const language = detectUserLanguage({ text: input.userMessage }).language;
+
   if (input.intent === "OUT_OF_SCOPE" || input.intent === "ABSURD_OR_UNKNOWN") {
     return {
-      answer: UNKNOWN_OFFICIAL_REPLY,
+      answer: getUnknownOfficialReply(language),
       blocked: true,
       reason: "Intent fuera de alcance; se evita fallback municipal.",
     };
@@ -309,7 +341,7 @@ export function validateAnswerGrounding(input: {
     if (typeof item === "string") return true;
     return item.type === "knowledge";
   });
-  const privateServiceReply = buildPrivateServiceUnknownReply(input.userMessage);
+  const privateServiceReply = buildPrivateServiceUnknownReply(input.userMessage, language);
 
   if (
     privateServiceReply &&
@@ -324,7 +356,7 @@ export function validateAnswerGrounding(input: {
 
   if (input.officialDataRequested && !hasKnowledge) {
     return {
-      answer: privateServiceReply ?? UNKNOWN_OFFICIAL_DATA_REPLY,
+      answer: privateServiceReply ?? getUnknownOfficialDataReply(language),
       blocked: true,
       reason: "La pregunta pide dato oficial, pero no hay fuente recuperada.",
     };
@@ -339,7 +371,7 @@ export function validateAnswerGrounding(input: {
 
   if (dependencyDump) {
     return {
-      answer: UNKNOWN_OFFICIAL_DATA_REPLY,
+      answer: getUnknownOfficialDataReply(language),
       blocked: true,
       reason: "La respuesta agrega dependencias que el usuario no pidio.",
     };

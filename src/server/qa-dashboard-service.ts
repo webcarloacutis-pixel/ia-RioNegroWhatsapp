@@ -401,6 +401,7 @@ export function evaluateScenarioResult(input: {
   createdAt?: string;
   detectedIntent?: string;
   metadata?: {
+    detectedLanguage?: "es" | "en";
     shouldCreateAlert?: boolean;
     alertCategory?: string | null;
     alertPriority?: string | null;
@@ -457,6 +458,7 @@ export function evaluateScenarioResult(input: {
     : true;
   const differences: string[] = [];
   const detectedIntent = input.detectedIntent;
+  const detectedLanguage = input.metadata?.detectedLanguage;
   const shouldCreateAlert = input.metadata?.shouldCreateAlert;
   const alertCategory = input.metadata?.alertCategory ?? null;
   const alertPriority = input.metadata?.alertPriority ?? null;
@@ -471,6 +473,12 @@ export function evaluateScenarioResult(input: {
   if (input.scenario.expectedIntent && detectedIntent !== input.scenario.expectedIntent) {
     differences.push(
       `Intencion esperada ${input.scenario.expectedIntent}, detectada ${detectedIntent ?? "sin dato"}.`,
+    );
+  }
+
+  if (input.scenario.expectedLanguage && detectedLanguage !== input.scenario.expectedLanguage) {
+    differences.push(
+      `Idioma esperado ${input.scenario.expectedLanguage}, detectado ${detectedLanguage ?? "sin dato"}.`,
     );
   }
 
@@ -621,6 +629,7 @@ export function evaluateScenarioResult(input: {
       forbiddenConcepts.matched.length ||
       !input.botReply.trim() ||
       (input.scenario.expectedIntent !== undefined && detectedIntent !== input.scenario.expectedIntent) ||
+      (input.scenario.expectedLanguage !== undefined && detectedLanguage !== input.scenario.expectedLanguage) ||
       (input.scenario.expectedShouldCreateAlert !== undefined &&
         shouldCreateAlert !== input.scenario.expectedShouldCreateAlert) ||
       (input.scenario.expectedAlertCategory !== undefined &&
@@ -661,6 +670,7 @@ export function evaluateScenarioResult(input: {
     botReply: input.botReply,
     expectedBehavior: input.scenario.expectedBehavior,
     detectedIntent,
+    detectedLanguage,
     shouldCreateAlert,
     alertCategory,
     alertPriority: alertPriority as QaScenarioResult["alertPriority"],
@@ -885,6 +895,7 @@ async function runScenario(scenario: QaScenario, runId: string, createdAt: strin
   const steps = messages.length ? messages : [scenario.input];
   let reply = "";
   let usedKnowledgeBase = false;
+  let detectedLanguage: "es" | "en" | undefined;
 
   resetConversation(sessionId);
 
@@ -896,6 +907,7 @@ async function runScenario(scenario: QaScenario, runId: string, createdAt: strin
     for (const message of steps) {
       const result = await chatWithAssistant(sessionId, message);
       reply = result.reply;
+      detectedLanguage = result.meta.language;
       usedKnowledgeBase =
         usedKnowledgeBase ||
         result.meta.route === "KNOWLEDGE_BASE" ||
@@ -922,6 +934,7 @@ async function runScenario(scenario: QaScenario, runId: string, createdAt: strin
     createdAt,
     detectedIntent: alertAnalysis.intent,
     metadata: {
+      detectedLanguage,
       shouldCreateAlert: alertAnalysis.shouldCreateAlert,
       alertCategory: alertAnalysis.category ?? null,
       alertPriority: alertAnalysis.priority ?? null,

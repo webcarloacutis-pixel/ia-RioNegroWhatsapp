@@ -186,6 +186,9 @@ export type KnowledgeTestAnswerResult = {
   usedItems: KnowledgeEntrySummary[];
   confidence: number;
   wouldSayUnknown: boolean;
+  detectedLanguage: "es" | "en";
+  answerLanguage: "es" | "en";
+  usedSpanishKnowledge: boolean;
 };
 
 export type DeliveryLogSummary = {
@@ -325,6 +328,8 @@ export type AssistantSourceReference = {
 export type AssistantReplyMeta = {
   topic: AssistantTopicValue;
   route: AssistantRouteValue;
+  language: "es" | "en";
+  languageConfidence: number;
   usedOpenAI: boolean;
   openAIEnabled: boolean;
   sources: AssistantSourceReference[];
@@ -400,6 +405,7 @@ export type QaScenario = {
   input: string;
   expectedBehavior: string;
   expectedIntent?: string;
+  expectedLanguage?: "es" | "en";
   expectedShouldCreateAlert?: boolean;
   expectedAlertCategory?: string;
   expectedAlertPriority?: CitizenReportPriority;
@@ -443,6 +449,7 @@ export type QaScenarioResult = {
   botReply: string;
   expectedBehavior: string;
   detectedIntent?: string;
+  detectedLanguage?: "es" | "en";
   shouldCreateAlert?: boolean;
   alertCategory?: string | null;
   alertPriority?: CitizenReportPriority | null;

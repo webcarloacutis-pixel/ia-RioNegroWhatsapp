@@ -355,6 +355,7 @@ export const qaScenarioInputSchema = z.object({
     .trim()
     .max(80, "La intencion esperada es demasiado larga.")
     .optional(),
+  expectedLanguage: z.enum(["es", "en"]).optional(),
   expectedShouldCreateAlert: z.boolean().optional(),
   expectedAlertCategory: z
     .string()

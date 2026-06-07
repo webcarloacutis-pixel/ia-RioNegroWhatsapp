@@ -1,7 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-import { generateElevenLabsSpeech, isElevenLabsConfigured } from "@/server/elevenlabs-service";
+import {
+  generateElevenLabsSpeech,
+  getElevenLabsVoiceForLanguage,
+  isElevenLabsConfigured,
+} from "@/server/elevenlabs-service";
 import { generateAIText, transcribeAudio } from "@/server/openai-service";
 
 test("OpenAI mock evita llamadas reales de texto y transcripcion", async () => {
@@ -37,22 +41,31 @@ test("ElevenLabs mock devuelve audio falso sin API key", async () => {
   const previousMock = process.env.ELEVENLABS_MOCK;
   const previousKey = process.env.ELEVENLABS_API_KEY;
   const previousVoice = process.env.ELEVENLABS_VOICE_ID;
+  const previousVoiceEs = process.env.ELEVENLABS_VOICE_ID_ES;
+  const previousVoiceEn = process.env.ELEVENLABS_VOICE_ID_EN;
 
   process.env.SIMULATION_MODE = "false";
   process.env.ELEVENLABS_MOCK = "true";
   process.env.ELEVENLABS_API_KEY = "";
   process.env.ELEVENLABS_VOICE_ID = "";
+  process.env.ELEVENLABS_VOICE_ID_ES = "voz-es-prueba";
+  delete process.env.ELEVENLABS_VOICE_ID_EN;
 
   assert.equal(isElevenLabsConfigured(), true);
+  assert.equal(getElevenLabsVoiceForLanguage("es"), "voz-es-prueba");
+  assert.equal(getElevenLabsVoiceForLanguage("en"), "6rOxfAnZpbM3VIEhFaeV");
 
-  const speech = await generateElevenLabsSpeech("Respuesta de prueba");
+  const speech = await generateElevenLabsSpeech("Respuesta de prueba", { language: "en" });
 
   assert.equal(speech.mimeType, "audio/mpeg");
   assert.equal(Boolean(speech.audioBase64), true);
+  assert.equal((speech as { voiceId?: string }).voiceId, "6rOxfAnZpbM3VIEhFaeV");
   assert.equal((speech as { simulated?: boolean }).simulated, true);
 
   process.env.SIMULATION_MODE = previousSimulation;
   process.env.ELEVENLABS_MOCK = previousMock;
   process.env.ELEVENLABS_API_KEY = previousKey;
   process.env.ELEVENLABS_VOICE_ID = previousVoice;
+  process.env.ELEVENLABS_VOICE_ID_ES = previousVoiceEs;
+  process.env.ELEVENLABS_VOICE_ID_EN = previousVoiceEn;
 });

@@ -11,8 +11,10 @@ import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import { isPublicHttpUrl } from "@/lib/url-security";
 import {
   generateElevenLabsSpeech,
+  getElevenLabsVoiceForLanguage,
   isElevenLabsConfigured,
 } from "@/server/elevenlabs-service";
+import { detectUserLanguage, type SupportedLanguage } from "@/lib/language";
 import {
   sendWhatsAppAudio,
   sendWhatsAppText,
@@ -733,16 +735,23 @@ async function sendAssistantReply({
   recipient,
   reply,
   inboundMessageId,
+  language = "es",
 }: {
   recipient: string;
   reply: string;
   inboundMessageId?: string;
+  language?: SupportedLanguage;
 }) {
   const audioEnabled = process.env.WHATSAPP_AUDIO_REPLIES !== "false";
 
-  if (audioEnabled && isElevenLabsConfigured()) {
+  if (audioEnabled && isElevenLabsConfigured(language)) {
     try {
-      const speech = await generateElevenLabsSpeech(reply);
+      const voiceId = getElevenLabsVoiceForLanguage(language);
+      console.log("[eva] elevenlabs voice selected", {
+        language,
+        voiceId,
+      });
+      const speech = await generateElevenLabsSpeech(reply, { language });
 
       await sendWhatsAppAudio({
         to: recipient,
@@ -815,15 +824,22 @@ async function getAssistantReplySafely(sessionId: string, message: string) {
     console.log("[assistant] reply generated", {
       chars: result.reply.length,
       usedOpenAI: result.meta.usedOpenAI,
+      language: result.meta.language,
     });
 
-    return result.reply;
+    return {
+      reply: result.reply,
+      language: result.meta.language,
+    };
   } catch (error) {
     console.error("[assistant] reply fallback", {
       error: error instanceof Error ? error.message : "unknown_error",
     });
 
-    return ASSISTANT_FALLBACK_REPLY;
+    return {
+      reply: ASSISTANT_FALLBACK_REPLY,
+      language: "es" as const,
+    };
   }
 }
 
@@ -841,15 +857,17 @@ async function processTextMessage(input: {
       reply:
         "Conversacion reiniciada. Puedes hacer una nueva consulta sobre Rionegro cuando quieras.",
       inboundMessageId: input.inboundMessageId,
+      language: "es",
     });
   }
 
-  const reply = await getAssistantReplySafely(input.sessionId, input.incomingText);
+  const assistantReply = await getAssistantReplySafely(input.sessionId, input.incomingText);
 
   return sendAssistantReply({
     recipient: input.recipient,
-    reply,
+    reply: assistantReply.reply,
     inboundMessageId: input.inboundMessageId,
+    language: assistantReply.language,
   });
 }
 
@@ -910,6 +928,7 @@ async function processCitizenReportMessage(input: {
   const image = hasImage ? getImageAttachment(input.payload) : null;
   const data = input.payload.data;
   const description = input.incomingText.trim();
+  const language = detectUserLanguage({ text: description }).language;
   const intentAnalysis = analyzeUserMessageIntent(description, {
     messageType: input.type,
     hasImage,
@@ -944,6 +963,7 @@ async function processCitizenReportMessage(input: {
     images: image ? [image] : [],
     hasImage,
     reportIntent,
+    language,
   });
 
   if (!result.handled) {
@@ -958,6 +978,7 @@ async function processCitizenReportMessage(input: {
     recipient: input.recipient,
     reply: result.reply,
     inboundMessageId: input.inboundMessageId,
+    language,
   });
 
   console.log("[citizen-reports] confirmation sent", {
@@ -992,6 +1013,7 @@ async function processAudioMessage(input: {
       reply:
         "No pude descargar la nota de voz. Por favor enviame el mensaje escrito o revisa que UltraMsg tenga activo Webhook Download Media.",
       inboundMessageId: input.inboundMessageId,
+      language: "es",
     });
   }
 
@@ -1001,6 +1023,7 @@ async function processAudioMessage(input: {
       reply:
         "No pude transcribir la nota de voz en este momento. Por favor enviame el mensaje escrito.",
       inboundMessageId: input.inboundMessageId,
+      language: "es",
     });
   }
 
@@ -1018,6 +1041,7 @@ async function processAudioMessage(input: {
       reply:
         "No pude descargar la nota de voz. Por favor enviame el mensaje escrito o revisa que UltraMsg tenga activo Webhook Download Media.",
       inboundMessageId: input.inboundMessageId,
+      language: "es",
     });
   }
 
@@ -1045,6 +1069,7 @@ async function processAudioMessage(input: {
       reply:
         "Recibi tu nota de voz, pero no pude transcribirla en este momento. Por favor enviame el mensaje escrito.",
       inboundMessageId: input.inboundMessageId,
+      language: "es",
     });
   }
 
@@ -1058,6 +1083,7 @@ async function processAudioMessage(input: {
       reply:
         "No pude entender la nota de voz. Por favor intenta enviarla de nuevo o escribeme el mensaje.",
       inboundMessageId: input.inboundMessageId,
+      language: "es",
     });
   }
 
@@ -1073,12 +1099,13 @@ async function processAudioMessage(input: {
     return citizenReportReply;
   }
 
-  const reply = await getAssistantReplySafely(input.sessionId, transcription);
+  const assistantReply = await getAssistantReplySafely(input.sessionId, transcription);
 
   return sendAssistantReply({
     recipient: input.recipient,
-    reply,
+    reply: assistantReply.reply,
     inboundMessageId: input.inboundMessageId,
+    language: assistantReply.language,
   });
 }
 

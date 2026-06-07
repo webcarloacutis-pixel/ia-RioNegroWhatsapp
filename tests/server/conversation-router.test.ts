@@ -41,6 +41,10 @@ test("routeConversationBeforeAssistant corta reportes reales antes del asistente
     reportQuestion.reply,
     "Claro. Cuentame que paso y en que sector para poder registrar el reporte.",
   );
+
+  const englishReportQuestion = routeConversationBeforeAssistant("How can I report a pothole?");
+  assert.equal(englishReportQuestion.analysis.shouldCreateCitizenReport, false);
+  assert.match(englishReportQuestion.reply ?? "", /Tell me where the pothole is|register/i);
 });
 
 test("routeConversationBeforeAssistant no registra consultas privadas de veterinaria", () => {
@@ -110,4 +114,13 @@ test("generateGroundedAnswer no inventa si falta knowledge", () => {
   });
 
   assert.equal(answer, "No tengo informacion oficial sobre eso en este momento.");
+
+  const english = generateGroundedAnswer({
+    userMessage: "What is the phone number of the invented office?",
+    intent: "KNOWLEDGE_BASE_QUERY",
+    retrievedKnowledge: [],
+    language: "en",
+  });
+
+  assert.equal(english, "I don't have official information about that at the moment.");
 });

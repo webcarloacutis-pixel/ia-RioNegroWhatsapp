@@ -1,4 +1,5 @@
 import type { KnowledgeEntrySummary } from "@/lib/types";
+import type { SupportedLanguage } from "@/lib/language";
 
 const STOP_WORDS = new Set([
   "a",
@@ -33,6 +34,19 @@ const STOP_WORDS = new Set([
 const LOCATION_PATTERNS = [
   /\b(donde|ubicacion|direccion|dirrecion|direcion|llego|llegar|queda|esta)\b/,
 ];
+
+export const KNOWLEDGE_BILINGUAL_TERMS = {
+  cityHall: ["city hall", "mayor's office", "municipal office", "town hall", "alcaldia", "palacio municipal"],
+  address: ["address", "location", "where is", "where can", "direccion", "ubicacion", "donde queda"],
+  hours: ["opening hours", "business hours", "schedule", "what time", "horario", "atencion"],
+  taxes: ["taxes", "property tax", "municipal taxes", "predial", "impuesto predial", "rentas"],
+  mobility: ["mobility", "traffic", "transit", "driver license", "movilidad", "transito", "comparendo"],
+  citizenReport: ["citizen report", "report an incident", "complaint", "denuncia", "reporte ciudadano", "alerta"],
+  procedure: ["procedure", "process", "paperwork", "tramite", "tramites", "requisito"],
+  contact: ["contact", "email", "phone", "telefono", "correo", "contacto"],
+  pqrs: ["complaint", "request", "claim", "petition", "pqrs", "pqrsd", "queja", "reclamo", "solicitud"],
+  emergency: ["emergency", "accident", "fire", "flood", "accidente", "incendio", "inundacion"],
+} as const;
 
 const INTENT_PATTERNS: Array<[string, RegExp]> = [
   ["LOCATION", /\b(donde|ubicacion|direccion|dirrecion|direcion|llego|llegar|queda|esta)\b/],
@@ -122,6 +136,77 @@ export function normalizeKnowledgeQuery(text: string) {
     .replace(/[^a-z0-9]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+export function expandKnowledgeQueryForSearch(text: string) {
+  const normalized = normalizeKnowledgeQuery(text);
+  const additions: string[] = [];
+
+  for (const terms of Object.values(KNOWLEDGE_BILINGUAL_TERMS)) {
+    const normalizedTerms = terms.map(normalizeKnowledgeQuery);
+    const matched = normalizedTerms.some((term) => {
+      return term && (normalized.includes(term) || term.includes(normalized));
+    });
+
+    if (matched) {
+      additions.push(...normalizedTerms);
+    }
+  }
+
+  return unique([normalized, ...additions], 80).join(" ");
+}
+
+export function detectKnowledgeTextLanguage(text: string): SupportedLanguage {
+  const normalized = normalizeKnowledgeQuery(text);
+  let englishScore = 0;
+  let spanishScore = 0;
+
+  for (const hint of ["city hall", "opening hours", "address", "phone", "email", "property tax", "procedure"]) {
+    if (normalized.includes(hint)) englishScore += hint.includes(" ") ? 2 : 1;
+  }
+
+  for (const hint of ["alcaldia", "horario", "direccion", "telefono", "correo", "predial", "tramite"]) {
+    if (normalized.includes(hint)) spanishScore += hint.includes(" ") ? 2 : 1;
+  }
+
+  if (/\b(the|and|from|where|what|how|office|hours)\b/.test(normalized)) englishScore += 2;
+  if (/\b(el|la|los|las|de|del|donde|como|que|cual)\b/.test(normalized)) spanishScore += 2;
+
+  return englishScore > spanishScore ? "en" : "es";
+}
+
+export function localizeKnowledgeAnswerForLanguage(
+  entry: Pick<KnowledgeEntrySummary, "question" | "answer" | "shortAnswer">,
+  language: SupportedLanguage,
+) {
+  const answer = entry.shortAnswer || entry.answer;
+
+  if (language !== "en" || detectKnowledgeTextLanguage(`${entry.question} ${answer}`) === "en") {
+    return answer;
+  }
+
+  return answer
+    .replace(/\bDireccion:/gi, "Address:")
+    .replace(/\bTelefono:/gi, "Phone:")
+    .replace(/\bCorreo de atencion:/gi, "Citizen services email:")
+    .replace(/\bCorreo judicial:/gi, "Legal email:")
+    .replace(/\bCorreo de transito:/gi, "Transit email:")
+    .replace(/\bCorreo de rentas:/gi, "Taxes email:")
+    .replace(/\bCorreo de valorizacion:/gi, "Valuation email:")
+    .replace(/\bLunes a jueves:/gi, "Monday to Thursday:")
+    .replace(/\bViernes:/gi, "Friday:")
+    .replace(/\bEl horario general de atencion es:/gi, "The general service hours are:")
+    .replace(/\bHorario de atencion:/gi, "Opening hours:")
+    .replace(/\bLa Alcaldia de Rionegro queda en el centro,?\s*en\b/gi, "Rionegro City Hall is located downtown, at")
+    .replace(/\bLa Alcaldia de Rionegro\b/g, "Rionegro City Hall")
+    .replace(/\bAlcaldia de Rionegro\b/g, "Rionegro City Hall")
+    .replace(/\bAlcaldia\b/g, "City Hall")
+    .replace(/\btramites\b/gi, "procedures")
+    .replace(/\bimpuesto predial\b/gi, "property tax")
+    .replace(/\btelefono\b/gi, "phone")
+    .replace(/\bcorreo\b/gi, "email")
+    .replace(/\bdireccion\b/gi, "address")
+    .replace(/\bhorario\b/gi, "schedule");
 }
 
 export function getKnowledgeCategoryLabel(category: string | null | undefined) {
@@ -254,7 +339,8 @@ function tokenOverlapScore(queryTokens: string[], text: string, weight: number) 
 
 export function scoreKnowledgeEntry(entry: KnowledgeEntrySummary, query: string) {
   const normalizedQuery = normalizeKnowledgeQuery(query);
-  const queryTokens = tokensFor(query);
+  const expandedQuery = expandKnowledgeQueryForSearch(query);
+  const queryTokens = tokensFor(expandedQuery);
 
   if (!normalizedQuery || !entry.isActive) return 0;
 

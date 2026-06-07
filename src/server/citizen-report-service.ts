@@ -1,6 +1,7 @@
 import { addDays } from "date-fns";
 
 import { AppError } from "@/lib/errors";
+import { detectUserLanguage, type SupportedLanguage } from "@/lib/language";
 import { prisma } from "@/lib/prisma";
 import type {
   CitizenReportListResult,
@@ -97,6 +98,7 @@ type CitizenAlertIntentInput = {
     lastIntent?: string | null;
     lastTopic?: string | null;
   } | null;
+  language?: SupportedLanguage;
 };
 
 type HandleCitizenReportInput = {
@@ -109,6 +111,7 @@ type HandleCitizenReportInput = {
   images?: CitizenReportImageInput[];
   hasImage?: boolean;
   reportIntent?: CitizenReportIntent;
+  language?: SupportedLanguage;
 };
 
 type HandleCitizenReportResult =
@@ -224,6 +227,30 @@ const REPORT_KEYWORDS = [
   "peligro en la vía",
   "anden",
   "andén",
+  "report",
+  "reporting",
+  "incident",
+  "accident",
+  "crash",
+  "collision",
+  "traffic jam",
+  "road closed",
+  "blocked road",
+  "badly parked",
+  "pothole",
+  "fallen tree",
+  "tree fell",
+  "flood",
+  "flooding",
+  "fire",
+  "explosion",
+  "gunshots",
+  "shots",
+  "landslide",
+  "gas leak",
+  "animal on the road",
+  "dog was hit",
+  "dangerous pothole",
 ];
 
 const REPORT_NATURAL_PATTERNS = [
@@ -243,15 +270,25 @@ const REPORT_NATURAL_PATTERNS = [
   /\bhay\s+(?:un\s+)?cierre\s+vial\b/,
   /\bhay\s+(?:un\s+)?bloqueo\b/,
   /\bhay\s+(?:una\s+)?persona\s+herida\b/,
+  /\bthere\s+is\s+(?:an?\s+)?accident\b/,
+  /\bthere\s+is\s+(?:a\s+)?fire\b/,
+  /\bi\s+heard\s+gunshots\b/,
+  /\bthere\s+is\s+(?:a\s+)?dangerous\s+pothole\b/,
+  /\b(?:a\s+)?tree\s+fell\b/,
+  /\bfallen\s+tree\b/,
+  /\bthere\s+is\s+flooding\b/,
+  /\b(?:a\s+)?dog\s+was\s+hit\b/,
 ];
 
 const URGENT_SITUATION_PATTERN =
-  /(atentado|ataque terrorista|posible atentado|explosion|balacera|disparos|incendio|fuga de gas|herido|heridos|ambulancia|derrumbe|deslizamiento)/;
+  /(atentado|ataque terrorista|posible atentado|explosion|balacera|disparos|incendio|fuga de gas|herido|heridos|ambulancia|derrumbe|deslizamiento|attack|explosion|gunshots|shots|fire|gas leak|injured|ambulance|landslide)/;
 
 const REPORT_INFORMATION_REQUEST_PATTERNS = [
   /^(?:como|donde|que|cual|puedo|debo|necesito saber|quiero saber|me puedes decir)\b.*\b(?:denuncia|denunciar|reporte|reportar|reporto)\b/,
   /^(?:como|que)\s+hago\b.*\b(?:denuncia|denunciar|reporte|reportar|hueco|accidente|choque)\b/,
   /^(?:donde|como)\b.*\b(?:transito|movilidad|inspeccion|policia|fiscalia)\b/,
+  /^(?:how|where|what|can|could|should|i need to know|please tell me)\b.*\b(?:complaint|report|reporting|incident|pothole|accident|crash)\b/,
+  /^how\s+(?:can|do)\s+i\s+report\b/,
 ];
 
 export const CLASSIFICATION_RULES: Array<{
@@ -261,43 +298,43 @@ export const CLASSIFICATION_RULES: Array<{
   type: string;
 }> = [
   {
-    pattern: /(atentado|ataque(?: terrorista)?|posible atentado|balacera|disparos)/,
+    pattern: /(atentado|ataque(?: terrorista)?|posible atentado|balacera|disparos|gunshots|shots|armed attack)/,
     category: "Seguridad",
     priority: "urgent",
     type: "seguridad",
   },
   {
-    pattern: /(incendio)/,
+    pattern: /(incendio|fire|flames)/,
     category: "Incendio",
     priority: "urgent",
     type: "emergencia",
   },
   {
-    pattern: /(explosion)/,
+    pattern: /(explosion|blast)/,
     category: "Explosión",
     priority: "urgent",
     type: "emergencia",
   },
   {
-    pattern: /(fuga de gas)/,
+    pattern: /(fuga de gas|gas leak)/,
     category: "Emergencia",
     priority: "urgent",
     type: "emergencia",
   },
   {
-    pattern: /(accidente|choque|herido|heridos|ambulancia)/,
+    pattern: /(accidente|choque|herido|heridos|ambulancia|accident|crash|collision|injured|ambulance)/,
     category: "Accidente",
     priority: "urgent",
     type: "transito",
   },
   {
-    pattern: /(derrumbe|deslizamiento)/,
+    pattern: /(derrumbe|deslizamiento|landslide)/,
     category: "Riesgo",
     priority: "urgent",
     type: "emergencia",
   },
   {
-    pattern: /(inundacion)/,
+    pattern: /(inundacion|flood|flooding)/,
     category: "Inundación",
     priority: "urgent",
     type: "emergencia",
@@ -309,7 +346,7 @@ export const CLASSIFICATION_RULES: Array<{
     type: "seguridad",
   },
   {
-    pattern: /(trancon|tacos?|via cerrada|cierre vial|cierre de via|bloqueando la via|animal en la via)/,
+    pattern: /(trancon|tacos?|via cerrada|cierre vial|cierre de via|bloqueando la via|animal en la via|traffic jam|road closed|blocked road|animal on the road)/,
     category: "Tránsito",
     priority: "high",
     type: "transito",
@@ -333,13 +370,13 @@ export const CLASSIFICATION_RULES: Array<{
     type: "transito",
   },
   {
-    pattern: /(hueco)/,
+    pattern: /(hueco|pothole)/,
     category: "Hueco en vía",
     priority: "normal",
     type: "infraestructura",
   },
   {
-    pattern: /(arbol caido|se cayo.*arbol)/,
+    pattern: /(arbol caido|se cayo.*arbol|fallen tree|tree fell|tree on the road)/,
     category: "Árbol caído",
     priority: "high",
     type: "emergencia",
@@ -513,12 +550,15 @@ const KNOWN_REPORT_LOCATIONS = [
   { key: "parque", label: "parque" },
   { key: "hospital", label: "hospital" },
   { key: "colegio", label: "colegio" },
+  { key: "downtown", label: "Centro" },
+  { key: "airport", label: "Aeropuerto" },
+  { key: "park", label: "parque" },
 ];
 
 function findKnownReportLocation(text: string) {
   const normalized = normalizeText(text);
   const viaMatch = normalized.match(
-    /\b(?:en\s+|por\s+)?(?:la\s+)?via\s+(san antonio|llanogrande|ojos de agua|el porvenir|centro|autopista|aeropuerto|parque|hospital|colegio)\b/,
+    /\b(?:en\s+|por\s+|on\s+)?(?:la\s+)?(?:via|road)\s+(san antonio|llanogrande|ojos de agua|el porvenir|centro|autopista|aeropuerto|parque|hospital|colegio|downtown|airport|park)\b/,
   );
 
   if (viaMatch?.[1]) {
@@ -549,9 +589,13 @@ function inferLocation(text: string) {
 
   const patterns = [
     /\b(?:en|por)\s+(San Antonio|Ojos de Agua|el centro|la autopista|el aeropuerto|la glorieta|Llanogrande)\b/i,
+    /\b(?:in|at|near)\s+(San Antonio|Ojos de Agua|downtown|the airport|the park|Llanogrande)\b/i,
     /\b(?:en|por)\s+((?:la\s+)?v[ií]a\s+[^.,;\n]+)/i,
+    /\b(?:on|near)\s+((?:the\s+)?(?:road|street)\s+[^.,;\n]+)/i,
     /\bv[ií]a\s+(?!esta\b|cerrada\b|bloqueada\b)([^.,;\n]+)/i,
+    /\broad\s+(?!is\b|closed\b|blocked\b)([^.,;\n]+)/i,
     /\bcerca\s+(?:al|del|de)\s+([^.,;\n]+)/i,
+    /\bnear\s+(?:the\s+)?([^.,;\n]+)/i,
     /\bfrente\s+(?:al|a la|a)\s+([^.,;\n]+)/i,
     /\ben\s+la\s+entrada\s+(?:del|de la)\s+([^.,;\n]+)/i,
     /\b(?:en|por)\s+((?:el\s+)?barrio\s+[^.,;\n]+)/i,
@@ -607,16 +651,16 @@ function isReportInformationRequest(normalizedText: string) {
 }
 
 const PRIVATE_SERVICE_PATTERN =
-  /\b(?:veterinari[ao]s?|farmacias?|taxi|taxis|gruas?|clinicas?|hospital(?:es)?|hoteles?|restaurantes?|droguerias?|comercio|negocio|taller(?:es)?)\b/;
+  /\b(?:veterinari[ao]s?|farmacias?|taxi|taxis|gruas?|clinicas?|hospital(?:es)?|hoteles?|restaurantes?|droguerias?|comercio|negocio|taller(?:es)?|vet|vets|veterinary|pharmacy|pharmacies|tow\s*truck|clinic|clinics|hotels?|restaurants?|workshops?)\b/;
 
 const PRIVATE_HELP_PATTERN =
-  /\b(?:mi|mis)\s+(?:gato|gata|perro|perra|mascota|mama|madre|papa|padre|hijo|hija|familiar)\b.*\b(?:enferm|urgencia|ayuda|atencion|hospital|clinica|veterinari|medico)\b/;
+  /\b(?:(?:mi|mis)\s+(?:gato|gata|perro|perra|mascota|mama|madre|papa|padre|hijo|hija|familiar)|my\s+(?:cat|dog|pet|mother|mom|father|dad|child|relative))\b.*\b(?:enferm|urgencia|ayuda|atencion|hospital|clinica|veterinari|medico|sick|emergency|help|care|clinic|veterinary|vet|medical)\b/;
 
 const SERVICE_QUERY_PATTERN =
-  /\b(?:donde|necesito|busco|buscar|hay|queda|abiert[ao]s?|24\s*horas|urgencias?|llevarlo|llevarla)\b/;
+  /\b(?:donde|necesito|busco|buscar|hay|queda|abiert[ao]s?|24\s*horas|urgencias?|llevarlo|llevarla|where|need|looking|search|open|24\s*hours|emergency|take\s+him|take\s+her)\b/;
 
 const HOW_TO_REPORT_PATTERN =
-  /^(?:como|que hago|donde|cual|puedo|debo|necesito saber|quiero saber|me puedes decir)\b.*\b(?:denuncia|denunciar|reporte|reportar|reporto|hueco|accidente|choque|arbol caido|incendio)\b/;
+  /^(?:como|que hago|donde|cual|puedo|debo|necesito saber|quiero saber|me puedes decir|how|where|what|can|could|should|i need to know|please tell me)\b.*\b(?:denuncia|denunciar|reporte|reportar|reporto|hueco|accidente|choque|arbol caido|incendio|complaint|report|reporting|incident|pothole|accident|crash|fallen tree|fire)\b/;
 
 const AMBIGUOUS_ALERT_PATTERNS = [
   /\bnecesito\s+ayuda(?:\s+urgente)?\b/,
@@ -628,13 +672,17 @@ const AMBIGUOUS_ALERT_PATTERNS = [
   /\bvi\s+algo\s+peligroso\b/,
   /\bhay\s+(?:un\s+)?perro\s+herido\b/,
   /\bhay\s+(?:un\s+)?animal\s+herido\b/,
+  /\bi\s+need\s+(?:urgent\s+)?help\b/,
+  /\bthere\s+is\s+(?:a\s+)?problem\b/,
+  /\bsomething\s+happened\b/,
+  /\bi\s+saw\s+something\s+dangerous\b/,
 ];
 
 const PUBLIC_CONTEXT_PATTERN =
-  /\b(?:via|vial|carretera|autopista|calle|anden|parque|barrio|sector|vereda|glorieta|entrada|puente|colegio|hospital|aeropuerto|centro|llanogrande|san antonio|ojos de agua)\b/;
+  /\b(?:via|vial|carretera|autopista|calle|anden|parque|barrio|sector|vereda|glorieta|entrada|puente|colegio|hospital|aeropuerto|centro|llanogrande|san antonio|ojos de agua|road|street|sidewalk|park|neighborhood|area|bridge|school|airport|downtown)\b/;
 
 const PERSONAL_PET_PATTERN =
-  /\b(?:mi|mis)\s+(?:gato|gata|perro|perra|mascota)\b/;
+  /\b(?:(?:mi|mis)\s+(?:gato|gata|perro|perra|mascota)|my\s+(?:cat|dog|pet))\b/;
 
 const ALERT_RULES: Array<{
   pattern: RegExp;
@@ -645,42 +693,42 @@ const ALERT_RULES: Array<{
   requiresPublicContext?: boolean;
 }> = [
   {
-    pattern: /\b(?:disparos|tiros|balacera|pelea con armas|amenaza armada)\b/,
+    pattern: /\b(?:disparos|tiros|balacera|pelea con armas|amenaza armada|gunshots|shots|armed threat)\b/,
     category: "Seguridad",
     priority: "urgent",
     type: "seguridad",
     incident: "seguridad",
   },
   {
-    pattern: /\b(?:incendio|llamas|se esta quemando|humo de una vivienda|humo de una casa)\b/,
+    pattern: /\b(?:incendio|llamas|se esta quemando|humo de una vivienda|humo de una casa|fire|flames|smoke from a house)\b/,
     category: "Incendio",
     priority: "urgent",
     type: "emergencia",
     incident: "incendio",
   },
   {
-    pattern: /\b(?:explosion|estallido|bomba|atentado)\b/,
+    pattern: /\b(?:explosion|estallido|bomba|atentado|blast|bomb)\b/,
     category: "Explosion",
     priority: "urgent",
     type: "emergencia",
     incident: "explosion",
   },
   {
-    pattern: /\b(?:fuga de gas|olor a gas|huele mucho a gas|cilindro danado)\b/,
+    pattern: /\b(?:fuga de gas|olor a gas|huele mucho a gas|cilindro danado|gas leak|smell of gas)\b/,
     category: "Fuga de gas",
     priority: "urgent",
     type: "emergencia",
     incident: "fuga de gas",
   },
   {
-    pattern: /\b(?:inundacion|agua entrando|creciente|quebrada desbordada|agua por todas partes)\b/,
+    pattern: /\b(?:inundacion|agua entrando|creciente|quebrada desbordada|agua por todas partes|flood|flooding|water entering)\b/,
     category: "Inundacion",
     priority: "urgent",
     type: "emergencia",
     incident: "inundacion",
   },
   {
-    pattern: /\b(?:derrumbe|deslizamiento|tierra en la via|caida de banca)\b/,
+    pattern: /\b(?:derrumbe|deslizamiento|tierra en la via|caida de banca|landslide|mudslide)\b/,
     category: "Derrumbe",
     priority: "urgent",
     type: "emergencia",
@@ -688,7 +736,7 @@ const ALERT_RULES: Array<{
   },
   {
     pattern:
-      /\b(?:(?:atropellaron|atropellad[oa])\s+(?:un\s+|una\s+)?(?:perro|gato|animal)|(?:perro|gato|animal|caballo|ganado|vaca|reses).*(?:atropellad[oa]?|herid[oa]?|muert[oa]?|suelto|bloqueando|agresiv|atacando))\b/,
+      /\b(?:(?:atropellaron|atropellad[oa])\s+(?:un\s+|una\s+)?(?:perro|gato|animal)|(?:perro|gato|animal|caballo|ganado|vaca|reses|dog|cat|animal|horse|cattle).*(?:atropellad[oa]?|herid[oa]?|muert[oa]?|suelto|bloqueando|agresiv|atacando|hit|injured|dead|loose|blocking|aggressive|attacking)|(?:dog|cat|animal)\s+was\s+hit)\b/,
     category: "Animal en via",
     priority: "high",
     type: "transito",
@@ -696,7 +744,7 @@ const ALERT_RULES: Array<{
   },
   {
     pattern:
-      /\b(?:accidente|choque|se chocaron|moto se cayo|moto caida|carro volcado|volcado|persona herida|personas heridas|heridos?)\b/,
+      /\b(?:accidente|choque|se chocaron|moto se cayo|moto caida|carro volcado|volcado|persona herida|personas heridas|heridos?|accident|crash|collision|car overturned|injured person|injured people)\b/,
     category: "Accidente",
     priority: "urgent",
     type: "transito",
@@ -704,7 +752,7 @@ const ALERT_RULES: Array<{
   },
   {
     pattern:
-      /\b(?:(?:se\s+)?cayo\s+(?:un\s+)?(?:arbol|palo|rama)|(?:arbol|palo|rama).*(?:caido|bloqueando))\b/,
+      /\b(?:(?:se\s+)?cayo\s+(?:un\s+)?(?:arbol|palo|rama)|(?:arbol|palo|rama|tree|branch).*(?:caido|bloqueando|fell|fallen|blocking)|(?:a\s+)?tree\s+fell|fallen\s+tree)\b/,
     category: "Arbol caido",
     priority: "high",
     type: "emergencia",
@@ -725,7 +773,7 @@ const ALERT_RULES: Array<{
     incident: "semaforo danado",
   },
   {
-    pattern: /\b(?:hueco|crater|via danada|calle rota|calle vuelta nada)\b/,
+    pattern: /\b(?:hueco|crater|via danada|calle rota|calle vuelta nada|pothole|road damage|damaged road)\b/,
     category: "Hueco en via",
     priority: "normal",
     type: "infraestructura",
@@ -903,7 +951,7 @@ export function analyzeCitizenAlertIntent(
   }
 
   if (
-    /\b(?:donde|como|cual|horario|queda|pagar|pago|tramite|predial|alcaldia|transito|atencion|telefono|direccion)\b/.test(
+    /\b(?:donde|como|cual|horario|queda|pagar|pago|tramite|predial|alcaldia|transito|atencion|telefono|direccion|where|how|what|hours|schedule|pay|payment|procedure|property tax|city hall|traffic|phone|address|weather|raining)\b/.test(
       normalized,
     )
   ) {
@@ -989,9 +1037,60 @@ function buildLocationPhrase(location?: string | null) {
   return `en el sector de ${location}`;
 }
 
-function buildKnownLocationReportReply(intent: CitizenReportIntent) {
-  const locationPhrase = buildLocationPhrase(intent.location);
+function buildEnglishLocationPhrase(location?: string | null) {
+  if (!location) return "";
+
+  const normalized = normalizeText(location);
+
+  if (normalized.startsWith("via ") || normalized.startsWith("road ")) {
+    return `on ${location}`;
+  }
+
+  if (/^(autopista|parque|hospital|colegio|aeropuerto|airport|park|downtown|centro)\b/.test(normalized)) {
+    return `at ${location}`;
+  }
+
+  return `in ${location}`;
+}
+
+function buildKnownLocationReportReply(intent: CitizenReportIntent, language: SupportedLanguage) {
+  const locationPhrase =
+    language === "en"
+      ? buildEnglishLocationPhrase(intent.location)
+      : buildLocationPhrase(intent.location);
   const category = normalizeText(intent.category);
+
+  if (language === "en") {
+    if (category.includes("accidente")) {
+      return [
+        `Thank you for reporting it. We have registered the accident ${locationPhrase} for review.`,
+        "",
+        "If you can, please send a photo of the place or a more exact reference point.",
+      ].join("\n");
+    }
+
+    if (category.includes("arbol")) {
+      return [
+        `Thank you for reporting it. We have registered the fallen tree case ${locationPhrase} for review.`,
+        "",
+        "If you can, please send a photo of the place or a more exact reference point.",
+      ].join("\n");
+    }
+
+    if (category.includes("animal")) {
+      return [
+        `Thank you for reporting it. We have registered the animal-on-road case ${locationPhrase} for review.`,
+        "",
+        "If you can, please send a photo of the place or a more exact reference point.",
+      ].join("\n");
+    }
+
+    return [
+      `Thank you for reporting it. We have registered the incident ${locationPhrase} for review.`,
+      "",
+      "If you can, please send a photo of the place or a more exact reference point.",
+    ].join("\n");
+  }
 
   if (category.includes("accidente")) {
     return [
@@ -1024,9 +1123,37 @@ function buildKnownLocationReportReply(intent: CitizenReportIntent) {
   ].join("\n");
 }
 
-function buildCitizenReportReply(intent: CitizenReportIntent, hasImage: boolean) {
+function buildCitizenReportReply(
+  intent: CitizenReportIntent,
+  hasImage: boolean,
+  language: SupportedLanguage,
+) {
   if (intent.isUrgentSituation) {
     const emergencyLine = getEmergencyContactReference();
+
+    if (language === "en") {
+      if (intent.needsLocation) {
+        return [
+          "Thank you for reporting it. We have registered the incident as a possible urgent situation for review.",
+          "",
+          `Please tell me the exact location or area where it is happening. If you can, also send a photo of the place. If there are injured people or immediate risk, please also contact ${emergencyLine}.`,
+        ].join("\n");
+      }
+
+      if (intent.category === "Accidente" && intent.location) {
+        return [
+          `Thank you for reporting it. We have registered the accident ${buildEnglishLocationPhrase(intent.location)} for review.`,
+          "",
+          `If you can, please send a photo of the place or a more exact reference point. If there are injured people or immediate risk, please also contact ${emergencyLine}.`,
+        ].join("\n");
+      }
+
+      return [
+        "Thank you for reporting it. We have registered the incident as a possible urgent situation for review.",
+        "",
+        `If you can, please send a photo of the place or a more exact reference point. If there are injured people or immediate risk, please also contact ${emergencyLine}.`,
+      ].join("\n");
+    }
 
     if (intent.needsLocation) {
       return [
@@ -1052,6 +1179,10 @@ function buildCitizenReportReply(intent: CitizenReportIntent, hasImage: boolean)
   }
 
   if (intent.needsLocation) {
+    if (language === "en") {
+      return "Thank you for reporting it. To register it properly, please tell me the exact location or area where it happened. If you can, also send a photo of the place.";
+    }
+
     if (intent.category === "Accidente") {
       return "Gracias por reportarlo. Para registrarlo bien, dime por favor la ubicación exacta o el sector donde ocurrió el accidente. Si puedes, envía también una foto del lugar.";
     }
@@ -1060,6 +1191,14 @@ function buildCitizenReportReply(intent: CitizenReportIntent, hasImage: boolean)
   }
 
   if (hasImage) {
+    if (language === "en") {
+      return [
+        "Thank you for reporting it. We received the information and the image. The case is registered for review by the administrative team.",
+        "",
+        "If you have another detail, such as a more exact reference point, you can send it here.",
+      ].join("\n");
+    }
+
     return [
       "Gracias por reportarlo. Ya recibimos la información y la imagen del suceso. El caso queda registrado para revisión del equipo administrativo.",
       "",
@@ -1068,7 +1207,15 @@ function buildCitizenReportReply(intent: CitizenReportIntent, hasImage: boolean)
   }
 
   if (intent.location) {
-    return buildKnownLocationReportReply(intent);
+    return buildKnownLocationReportReply(intent, language);
+  }
+
+  if (language === "en") {
+    return [
+      "Thank you for reporting it. We have registered the information for review.",
+      "",
+      "If you can, please send a photo of the place and a more exact location to help identify the case better.",
+    ].join("\n");
   }
 
   return [
@@ -1084,6 +1231,7 @@ export async function handleCitizenReport(
   const messageType = input.messageType.toLowerCase();
   const hasImage = Boolean(input.hasImage || input.images?.length);
   const description = sanitizeText(input.text);
+  const language = input.language ?? detectUserLanguage({ text: description }).language;
   const intent =
     input.reportIntent ?? detectCitizenReportIntent(description, messageType);
 
@@ -1097,7 +1245,9 @@ export async function handleCitizenReport(
     return {
       handled: true,
       reply:
-        "Recibimos la imagen. Cuéntanos por favor qué ocurrió y en qué lugar para poder registrar el reporte correctamente.",
+        language === "en"
+          ? "We received the image. Please tell us what happened and where, so we can register the report properly."
+          : "Recibimos la imagen. Cuentanos por favor que ocurrio y en que lugar para poder registrar el reporte correctamente.",
       needsMoreInfo: true,
     };
   }
@@ -1110,7 +1260,9 @@ export async function handleCitizenReport(
     return {
       handled: true,
       reply:
-        "Recibimos la imagen. Cuéntanos por favor qué ocurrió y en qué lugar para poder registrar el reporte correctamente.",
+        language === "en"
+          ? "We received the image. Please tell us what happened and where, so we can register the report properly."
+          : "Recibimos la imagen. Cuentanos por favor que ocurrio y en que lugar para poder registrar el reporte correctamente.",
       needsMoreInfo: true,
     };
   }
@@ -1158,7 +1310,7 @@ export async function handleCitizenReport(
 
   return {
     handled: true,
-    reply: buildCitizenReportReply(intent, hasImage),
+    reply: buildCitizenReportReply(intent, hasImage, language),
     report,
     needsMoreInfo: intent.needsLocation || !hasImage,
   };

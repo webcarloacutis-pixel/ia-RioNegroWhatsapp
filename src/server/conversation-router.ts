@@ -5,7 +5,11 @@ import {
   type ConversationalIntent,
 } from "@/server/intent-classifier";
 import type { KnowledgeEntrySummary } from "@/lib/types";
-import { scoreKnowledgeEntry } from "@/lib/knowledge-metadata";
+import {
+  localizeKnowledgeAnswerForLanguage,
+  scoreKnowledgeEntry,
+} from "@/lib/knowledge-metadata";
+import { detectUserLanguage, type SupportedLanguage } from "@/lib/language";
 import { extractLocationFromReportText } from "@/server/citizen-report-service";
 import { listKnowledgeEntriesFromDatabase } from "@/server/panel-service";
 import { getEmergencyContactReference, getEmergencyContacts } from "@/server/emergency-contacts";
@@ -43,6 +47,8 @@ type ExpectedAnswerShape =
 
 export type ConversationIntentAnalysis = {
   intent: ConversationRouterIntent;
+  language: SupportedLanguage;
+  languageConfidence: number;
   confidence: number;
   userGoal: string;
   needsKnowledgeBase: boolean;
@@ -205,9 +211,12 @@ function toConversationIntentAnalysis(
 ): ConversationIntentAnalysis {
   const normalizedMessage = normalizeText(message);
   const intent = mapBaseIntent(analysis.intent, normalizedMessage);
+  const language = detectUserLanguage({ text: message });
 
   return {
     intent,
+    language: language.language,
+    languageConfidence: language.confidence,
     confidence: analysis.confidence,
     userGoal: normalizedMessage || "Sin texto suficiente.",
     needsKnowledgeBase: analysis.shouldUseKnowledgeBase,
@@ -269,9 +278,11 @@ export function analyzeConversationIntent(input: {
   const baseAnalysis = analyzeUserMessageIntent(effectiveMessage, context);
   const analysis = toConversationIntentAnalysis(effectiveMessage, baseAnalysis);
 
-  console.log("[conversation] intent analyzed", {
-    intent: analysis.intent,
-    confidence: analysis.confidence,
+    console.log("[conversation] intent analyzed", {
+      intent: analysis.intent,
+      language: analysis.language,
+      languageConfidence: analysis.languageConfidence,
+      confidence: analysis.confidence,
     needsKnowledgeBase: analysis.needsKnowledgeBase,
     shouldCreateReport: analysis.shouldCreateReport,
     reason: analysis.reason,
@@ -297,6 +308,7 @@ export function analyzeConversationIntent(input: {
 export async function retrieveRelevantKnowledge(input: {
   userMessage: string;
   intent: ConversationRouterIntent | ConversationalIntent;
+  language?: SupportedLanguage;
   maxItems?: number;
 }): Promise<RelevantKnowledgeItem[]> {
   const maxItems = Math.max(1, input.maxItems ?? 3);
@@ -328,6 +340,7 @@ export async function retrieveRelevantKnowledge(input: {
 
   console.log("[conversation] knowledge retrieved", {
     intent: input.intent,
+    language: input.language,
     count: ranked.length,
     bestScore: ranked[0]?.relevanceScore ?? 0,
   });
@@ -376,7 +389,9 @@ export function generateGroundedAnswer(input: {
   userMessage: string;
   intent: ConversationRouterIntent | ConversationalIntent;
   retrievedKnowledge: RelevantKnowledgeItem[];
+  language?: SupportedLanguage;
 }) {
+  const language = input.language ?? detectUserLanguage({ text: input.userMessage }).language;
   const grounding = validateKnowledgeGrounding({
     userMessage: input.userMessage,
     intent: input.intent,
@@ -384,10 +399,16 @@ export function generateGroundedAnswer(input: {
   });
 
   if (!grounding.hasEnoughEvidence) {
-    return UNKNOWN_OFFICIAL_DATA_REPLY;
+    return language === "en"
+      ? "I don't have official information about that at the moment."
+      : UNKNOWN_OFFICIAL_DATA_REPLY;
   }
 
-  const answer = input.retrievedKnowledge[0]?.answer ?? UNKNOWN_OFFICIAL_DATA_REPLY;
+  const answer = input.retrievedKnowledge[0]
+    ? localizeKnowledgeAnswerForLanguage(input.retrievedKnowledge[0], language)
+    : language === "en"
+      ? "I don't have official information about that at the moment."
+      : UNKNOWN_OFFICIAL_DATA_REPLY;
   const groundingSources = input.retrievedKnowledge.map((item) => ({
     title: item.question,
     type: item.category,
@@ -416,6 +437,35 @@ export function generateGroundedAnswer(input: {
 
 export function buildClarifyingQuestion(message: string) {
   const normalized = normalizeText(message);
+  const language = detectUserLanguage({ text: message }).language;
+
+  if (language === "en") {
+    if (/(pet|cat|dog)/.test(normalized) && /(help|urgent|emergency|injured|sick)/.test(normalized)) {
+      return "I understand. Is this an emergency involving your pet, or do you want to register a citizen alert? If it is a citizen alert, please tell me what happened and where.";
+    }
+
+    if (/(tax|taxes|payment|payments)/.test(normalized)) {
+      return "Sure. Do you mean property tax, industry and commerce tax, or another payment?";
+    }
+
+    if (/(procedure|procedures|paperwork)/.test(normalized)) {
+      return "Sure. What procedure do you need to complete?";
+    }
+
+    if (/pothole/.test(normalized) && /(complaint|report|reporting)/.test(normalized)) {
+      return "Sure. Tell me where the pothole is and, if you can, send a photo so we can register it properly.";
+    }
+
+    if (/(strange smell|problem|something happened|dangerous|need help)/.test(normalized)) {
+      return "I understand. Do you want me to register this as a citizen alert? If so, tell me what happened, the exact area, and send a photo if you can.";
+    }
+
+    if (/(complaint|report|reporting|incident)/.test(normalized)) {
+      return "Sure. Tell me what happened and in which area so I can register the report.";
+    }
+
+    return "Sure. Can you tell me a little more so I can guide you properly?";
+  }
 
   if (/(perro|gato|mascota)/.test(normalized) && /(ayuda|urgente|emergencia|herido)/.test(normalized)) {
     return "Entiendo. Es una emergencia con tu mascota o quieres registrar una alerta ciudadana? Si es una alerta, dime que paso y en que sector.";
@@ -462,6 +512,20 @@ function buildLocationPhrase(location: string) {
   return `en el sector de ${location}`;
 }
 
+function buildEnglishLocationPhrase(location: string) {
+  const normalizedLocation = normalizeText(location);
+
+  if (normalizedLocation.startsWith("via ")) {
+    return `on ${location}`;
+  }
+
+  if (/^(parque|hospital|colegio|airport|aeropuerto|downtown|centro)\b/.test(normalizedLocation)) {
+    return `at ${location}`;
+  }
+
+  return `in ${location}`;
+}
+
 function getReportSubject(analysis: AnalyzedUserMessageIntent) {
   const normalizedCategory = normalizeText(analysis.reason);
 
@@ -503,8 +567,45 @@ function getReportSubject(analysis: AnalyzedUserMessageIntent) {
 export function buildCitizenReportAssistantPrompt(
   analysis: AnalyzedUserMessageIntent,
   message = "",
+  language: SupportedLanguage = detectUserLanguage({ text: message }).language,
 ) {
   const location = extractLocationFromReportText(message);
+
+  if (language === "en") {
+    if (analysis.intent === "EMERGENCY_REPORT") {
+      if (!location) {
+        return [
+          "Thank you for reporting it. We have registered the incident as a possible urgent situation for review.",
+          "",
+          `Please tell me the exact location or area where it is happening. If you can, also send a photo of the place. If there are injured people or immediate risk, please also contact ${getEmergencyContactReference()}.`,
+        ].join("\n");
+      }
+
+      if (normalizeText(analysis.reason).includes("accidente") || normalizeText(analysis.reason).includes("accident")) {
+        return [
+          `Thank you for reporting it. We have registered the accident ${buildEnglishLocationPhrase(location)} for review.`,
+          "",
+          `If you can, please send a photo of the place or a more exact reference point. If there are injured people or immediate risk, please also contact ${getEmergencyContactReference()}.`,
+        ].join("\n");
+      }
+
+      return [
+        `Thank you for reporting it. We have registered the incident ${buildEnglishLocationPhrase(location)} for review.`,
+        "",
+        `If you can, please send a photo of the place or a more exact reference point. If there are injured people or immediate risk, please also contact ${getEmergencyContactReference()}.`,
+      ].join("\n");
+    }
+
+    if (location) {
+      return [
+        `Thank you for reporting it. We have registered the incident ${buildEnglishLocationPhrase(location)} for review.`,
+        "",
+        "If you can, please send a photo of the place or a more exact reference point.",
+      ].join("\n");
+    }
+
+    return "Thank you for reporting it. To register it properly, please tell me the exact location or area where it happened. If you can, also send a photo of the place.";
+  }
 
   if (analysis.intent === "EMERGENCY_REPORT") {
     if (!location) {
@@ -544,17 +645,20 @@ export function buildCitizenReportAssistantPrompt(
 export function getPreAssistantReply(
   message: string,
   analysis: AnalyzedUserMessageIntent,
+  language: SupportedLanguage = detectUserLanguage({ text: message }).language,
 ) {
   if (analysis.intent === "THANKS") {
-    return "Con mucho gusto.";
+    return language === "en" ? "You're welcome." : "Con mucho gusto.";
   }
 
   if (analysis.intent === "GREETING") {
-    return "Hola! En que te puedo ayudar hoy?";
+    return language === "en" ? "Hi! I'm Eva. How can I help you today?" : "Hola! En que te puedo ayudar hoy?";
   }
 
   if (analysis.shouldRefuseBecauseUnknown) {
-    return UNKNOWN_OFFICIAL_REPLY;
+    return language === "en"
+      ? "I don't have official information about that at the moment. I can help you with municipal services, procedures, or citizen reports in Rionegro."
+      : UNKNOWN_OFFICIAL_REPLY;
   }
 
   if (analysis.shouldAskClarifyingQuestion) {
@@ -562,7 +666,7 @@ export function getPreAssistantReply(
   }
 
   if (analysis.shouldCreateCitizenReport) {
-    return buildCitizenReportAssistantPrompt(analysis, message);
+    return buildCitizenReportAssistantPrompt(analysis, message, language);
   }
 
   return null;
@@ -572,6 +676,7 @@ export function routeConversationBeforeAssistant(
   message: string,
   context?: ConversationContext,
 ) {
+  const language = detectUserLanguage({ text: message }).language;
   const analysis = analyzeUserMessageIntent(message, context);
   const routerAnalysis = toConversationIntentAnalysis(message, analysis);
 
@@ -600,7 +705,7 @@ export function routeConversationBeforeAssistant(
   return {
     analysis,
     routerAnalysis,
-    reply: getPreAssistantReply(message, analysis),
+    reply: getPreAssistantReply(message, analysis, language),
   };
 }
 

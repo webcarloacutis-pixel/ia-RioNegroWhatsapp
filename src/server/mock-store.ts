@@ -12,6 +12,7 @@ import {
   formatDateTimeForBogotaDisplay,
   parseBogotaDateTimeLocalToUtcDate,
 } from "@/lib/format";
+import { detectUserLanguage } from "@/lib/language";
 import {
   buildOfficialAnnouncements,
   buildOfficialKnowledgeEntries,
@@ -1333,6 +1334,7 @@ export async function bulkUpdateKnowledgeEntries(input: KnowledgeBulkActionInput
 export async function testKnowledgeAnswer(
   input: KnowledgeTestAnswerInput,
 ): Promise<KnowledgeTestAnswerResult> {
+  const language = detectUserLanguage({ text: input.question }).language;
   const initialCandidates = input.entryId
     ? [serializeKnowledgeEntry(getKnowledgeEntryOrThrow(input.entryId))]
     : (
@@ -1365,6 +1367,9 @@ export async function testKnowledgeAnswer(
       usedItems: [],
       confidence: 0.2,
       wouldSayUnknown: true,
+      detectedLanguage: language,
+      answerLanguage: language,
+      usedSpanishKnowledge: false,
     };
   }
 
@@ -1373,6 +1378,9 @@ export async function testKnowledgeAnswer(
     usedItems: rankedItems.map(({ item }) => item),
     confidence: Math.min(1, Math.max(best.item.confidence, best.score / 100)),
     wouldSayUnknown: false,
+    detectedLanguage: language,
+    answerLanguage: language,
+    usedSpanishKnowledge: false,
   };
 }
 

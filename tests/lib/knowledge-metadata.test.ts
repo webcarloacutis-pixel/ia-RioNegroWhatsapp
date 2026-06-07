@@ -2,9 +2,11 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  expandKnowledgeQueryForSearch,
   generateKnowledgeMetadata,
   getKnowledgeCategoryLabel,
   getKnowledgeIntentLabel,
+  localizeKnowledgeAnswerForLanguage,
   normalizeKnowledgeQuery,
   scoreKnowledgeEntry,
 } from "@/lib/knowledge-metadata";
@@ -65,6 +67,38 @@ test("scoreKnowledgeEntry encuentra una ficha por pregunta variante", () => {
 
   assert.ok(scoreKnowledgeEntry(entry, "como llego a las delicias") >= 35);
   assert.ok(scoreKnowledgeEntry(entry, "direccion restaurante las delicias") >= 35);
+});
+
+test("scoreKnowledgeEntry encuentra ficha espanola con pregunta en ingles", () => {
+  const now = new Date().toISOString();
+  const entry: KnowledgeEntrySummary = {
+    id: "kb-city-hall",
+    question: "Donde queda la Alcaldia de Rionegro?",
+    answer: "La Alcaldia de Rionegro queda en el centro, en Carrera 50 # 49 - 05.",
+    category: "Alcaldia",
+    intent: "LOCATION",
+    shortAnswer: null,
+    tags: ["alcaldia", "direccion", "rionegro"],
+    aliases: ["ubicacion alcaldia", "direccion alcaldia"],
+    sourceUrl: null,
+    sourceName: "Panel admin",
+    sourceType: "manual_admin",
+    isOfficial: false,
+    isActive: true,
+    needsReview: false,
+    confidence: 0.8,
+    lastVerifiedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  const expanded = expandKnowledgeQueryForSearch("Where is the City Hall of Rionegro?");
+  const localized = localizeKnowledgeAnswerForLanguage(entry, "en");
+
+  assert.match(expanded, /alcaldia/);
+  assert.ok(scoreKnowledgeEntry(entry, "Where is the City Hall of Rionegro?") >= 80);
+  assert.match(localized, /Rionegro City Hall/i);
+  assert.match(localized, /Carrera 50 # 49 - 05/);
 });
 
 test("labels traducen categorias e intenciones tecnicas", () => {

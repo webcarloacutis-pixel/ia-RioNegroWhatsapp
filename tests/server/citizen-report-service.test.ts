@@ -30,6 +30,29 @@ test("detecta accidente en Llanogrande como reporte ciudadano", () => {
   assert.match(intent.location ?? "", /Llanogrande/i);
 });
 
+test("detecta reportes ciudadanos en ingles", () => {
+  const accident = analyzeCitizenAlertIntent({
+    text: "There is an accident in Llanogrande.",
+  });
+  const tree = analyzeCitizenAlertIntent({
+    text: "A tree fell on the road in San Antonio.",
+  });
+  const potholeQuestion = analyzeCitizenAlertIntent({
+    text: "How can I report a pothole?",
+  });
+
+  assert.equal(accident.intent, "EMERGENCY_ALERT");
+  assert.equal(accident.shouldCreateAlert, true);
+  assert.equal(accident.category, "Accidente");
+  assert.match(accident.location ?? "", /Llanogrande/i);
+  assert.equal(tree.intent, "CITIZEN_ALERT");
+  assert.equal(tree.shouldCreateAlert, true);
+  assert.match(tree.category ?? "", /Arbol caido/i);
+  assert.match(tree.location ?? "", /San Antonio/i);
+  assert.equal(potholeQuestion.intent, "HOW_TO_REPORT");
+  assert.equal(potholeQuestion.shouldCreateAlert, false);
+});
+
 test("no marca preguntas generales de la Alcaldia como reportes", () => {
   const intent = detectCitizenReportIntent("Hola, donde queda la Alcaldia?");
 
@@ -50,6 +73,12 @@ test("clasificador de alertas separa servicios privados de reportes reales", () 
   assert.equal(vet.shouldCreateAlert, false);
   assert.equal(pharmacy.intent, "PRIVATE_SERVICE_QUERY");
   assert.equal(pharmacy.shouldCreateAlert, false);
+
+  const englishVet = analyzeCitizenAlertIntent({
+    text: "My cat is sick and I need a 24-hour vet.",
+  });
+  assert.equal(englishVet.intent, "PRIVATE_SERVICE_QUERY");
+  assert.equal(englishVet.shouldCreateAlert, false);
 });
 
 test("clasificador de alertas detecta animales en via sin confundir mascota enferma", () => {
@@ -209,6 +238,25 @@ test("handleCitizenReport registra accidente con sector y pide foto o referencia
     assert.match(result.reply, /accidente/i);
     assert.match(result.reply, /Llanogrande/i);
     assert.match(result.reply, /foto|referencia/i);
+  }
+});
+
+test("handleCitizenReport responde en ingles cuando el reporte entra en ingles", async () => {
+  const result = await handleCitizenReport({
+    text: "There is an accident in Llanogrande.",
+    messageType: "chat",
+    recipient: "+573001112249",
+    whatsappMessageId: `unit-accident-en-${Date.now()}`,
+  });
+
+  assert.equal(result.handled, true);
+
+  if (result.handled) {
+    assert.equal(result.report?.category, "Accidente");
+    assert.match(result.report?.location ?? "", /Llanogrande/i);
+    assert.match(result.reply, /Thank you for reporting it/i);
+    assert.match(result.reply, /Llanogrande/i);
+    assert.doesNotMatch(result.reply, /Gracias|registramos el accidente/i);
   }
 });
 

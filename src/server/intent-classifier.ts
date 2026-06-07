@@ -83,6 +83,37 @@ const MUNICIPAL_SCOPE_HINTS = [
   "alcalde",
   "sede",
   "oficina",
+  "city hall",
+  "mayor's office",
+  "municipality",
+  "municipal office",
+  "procedure",
+  "procedures",
+  "service",
+  "services",
+  "tax",
+  "taxes",
+  "property tax",
+  "payment",
+  "payments",
+  "complaint",
+  "request",
+  "petition",
+  "office",
+  "opening hours",
+  "schedule",
+  "address",
+  "phone",
+  "report",
+  "incident",
+  "emergency",
+  "traffic",
+  "mobility",
+  "accident",
+  "fire",
+  "pothole",
+  "flood",
+  "weather",
 ];
 
 const OFFICIAL_DATA_HINTS = [
@@ -110,6 +141,27 @@ const OFFICIAL_DATA_HINTS = [
   "enlace",
   "link",
   "pasaporte",
+  "where",
+  "address",
+  "location",
+  "opening hours",
+  "business hours",
+  "schedule",
+  "what time",
+  "phone",
+  "email",
+  "requirements",
+  "documents",
+  "procedure",
+  "procedures",
+  "payment",
+  "payments",
+  "property tax",
+  "traffic ticket",
+  "office",
+  "channel",
+  "link",
+  "weather",
 ];
 
 const PAYMENT_HINTS = [
@@ -125,6 +177,15 @@ const PAYMENT_HINTS = [
   "pagar",
   "comparendo",
   "valorizacion",
+  "tax",
+  "taxes",
+  "property tax",
+  "municipal taxes",
+  "treasury",
+  "payment",
+  "payments",
+  "pay",
+  "traffic ticket",
 ];
 
 const AMBIGUOUS_TAX_HINTS = [
@@ -133,6 +194,10 @@ const AMBIGUOUS_TAX_HINTS = [
   "pagos",
   "pago",
   "rentas",
+  "taxes",
+  "tax",
+  "payments",
+  "payment",
 ];
 
 const ABSURD_OR_OUT_OF_SCOPE_HINTS = [
@@ -166,6 +231,8 @@ const REPORT_INFO_REQUEST_PATTERNS = [
   /^(?:como|donde|que|cual|puedo|debo|necesito saber|quiero saber|me puedes decir)\b.*\b(?:denuncia|denunciar|reporte|reportar|reporto)\b/,
   /^(?:como|que)\s+hago\b.*\b(?:denuncia|denunciar|reporte|reportar|hueco|accidente|choque)\b/,
   /^(?:donde|como)\b.*\b(?:transito|movilidad|inspeccion|policia|fiscalia)\b/,
+  /^(?:how|where|what|can|could|should|i need to know|please tell me)\b.*\b(?:complaint|report|reporting|incident|pothole|accident|crash)\b/,
+  /^how\s+(?:can|do)\s+i\s+report\b/,
 ];
 
 function normalizeText(value: string) {
@@ -211,9 +278,20 @@ function isAmbiguousMunicipalRequest(text: string) {
     return true;
   }
 
+  if (/^(?:i need|i want|can you help|help me)\b.*\b(?:procedure|paperwork)\b/.test(text)) {
+    return true;
+  }
+
   if (
     /^(?:necesito|quiero|me ayudas|ayuda|ayudame)\b.*\b(?:impuestos?|pagos?|rentas)\b/.test(text) &&
     !includesAny(text, ["predial", "industria y comercio", "ica", "comparendo", "valorizacion"])
+  ) {
+    return true;
+  }
+
+  if (
+    /^(?:i need|i want|can you help|help me)\b.*\b(?:tax|taxes|payments?)\b/.test(text) &&
+    !includesAny(text, ["property tax", "traffic ticket", "municipal taxes"])
   ) {
     return true;
   }

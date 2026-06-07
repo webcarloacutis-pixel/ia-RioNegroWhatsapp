@@ -765,6 +765,14 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
                 <Badge tone={testResult.wouldSayUnknown ? "warning" : "success"}>
                   Confianza {formatPercent(testResult.confidence)}
                 </Badge>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <Badge tone="info">
+                    Idioma {testResult.detectedLanguage === "en" ? "ingles" : "espanol"}
+                  </Badge>
+                  {testResult.usedSpanishKnowledge ? (
+                    <Badge tone="success">Uso ficha en espanol</Badge>
+                  ) : null}
+                </div>
                 <p className="mt-3 text-sm leading-6 text-foreground">{testResult.answer}</p>
                 {testResult.usedItems.length ? (
                   <div className="mt-3 space-y-1 text-xs text-muted">
