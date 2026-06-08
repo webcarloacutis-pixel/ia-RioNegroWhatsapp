@@ -54,8 +54,16 @@ export function AppShell({ adminEmail, channelStatus, children }: AppShellProps)
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [pendingReportsCount, setPendingReportsCount] = useState(0);
+  const [todayLabel, setTodayLabel] = useState("");
 
   useEffect(() => {
+    setTodayLabel(
+      new Intl.DateTimeFormat("es-CO", {
+        dateStyle: "full",
+        timeZone: "America/Bogota",
+      }).format(new Date()),
+    );
+
     let cancelled = false;
 
     async function loadPendingReportsCount() {
@@ -210,11 +218,7 @@ export function AppShell({ adminEmail, channelStatus, children }: AppShellProps)
             </button>
             <div>
               <p className="text-sm font-semibold text-muted">WhatsApp Rionegro</p>
-              <p className="text-sm text-muted">
-                {new Intl.DateTimeFormat("es-CO", {
-                  dateStyle: "full",
-                }).format(new Date())}
-              </p>
+              <p className="text-sm text-muted">{todayLabel || "Fecha de hoy"}</p>
             </div>
           </div>
 

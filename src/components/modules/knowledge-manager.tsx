@@ -258,6 +258,32 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
   const [testResult, setTestResult] = useState<KnowledgeTestAnswerResult | null>(null);
   const [lastKnowledgeRequestId, setLastKnowledgeRequestId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+  const categoryOptions = useMemo(
+    () =>
+      Array.from(
+        new Set([
+          ...KNOWLEDGE_CATEGORY_SUGGESTIONS,
+          ...data.facets.categories.map((facet) => facet.value),
+        ]),
+      ).sort((left, right) => left.localeCompare(right, "es")),
+    [data.facets.categories],
+  );
+  const activeFilterLabels = useMemo(() => {
+    const labels: string[] = [];
+
+    if (filters.q.trim()) labels.push(`Busqueda: ${filters.q.trim()}`);
+    if (filters.category) labels.push(`Categoria: ${getKnowledgeCategoryLabel(filters.category)}`);
+    if (filters.intent) labels.push(`Intencion: ${getKnowledgeIntentLabel(filters.intent)}`);
+    if (filters.sourceName) labels.push(`Fuente: ${filters.sourceName}`);
+    if (filters.isActive) labels.push(filters.isActive === "true" ? "Activas" : "Inactivas");
+    if (filters.needsReview) {
+      labels.push(filters.needsReview === "true" ? "Requiere revision" : "Revisadas");
+    }
+    if (filters.lowConfidence === "true") labels.push("Baja confianza");
+    if (filters.tag) labels.push(`Tag: ${filters.tag}`);
+
+    return labels;
+  }, [filters]);
   const selectedItems = useMemo(
     () => data.items.filter((item) => selectedIds.has(item.id)),
     [data.items, selectedIds],
@@ -309,6 +335,10 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
       ...patch,
       page: patch.page ?? 1,
     }));
+  }
+
+  function clearFilters() {
+    setFilters(initialFilters);
   }
 
   function openCreate() {
@@ -564,7 +594,7 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
             onChange={(event) => updateFilters({ category: event.target.value })}
           >
             <option value="">Categoria</option>
-            {KNOWLEDGE_CATEGORY_SUGGESTIONS.map((category) => (
+            {categoryOptions.map((category) => (
               <option key={category} value={category}>
                 {getKnowledgeCategoryLabel(category)}
               </option>
@@ -624,8 +654,31 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
           </Button>
         </div>
 
+        {activeFilterLabels.length ? (
+          <div className="mt-4 flex flex-wrap items-center gap-2 rounded-2xl border border-border bg-surface px-4 py-3">
+            <span className="text-xs font-semibold uppercase tracking-[0.18em] text-muted">
+              Filtros activos
+            </span>
+            {activeFilterLabels.map((label) => (
+              <span key={label} className="rounded-full bg-white px-3 py-1 text-xs text-muted">
+                {label}
+              </span>
+            ))}
+            <Button variant="ghost" className="ml-auto" onClick={clearFilters}>
+              Limpiar filtros
+            </Button>
+          </div>
+        ) : null}
+
+        {filters.lowConfidence === "true" ? (
+          <div className="mt-3 rounded-2xl border border-[#f1d7a4] bg-[#fff7e8] px-4 py-3 text-sm text-[#7c5719]">
+            Baja confianza esta activo. Las fichas turisticas cargadas tienen confianza alta, por
+            eso no aparecen hasta limpiar ese filtro.
+          </div>
+        ) : null}
+
         <div className="mt-4 flex flex-wrap gap-2">
-          {data.facets.categories.slice(0, 14).map((facet) => (
+          {data.facets.categories.map((facet) => (
             <button
               key={facet.value}
               className={cn(
@@ -665,7 +718,7 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
               value={bulkCategory}
               onChange={(event) => setBulkCategory(event.target.value)}
             >
-              {KNOWLEDGE_CATEGORY_SUGGESTIONS.map((category) => (
+              {categoryOptions.map((category) => (
                 <option key={category} value={category}>
                   {getKnowledgeCategoryLabel(category)}
                 </option>
