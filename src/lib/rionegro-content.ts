@@ -380,10 +380,10 @@ export const assistantWelcomeMessage =
   "Hola 👋 soy el asistente oficial de Rionegro. Puedo ayudarte con eventos, noticias, cierres viales y mas. En que puedo ayudarte?";
 
 export const assistantNoDataMessage =
-  "No tengo el dato exacto ahora mismo, pero puedo orientarte con lo que si esta registrado.";
+  "No tengo informacion oficial sobre eso en este momento.";
 
 export const assistantScopeMessage =
-  "Puedo ayudarte solo con informacion oficial del municipio de Rionegro.";
+  "Puedo ayudarte con informacion oficial, tramites, servicios y reportes ciudadanos de Rionegro.";
 
 export const assistantSampleQuestions = [
   "Que es Rionegro?",

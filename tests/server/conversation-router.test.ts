@@ -25,6 +25,24 @@ test("analyzeConversationIntent devuelve contrato conversacional completo", () =
   assert.equal(absurd.shouldRefuseBecauseUnknown, true);
 });
 
+test("analyzeConversationIntent conserva intencion institucional en audio e imagen", () => {
+  const audio = analyzeConversationIntent({
+    userMessage: "",
+    hasAudio: true,
+    transcription: "A que hora atienden en la Alcaldia?",
+  });
+  const image = routeConversationBeforeAssistant("", {
+    messageType: "image",
+    hasImage: true,
+  });
+
+  assert.equal(audio.intent, "SIMPLE_HOURS");
+  assert.equal(audio.institutionalIntent, "horario");
+  assert.equal(image.analysis.institutionalIntent, "reporte_ciudadano");
+  assert.match(image.reply ?? "", /Recibi la imagen/i);
+  assert.match(image.reply ?? "", /sector/i);
+});
+
 test("routeConversationBeforeAssistant corta reportes reales antes del asistente general", () => {
   const noLocation = routeConversationBeforeAssistant("Hay un accidente en Rionegro");
   const withLocation = routeConversationBeforeAssistant("Hay un accidente en Llanogrande");

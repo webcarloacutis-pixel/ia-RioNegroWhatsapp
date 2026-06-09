@@ -146,6 +146,7 @@ test("responde ubicacion de Alcaldia de forma breve y sin bullets", async () => 
 
   assert.match(result.reply, /Alcaldia de Rionegro/i);
   assert.match(result.reply, /Carrera 50 # 49 - 05/i);
+  assert.equal(result.meta.institutionalIntent, "ubicacion");
   assert.doesNotMatch(result.reply, /^\s*(?:[-*]|\d+[.)])\s+/m);
   assert.ok(result.reply.split(/\n{2,}/).length <= 2);
 
@@ -230,6 +231,19 @@ test("pregunta fuera de alcance responde que no tiene informacion oficial", asyn
   assert.doesNotMatch(weather.reply, /City Hall|Carrera 50|Alcaldia/i);
 });
 
+test("responde conversacion general inocua sin sonar bloqueada", async () => {
+  resetConversation("unit-general-reggaeton");
+  const result = await chatWithAssistant(
+    "unit-general-reggaeton",
+    "Quien es el mejor cantante de regueton?",
+  );
+
+  assert.equal(result.meta.usedOpenAI, false);
+  assert.equal(result.meta.institutionalIntent, "desconocido");
+  assert.match(result.reply, /gustos/i);
+  assert.doesNotMatch(result.reply, /No tengo informacion oficial/i);
+});
+
 test("consulta de veterinaria por mascota enferma no crea reporte ni inventa negocios", async () => {
   resetConversation("unit-private-vet");
   const result = await chatWithAssistant(
@@ -297,6 +311,7 @@ test("responde predial con orientacion especifica y sin lista generica", async (
   const result = await chatWithAssistant("unit-predial", "Necesito pagar el predial");
 
   assert.match(result.reply, /predial|Hacienda|Rentas/i);
+  assert.equal(result.meta.institutionalIntent, "pago");
   assert.doesNotMatch(result.reply, /^\s*(?:[-*]|\d+[.)])\s+/m);
   assert.doesNotMatch(result.reply, /puedes realizar tramites y consultas relacionados con:/i);
 });

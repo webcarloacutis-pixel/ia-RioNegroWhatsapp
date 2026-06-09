@@ -58,6 +58,12 @@ function formatTurnTime(value: string) {
   }).format(new Date(value));
 }
 
+function formatInstitutionalIntent(value: string) {
+  return value
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
 export function AssistantPlayground({
   initialHistory,
   analytics,
@@ -472,6 +478,12 @@ export function AssistantPlayground({
                     <p className="text-sm text-muted">Enfoque aplicado</p>
                     <p className="mt-2 font-semibold text-foreground">
                       {ASSISTANT_ROUTE_LABELS[lastMeta.route]}
+                    </p>
+                  </div>
+                  <div className="rounded-[22px] bg-surface px-4 py-4">
+                    <p className="text-sm text-muted">Intencion institucional</p>
+                    <p className="mt-2 font-semibold text-foreground">
+                      {formatInstitutionalIntent(lastMeta.institutionalIntent)}
                     </p>
                   </div>
                   <div className="rounded-[22px] bg-surface px-4 py-4">

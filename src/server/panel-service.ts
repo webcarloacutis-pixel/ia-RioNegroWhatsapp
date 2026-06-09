@@ -475,6 +475,10 @@ async function withMockFallback<T>(
   runWithDatabase: () => Promise<T>,
   runWithMock: () => Promise<T>,
 ) {
+  if (!process.env.DATABASE_URL?.trim()) {
+    return runWithMock();
+  }
+
   try {
     return await runWithDatabase();
   } catch (error) {

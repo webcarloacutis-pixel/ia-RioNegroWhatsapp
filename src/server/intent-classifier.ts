@@ -14,6 +14,20 @@ export type ConversationalIntent =
   | "GREETING"
   | "THANKS";
 
+export type InstitutionalConversationIntent =
+  | "consulta_informativa"
+  | "tramite"
+  | "horario"
+  | "ubicacion"
+  | "pago"
+  | "servicio"
+  | "emergencia"
+  | "denuncia"
+  | "reporte_ciudadano"
+  | "comunicado_admin"
+  | "agendamiento"
+  | "desconocido";
+
 export type ConversationContext = {
   lastIntent?: ConversationalIntent | null;
   lastTopic?: string | null;
@@ -23,6 +37,7 @@ export type ConversationContext = {
 
 export type AnalyzedUserMessageIntent = {
   intent: ConversationalIntent;
+  institutionalIntent: InstitutionalConversationIntent;
   confidence: number;
   shouldUseKnowledgeBase: boolean;
   shouldCreateCitizenReport: boolean;
@@ -263,6 +278,95 @@ function isGreeting(text: string) {
   return text.slice(match[0].length).trim() === "";
 }
 
+type IntentAnalysisCore = Omit<AnalyzedUserMessageIntent, "institutionalIntent">;
+
+export function classifyIntent(
+  message: string,
+  context: ConversationContext = {},
+  analysis?: Partial<IntentAnalysisCore>,
+): InstitutionalConversationIntent {
+  const normalized = normalizeText(message);
+
+  if (!normalized) {
+    return context.hasImage || context.messageType === "image" ? "reporte_ciudadano" : "desconocido";
+  }
+
+  if (
+    /\b(comunicado|comunicados|mensaje masivo|mensajes masivos|difusion|campana|campana institucional|broadcast)\b/.test(
+      normalized,
+    )
+  ) {
+    return /\b(programar|programado|agendar|agenda|fecha|hora|scheduled|schedule)\b/.test(
+      normalized,
+    )
+      ? "agendamiento"
+      : "comunicado_admin";
+  }
+
+  if (analysis?.shouldCreateCitizenReport || analysis?.intent === "EMERGENCY_REPORT") {
+    if (
+      /\b(emergencia|urgencia|urgente|accidente|choque|incendio|disparos|balacera|fuga de gas|herido|heridos|ambulancia|explosion|derrumbe|deslizamiento|emergency|accident|fire|gunshots|gas leak|injured)\b/.test(
+        normalized,
+      )
+    ) {
+      return "emergencia";
+    }
+
+    if (/\b(denuncia|denunciar|queja|abuso|robo|hurto|complaint|crime)\b/.test(normalized)) {
+      return "denuncia";
+    }
+
+    return "reporte_ciudadano";
+  }
+
+  if (analysis?.isReportInformationRequest) {
+    return /\b(denuncia|denunciar|queja|complaint)\b/.test(normalized)
+      ? "denuncia"
+      : "reporte_ciudadano";
+  }
+
+  if (/\b(predial|impuesto|impuestos|pago|pagos|pagar|rentas|hacienda|comparendo|valorizacion|property tax|tax|taxes|payment|pay|traffic ticket)\b/.test(normalized)) {
+    return "pago";
+  }
+
+  if (/\b(horario|horarios|atiende|atienden|atencion|abre|cierra|opening hours|business hours|schedule|what time)\b/.test(normalized)) {
+    return "horario";
+  }
+
+  if (/\b(tramite|tramites|requisito|requisitos|documentos|proceso|licencia|procedure|procedures|paperwork|requirements|documents)\b/.test(normalized)) {
+    return "tramite";
+  }
+
+  if (
+    /\b(veterinaria|veterinario|farmacia|drogueria|taxi|grua|hotel|restaurante|clinica|hospital|servicio|servicios|dependencia|secretaria|oficina|vet|veterinary|pharmacy|restaurant|clinic|service|office)\b/.test(
+      normalized,
+    )
+  ) {
+    return "servicio";
+  }
+
+  if (/\b(donde|direccion|ubicacion|queda|llego|llegar|sede|where|address|location|city hall|mayor's office)\b/.test(normalized)) {
+    return "ubicacion";
+  }
+
+  if (analysis?.shouldUseKnowledgeBase || analysis?.officialDataRequested) {
+    return "consulta_informativa";
+  }
+
+  return "desconocido";
+}
+
+function withInstitutionalIntent(
+  message: string,
+  context: ConversationContext,
+  analysis: IntentAnalysisCore,
+): AnalyzedUserMessageIntent {
+  return {
+    ...analysis,
+    institutionalIntent: classifyIntent(message, context, analysis),
+  };
+}
+
 function isThanks(text: string) {
   return /^(gracias|muchas gracias|mil gracias|thank you|thanks|thx)\b/.test(text);
 }
@@ -355,7 +459,7 @@ export function analyzeUserMessageIntent(
   const hasKnowledgeReference = hasKnownOfficialReference(normalized);
 
   if (!normalized && context.hasImage) {
-    return {
+    return withInstitutionalIntent(message, context, {
       intent: "AMBIGUOUS",
       confidence: 0.84,
       shouldUseKnowledgeBase: false,
@@ -365,11 +469,11 @@ export function analyzeUserMessageIntent(
       reason: "Imagen sin texto suficiente para clasificar.",
       officialDataRequested: false,
       isReportInformationRequest: false,
-    };
+    });
   }
 
   if (!normalized) {
-    return {
+    return withInstitutionalIntent(message, context, {
       intent: "AMBIGUOUS",
       confidence: 0.82,
       shouldUseKnowledgeBase: false,
@@ -379,11 +483,11 @@ export function analyzeUserMessageIntent(
       reason: "Mensaje vacio o sin contenido util.",
       officialDataRequested: false,
       isReportInformationRequest: false,
-    };
+    });
   }
 
   if (isThanks(normalized)) {
-    return {
+    return withInstitutionalIntent(message, context, {
       intent: "THANKS",
       confidence: 0.98,
       shouldUseKnowledgeBase: false,
@@ -393,11 +497,11 @@ export function analyzeUserMessageIntent(
       reason: "Agradecimiento simple.",
       officialDataRequested: false,
       isReportInformationRequest: false,
-    };
+    });
   }
 
   if (isGreeting(normalized) && wordCount(normalized) <= 4) {
-    return {
+    return withInstitutionalIntent(message, context, {
       intent: "GREETING",
       confidence: 0.96,
       shouldUseKnowledgeBase: false,
@@ -407,11 +511,11 @@ export function analyzeUserMessageIntent(
       reason: "Saludo simple.",
       officialDataRequested: false,
       isReportInformationRequest: false,
-    };
+    });
   }
 
   if (hasAbsurdHint) {
-    return {
+    return withInstitutionalIntent(message, context, {
       intent: "ABSURD_OR_UNKNOWN",
       confidence: 0.94,
       shouldUseKnowledgeBase: false,
@@ -421,11 +525,11 @@ export function analyzeUserMessageIntent(
       reason: "Pregunta absurda, especulativa o ajena a informacion oficial.",
       officialDataRequested,
       isReportInformationRequest: reportInfoRequest,
-    };
+    });
   }
 
   if (alertIntent.shouldCreateAlert && !reportInfoRequest) {
-    return {
+    return withInstitutionalIntent(message, context, {
       intent: alertIntent.intent === "EMERGENCY_ALERT" ? "EMERGENCY_REPORT" : "CITIZEN_REPORT",
       confidence: alertIntent.confidence,
       shouldUseKnowledgeBase: false,
@@ -435,11 +539,11 @@ export function analyzeUserMessageIntent(
       reason: `Mensaje describe un hecho ciudadano: ${alertIntent.category ?? "Reporte"}.`,
       officialDataRequested: false,
       isReportInformationRequest: false,
-    };
+    });
   }
 
   if (alertIntent.intent === "PRIVATE_SERVICE_QUERY") {
-    return {
+    return withInstitutionalIntent(message, context, {
       intent: "KNOWLEDGE_BASE_QUERY",
       confidence: alertIntent.confidence,
       shouldUseKnowledgeBase: true,
@@ -449,11 +553,11 @@ export function analyzeUserMessageIntent(
       reason: alertIntent.reason,
       officialDataRequested: true,
       isReportInformationRequest: false,
-    };
+    });
   }
 
   if (isAmbiguousMunicipalRequest(normalized)) {
-    return {
+    return withInstitutionalIntent(message, context, {
       intent: "AMBIGUOUS",
       confidence: 0.86,
       shouldUseKnowledgeBase: false,
@@ -463,11 +567,11 @@ export function analyzeUserMessageIntent(
       reason: "Consulta municipal incompleta; falta precisar tramite, pago o servicio.",
       officialDataRequested: false,
       isReportInformationRequest: reportInfoRequest,
-    };
+    });
   }
 
   if (alertIntent.intent === "INFORMATION_QUERY") {
-    return {
+    return withInstitutionalIntent(message, context, {
       intent: "KNOWLEDGE_BASE_QUERY",
       confidence: alertIntent.confidence,
       shouldUseKnowledgeBase: true,
@@ -477,11 +581,11 @@ export function analyzeUserMessageIntent(
       reason: alertIntent.reason,
       officialDataRequested: true,
       isReportInformationRequest: false,
-    };
+    });
   }
 
   if (alertIntent.intent === "AMBIGUOUS_POSSIBLE_ALERT") {
-    return {
+    return withInstitutionalIntent(message, context, {
       intent: "AMBIGUOUS",
       confidence: alertIntent.confidence,
       shouldUseKnowledgeBase: false,
@@ -491,11 +595,11 @@ export function analyzeUserMessageIntent(
       reason: alertIntent.reason,
       officialDataRequested: false,
       isReportInformationRequest: false,
-    };
+    });
   }
 
   if (reportInfoRequest || alertIntent.intent === "HOW_TO_REPORT") {
-    return {
+    return withInstitutionalIntent(message, context, {
       intent: "AMBIGUOUS",
       confidence: Math.max(0.87, alertIntent.confidence),
       shouldUseKnowledgeBase: false,
@@ -505,11 +609,11 @@ export function analyzeUserMessageIntent(
       reason: alertIntent.reason,
       officialDataRequested: false,
       isReportInformationRequest: true,
-    };
+    });
   }
 
   if (!hasMunicipalScope && !hasKnowledgeReference) {
-    return {
+    return withInstitutionalIntent(message, context, {
       intent: "OUT_OF_SCOPE",
       confidence: 0.9,
       shouldUseKnowledgeBase: false,
@@ -519,11 +623,11 @@ export function analyzeUserMessageIntent(
       reason: "No hay relacion suficiente con Rionegro o servicios municipales.",
       officialDataRequested,
       isReportInformationRequest: reportInfoRequest,
-    };
+    });
   }
 
   if (hasPaymentHint) {
-    return {
+    return withInstitutionalIntent(message, context, {
       intent: "PAYMENT_OR_TAX",
       confidence: 0.9,
       shouldUseKnowledgeBase: true,
@@ -533,11 +637,11 @@ export function analyzeUserMessageIntent(
       reason: "Consulta sobre pagos, impuestos o rentas municipales.",
       officialDataRequested: true,
       isReportInformationRequest: reportInfoRequest,
-    };
+    });
   }
 
   if (officialDataRequested || hasKnowledgeReference || reportInfoRequest) {
-    return {
+    return withInstitutionalIntent(message, context, {
       intent: "KNOWLEDGE_BASE_QUERY",
       confidence: 0.88,
       shouldUseKnowledgeBase: true,
@@ -549,10 +653,10 @@ export function analyzeUserMessageIntent(
         : "Consulta pide informacion oficial o dato verificable.",
       officialDataRequested: true,
       isReportInformationRequest: reportInfoRequest,
-    };
+    });
   }
 
-  return {
+  return withInstitutionalIntent(message, context, {
     intent: "GENERAL_MUNICIPAL_INFO",
     confidence: 0.78,
     shouldUseKnowledgeBase: true,
@@ -562,11 +666,12 @@ export function analyzeUserMessageIntent(
     reason: "Consulta dentro del alcance municipal general.",
     officialDataRequested,
     isReportInformationRequest: reportInfoRequest,
-  };
+  });
 }
 
 export const intentClassifierInternals = {
   normalizeText,
+  classifyIntent,
   isReportInformationRequest,
   isAmbiguousMunicipalRequest,
   hasKnownOfficialReference,

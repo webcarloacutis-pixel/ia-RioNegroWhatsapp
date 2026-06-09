@@ -325,9 +325,24 @@ export type AssistantSourceReference = {
   title: string;
 };
 
+export type AssistantInstitutionalIntentValue =
+  | "consulta_informativa"
+  | "tramite"
+  | "horario"
+  | "ubicacion"
+  | "pago"
+  | "servicio"
+  | "emergencia"
+  | "denuncia"
+  | "reporte_ciudadano"
+  | "comunicado_admin"
+  | "agendamiento"
+  | "desconocido";
+
 export type AssistantReplyMeta = {
   topic: AssistantTopicValue;
   route: AssistantRouteValue;
+  institutionalIntent: AssistantInstitutionalIntentValue;
   language: "es" | "en";
   languageConfidence: number;
   usedOpenAI: boolean;

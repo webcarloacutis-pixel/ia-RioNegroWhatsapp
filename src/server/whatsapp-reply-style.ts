@@ -2,13 +2,13 @@ import type { ConversationalIntent } from "@/server/intent-classifier";
 import { detectUserLanguage, type SupportedLanguage } from "@/lib/language";
 
 export const UNKNOWN_OFFICIAL_REPLY =
-  "No tengo informacion oficial sobre eso en este momento. Puedo ayudarte con tramites, servicios o reportes ciudadanos de Rionegro.";
+  "No tengo informacion oficial sobre eso en este momento. Si quieres, puedo registrar tu consulta para que el equipo la revise o ayudarte a buscar informacion relacionada.";
 
 export const UNKNOWN_OFFICIAL_DATA_REPLY =
   "No tengo informacion oficial sobre eso en este momento.";
 
 export const UNKNOWN_OFFICIAL_REPLY_EN =
-  "I don't have official information about that at the moment. I can help you with municipal services, procedures, or citizen reports in Rionegro.";
+  "I don't have official information about that at the moment. If you want, I can help register your question for review or look for related official information.";
 
 export const UNKNOWN_OFFICIAL_DATA_REPLY_EN =
   "I don't have official information about that at the moment.";
@@ -66,7 +66,7 @@ function buildPrivateServiceUnknownReply(userMessage: string, language: Supporte
   if (/(veterinari|mascota|gato|perro|vet|veterinary|pet|cat|dog)/.test(normalized)) {
     if (language === "en") {
       return [
-        "I don't have official information about 24-hour veterinary clinics at the moment.",
+        "I don't have official information about that at the moment.",
         "",
         "If your pet is sick, I recommend contacting a nearby veterinary clinic or looking for an emergency veterinary service.",
       ].join("\n");
@@ -79,7 +79,7 @@ function buildPrivateServiceUnknownReply(userMessage: string, language: Supporte
         : "mascota";
 
     return [
-      "No tengo informacion oficial sobre veterinarias 24 horas en este momento.",
+      "No tengo informacion oficial sobre eso en este momento.",
       "",
       `Si tu ${animal} esta enfermo, te recomiendo contactar directamente una clinica veterinaria cercana o buscar un servicio veterinario de urgencias.`,
     ].join("\n");
@@ -283,6 +283,12 @@ export function formatWhatsAppReply(input: {
 
   if (input.intent === "OUT_OF_SCOPE" || input.intent === "ABSURD_OR_UNKNOWN") {
     const language = detectUserLanguage({ text: input.userMessage }).language;
+    const cleaned = stripProhibitedPhrases(input.reply).trim();
+
+    if (/\b(gustos|taste|musica|music)\b/i.test(normalizeText(cleaned))) {
+      return capParagraphs(cleaned, 2);
+    }
+
     return getUnknownOfficialReply(language);
   }
 

@@ -3,6 +3,7 @@ import {
   type AnalyzedUserMessageIntent,
   type ConversationContext,
   type ConversationalIntent,
+  type InstitutionalConversationIntent,
 } from "@/server/intent-classifier";
 import type { KnowledgeEntrySummary } from "@/lib/types";
 import {
@@ -16,6 +17,7 @@ import { getEmergencyContactReference, getEmergencyContacts } from "@/server/eme
 import {
   UNKNOWN_OFFICIAL_DATA_REPLY,
   UNKNOWN_OFFICIAL_REPLY,
+  UNKNOWN_OFFICIAL_REPLY_EN,
   formatWhatsAppReply,
   validateFinalAnswer,
 } from "@/server/whatsapp-reply-style";
@@ -47,6 +49,7 @@ type ExpectedAnswerShape =
 
 export type ConversationIntentAnalysis = {
   intent: ConversationRouterIntent;
+  institutionalIntent: InstitutionalConversationIntent;
   language: SupportedLanguage;
   languageConfidence: number;
   confidence: number;
@@ -215,6 +218,7 @@ function toConversationIntentAnalysis(
 
   return {
     intent,
+    institutionalIntent: analysis.institutionalIntent,
     language: language.language,
     languageConfidence: language.confidence,
     confidence: analysis.confidence,
@@ -280,6 +284,7 @@ export function analyzeConversationIntent(input: {
 
     console.log("[conversation] intent analyzed", {
       intent: analysis.intent,
+      institutionalIntent: analysis.institutionalIntent,
       language: analysis.language,
       languageConfidence: analysis.languageConfidence,
       confidence: analysis.confidence,
@@ -564,6 +569,18 @@ function getReportSubject(analysis: AnalyzedUserMessageIntent) {
   return "el caso";
 }
 
+function buildHarmlessGeneralReply(message: string, language: SupportedLanguage) {
+  const normalized = normalizeText(message);
+
+  if (/(regueton|reggaeton|cantante|musica|music)/.test(normalized)) {
+    return language === "en"
+      ? "That is more about taste than official information. Some people would say Bad Bunny, others prefer Feid, Karol G, J Balvin or Daddy Yankee. Are you asking about current music or the history of the genre?"
+      : "Eso ya es mas de gustos. Mucha gente diria Bad Bunny, otros prefieren Feid, Karol G, J Balvin o Daddy Yankee. Lo preguntas por musica actual o por historia del genero?";
+  }
+
+  return null;
+}
+
 export function buildCitizenReportAssistantPrompt(
   analysis: AnalyzedUserMessageIntent,
   message = "",
@@ -655,9 +672,21 @@ export function getPreAssistantReply(
     return language === "en" ? "Hi! I'm Eva. How can I help you today?" : "Hola! En que te puedo ayudar hoy?";
   }
 
-  if (analysis.shouldRefuseBecauseUnknown) {
+  if (analysis.reason.includes("Imagen sin texto")) {
     return language === "en"
-      ? "I don't have official information about that at the moment. I can help you with municipal services, procedures, or citizen reports in Rionegro."
+      ? "I received the image. Can you tell me what is happening and in which area it happened?"
+      : "Recibi la imagen. Me cuentas que esta pasando y en que sector ocurrio?";
+  }
+
+  if (analysis.shouldRefuseBecauseUnknown) {
+    const harmlessReply = buildHarmlessGeneralReply(message, language);
+
+    if (harmlessReply) {
+      return harmlessReply;
+    }
+
+    return language === "en"
+      ? UNKNOWN_OFFICIAL_REPLY_EN
       : UNKNOWN_OFFICIAL_REPLY;
   }
 
@@ -682,6 +711,7 @@ export function routeConversationBeforeAssistant(
 
   console.log("[conversation] intent analyzed", {
     intent: routerAnalysis.intent,
+    institutionalIntent: routerAnalysis.institutionalIntent,
     confidence: routerAnalysis.confidence,
     needsKnowledgeBase: routerAnalysis.needsKnowledgeBase,
     shouldCreateReport: routerAnalysis.shouldCreateReport,
