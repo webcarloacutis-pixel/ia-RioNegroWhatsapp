@@ -6,13 +6,10 @@ import {
   type InstitutionalConversationIntent,
 } from "@/server/intent-classifier";
 import type { KnowledgeEntrySummary } from "@/lib/types";
-import {
-  localizeKnowledgeAnswerForLanguage,
-  scoreKnowledgeEntry,
-} from "@/lib/knowledge-metadata";
+import { localizeKnowledgeAnswerForLanguage } from "@/lib/knowledge-metadata";
 import { detectUserLanguage, type SupportedLanguage } from "@/lib/language";
 import { extractLocationFromReportText } from "@/server/citizen-report-service";
-import { listKnowledgeEntriesFromDatabase } from "@/server/panel-service";
+import { retrieveEvaKnowledge } from "@/server/eva-knowledge-retrieval";
 import { getEmergencyContactReference, getEmergencyContacts } from "@/server/emergency-contacts";
 import {
   UNKNOWN_OFFICIAL_DATA_REPLY,
@@ -328,26 +325,25 @@ export async function retrieveRelevantKnowledge(input: {
     return [];
   }
 
-  const storedEntries = await listKnowledgeEntriesFromDatabase();
-  const entries = dedupeKnowledgeEntries(storedEntries);
-  const ranked = entries
-    .map((entry) => {
-      const relevanceScore = scoreKnowledgeEntry(entry, input.userMessage);
-
-      return {
-        ...entry,
-        relevanceScore,
-      };
-    })
-    .filter((entry) => entry.relevanceScore >= 35)
-    .sort((left, right) => right.relevanceScore - left.relevanceScore)
-    .slice(0, maxItems);
+  const analyzedIntent = analyzeUserMessageIntent(input.userMessage);
+  const retrieval = await retrieveEvaKnowledge({
+    query: input.userMessage,
+    language: input.language ?? detectUserLanguage({ text: input.userMessage }).language,
+    intent: analyzedIntent.institutionalIntent,
+    maxItems,
+  });
+  const ranked = dedupeKnowledgeEntries(retrieval.rankedItems).map((entry) => ({
+    ...entry,
+    relevanceScore: "relevanceScore" in entry ? Number(entry.relevanceScore) : 0,
+  }));
 
   console.log("[conversation] knowledge retrieved", {
     intent: input.intent,
     language: input.language,
     count: ranked.length,
-    bestScore: ranked[0]?.relevanceScore ?? 0,
+    bestScore: retrieval.topScore,
+    source: retrieval.source,
+    strategy: retrieval.strategy,
   });
 
   return ranked;

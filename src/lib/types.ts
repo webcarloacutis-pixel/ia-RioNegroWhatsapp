@@ -183,12 +183,17 @@ export type KnowledgeListResult = {
 
 export type KnowledgeTestAnswerResult = {
   answer: string;
-  usedItems: KnowledgeEntrySummary[];
+  usedItems: Array<KnowledgeEntrySummary & { score?: number; matchedBy?: string[] }>;
   confidence: number;
   wouldSayUnknown: boolean;
   detectedLanguage: "es" | "en";
   answerLanguage: "es" | "en";
   usedSpanishKnowledge: boolean;
+  knowledgeSource: "db" | "cache";
+  strategy: string;
+  usedMemory: boolean;
+  topScore: number;
+  queryNormalized: string;
 };
 
 export type DeliveryLogSummary = {

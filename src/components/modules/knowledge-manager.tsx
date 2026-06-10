@@ -822,15 +822,27 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
                   <Badge tone="info">
                     Idioma {testResult.detectedLanguage === "en" ? "ingles" : "espanol"}
                   </Badge>
+                  <Badge tone="info">
+                    Fuente {testResult.knowledgeSource === "db" ? "DB" : "cache"}
+                  </Badge>
+                  <Badge tone="info">Score {Math.round(testResult.topScore)}</Badge>
+                  <Badge tone="info">{testResult.strategy.replace(/_/g, " ")}</Badge>
+                  {testResult.usedMemory ? <Badge tone="success">Uso memoria</Badge> : null}
                   {testResult.usedSpanishKnowledge ? (
                     <Badge tone="success">Uso ficha en espanol</Badge>
                   ) : null}
                 </div>
+                <p className="mt-2 text-xs text-muted">
+                  Consulta normalizada: {testResult.queryNormalized || "sin texto"}
+                </p>
                 <p className="mt-3 text-sm leading-6 text-foreground">{testResult.answer}</p>
                 {testResult.usedItems.length ? (
                   <div className="mt-3 space-y-1 text-xs text-muted">
                     {testResult.usedItems.map((item) => (
-                      <p key={item.id}>{item.question}</p>
+                      <p key={item.id}>
+                        {item.question}
+                        {typeof item.score === "number" ? ` - score ${Math.round(item.score)}` : ""}
+                      </p>
                     ))}
                   </div>
                 ) : testResult.wouldSayUnknown ? (

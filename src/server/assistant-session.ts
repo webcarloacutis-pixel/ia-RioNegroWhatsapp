@@ -1,4 +1,4 @@
-import type { AssistantProfile, AssistantTopicValue } from "@/lib/types";
+import type { AssistantProfile, AssistantTopicValue, KnowledgeEntrySummary } from "@/lib/types";
 
 export type AssistantTurn = {
   role: "user" | "assistant";
@@ -12,7 +12,10 @@ type AssistantConversationContext = {
   conversationLanguage: "es" | "en";
   lastPlace: string | null;
   lastEntityMentioned: string | null;
+  lastCategory: string | null;
+  lastKnowledgeEntries: KnowledgeEntrySummary[];
   lastSuggestedItems: string[];
+  recentMessages: string[];
 };
 
 type AssistantSession = {
@@ -55,7 +58,10 @@ export function getAssistantSession(id: string) {
       conversationLanguage: "es",
       lastPlace: null,
       lastEntityMentioned: null,
+      lastCategory: null,
+      lastKnowledgeEntries: [],
       lastSuggestedItems: [],
+      recentMessages: [],
     },
   };
 
@@ -114,7 +120,10 @@ export function resetAssistantSession(sessionId: string) {
       conversationLanguage: "es",
       lastPlace: null,
       lastEntityMentioned: null,
+      lastCategory: null,
+      lastKnowledgeEntries: [],
       lastSuggestedItems: [],
+      recentMessages: [],
     },
   });
 }

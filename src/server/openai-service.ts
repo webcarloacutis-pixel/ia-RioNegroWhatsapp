@@ -62,7 +62,7 @@ export async function generateOpenAIText(input: {
 
   const response = await client.responses.create({
     model: getOpenAIModel(),
-    max_output_tokens: 220,
+    max_output_tokens: 520,
     input: [
       {
         role: "system",

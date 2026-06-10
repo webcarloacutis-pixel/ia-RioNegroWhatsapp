@@ -1370,17 +1370,27 @@ export async function testKnowledgeAnswer(
       detectedLanguage: language,
       answerLanguage: language,
       usedSpanishKnowledge: false,
+      knowledgeSource: "cache",
+      strategy: "mock_low_score",
+      usedMemory: false,
+      topScore: 0,
+      queryNormalized: normalizeKnowledgeText(input.question),
     };
   }
 
   return {
     answer: best.item.shortAnswer || best.item.answer,
-    usedItems: rankedItems.map(({ item }) => item),
+    usedItems: rankedItems.map(({ item, score }) => ({ ...item, score, matchedBy: ["mock_score"] })),
     confidence: Math.min(1, Math.max(best.item.confidence, best.score / 100)),
     wouldSayUnknown: false,
     detectedLanguage: language,
     answerLanguage: language,
     usedSpanishKnowledge: false,
+    knowledgeSource: "cache",
+    strategy: "mock_hybrid_match",
+    usedMemory: false,
+    topScore: best.score,
+    queryNormalized: normalizeKnowledgeText(input.question),
   };
 }
 

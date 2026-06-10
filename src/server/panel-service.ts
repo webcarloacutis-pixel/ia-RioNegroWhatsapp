@@ -42,6 +42,9 @@ import type {
   SegmentSummary,
 } from "@/lib/types";
 import { getChannelRuntimeStatus } from "@/server/channel-status-service";
+import { classifyIntent } from "@/server/intent-classifier";
+import { invalidateKnowledgeCache } from "@/server/knowledge-cache";
+import { retrieveEvaKnowledge } from "@/server/eva-knowledge-retrieval";
 import * as mockStore from "@/server/mock-store";
 import {
   serializeAnnouncement,
@@ -1401,6 +1404,8 @@ async function createKnowledgeEntryDb(input: KnowledgeInput) {
     data: applyGeneratedKnowledgeMetadata(input),
   });
 
+  invalidateKnowledgeCache("knowledge_created");
+
   return serializeKnowledgeEntry(entry);
 }
 
@@ -1418,6 +1423,8 @@ async function updateKnowledgeEntryDb(id: string, input: KnowledgeInput) {
     data: applyGeneratedKnowledgeMetadata(input),
   });
 
+  invalidateKnowledgeCache("knowledge_updated");
+
   return serializeKnowledgeEntry(entry);
 }
 
@@ -1433,6 +1440,8 @@ async function deleteKnowledgeEntryDb(id: string) {
   await prisma.knowledgeBaseEntry.delete({
     where: { id },
   });
+
+  invalidateKnowledgeCache("knowledge_deleted");
 
   return { id };
 }
@@ -1453,6 +1462,8 @@ async function toggleKnowledgeEntryActiveDb(id: string) {
     },
   });
 
+  invalidateKnowledgeCache("knowledge_toggled");
+
   return serializeKnowledgeEntry(updated);
 }
 
@@ -1472,6 +1483,8 @@ async function markKnowledgeEntryReviewedDb(id: string) {
       lastVerifiedAt: new Date(),
     },
   });
+
+  invalidateKnowledgeCache("knowledge_reviewed");
 
   return serializeKnowledgeEntry(updated);
 }
@@ -1499,6 +1512,8 @@ async function bulkUpdateKnowledgeEntriesDb(input: KnowledgeBulkActionInput) {
     data,
   });
 
+  invalidateKnowledgeCache("knowledge_bulk_updated");
+
   return {
     updated: result.count,
   };
@@ -1510,15 +1525,21 @@ async function testKnowledgeAnswerDb(
   const language = detectUserLanguage({ text: input.question });
   const initialCandidates = input.entryId
     ? [await getKnowledgeEntryDb(input.entryId)]
-    : await listKnowledgeEntriesDb();
+    : undefined;
+  const retrieval = await retrieveEvaKnowledge({
+    query: input.question,
+    language: language.language,
+    intent: classifyIntent(input.question),
+    maxItems: 3,
+    entriesOverride: initialCandidates,
+  });
 
-  const rankedItems = initialCandidates
-    .map((item) => ({ item, score: scoreKnowledgeEntry(item, input.question) }))
-    .filter(({ score }) => score >= 35)
-    .sort((left, right) => right.score - left.score)
-    .slice(0, 3);
-
-  const best = rankedItems[0];
+  const usedItems = retrieval.rankedItems.map((item) => ({
+    ...item,
+    score: item.relevanceScore,
+    matchedBy: item.matchedBy,
+  }));
+  const best = usedItems[0];
 
   if (!best) {
     return {
@@ -1532,22 +1553,31 @@ async function testKnowledgeAnswerDb(
       detectedLanguage: language.language,
       answerLanguage: language.language,
       usedSpanishKnowledge: false,
+      knowledgeSource: retrieval.source,
+      strategy: retrieval.strategy,
+      usedMemory: retrieval.usedMemory,
+      topScore: retrieval.topScore,
+      queryNormalized: retrieval.queryNormalized,
     };
   }
 
-  const usedItems = rankedItems.map(({ item }) => item);
   const usedSpanishKnowledge =
     language.language === "en" &&
     usedItems.some((item) => detectKnowledgeTextLanguage(`${item.question} ${item.answer}`) === "es");
 
   return {
-    answer: localizeKnowledgeAnswerForLanguage(best.item, language.language),
+    answer: localizeKnowledgeAnswerForLanguage(best, language.language),
     usedItems,
-    confidence: Math.min(1, Math.max(best.item.confidence, best.score / 100)),
+    confidence: retrieval.confidence,
     wouldSayUnknown: false,
     detectedLanguage: language.language,
     answerLanguage: language.language,
     usedSpanishKnowledge,
+    knowledgeSource: retrieval.source,
+    strategy: retrieval.strategy,
+    usedMemory: retrieval.usedMemory,
+    topScore: retrieval.topScore,
+    queryNormalized: retrieval.queryNormalized,
   };
 }
 

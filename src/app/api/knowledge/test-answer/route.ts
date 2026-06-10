@@ -16,6 +16,10 @@ export async function POST(request: Request) {
       usedItems: result.usedItems.length,
       confidence: result.confidence,
       wouldSayUnknown: result.wouldSayUnknown,
+      knowledgeSource: result.knowledgeSource,
+      strategy: result.strategy,
+      topScore: result.topScore,
+      usedMemory: result.usedMemory,
       answerLength: result.answer.length,
     });
 

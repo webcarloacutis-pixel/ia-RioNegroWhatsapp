@@ -198,11 +198,19 @@ function sanitizeValue(value: unknown, key?: string, depth = 0): unknown {
     return value.slice(0, 50).map((item) => sanitizeValue(item, key, depth + 1));
   }
 
+  if (typeof value === "undefined") {
+    return undefined;
+  }
+
   if (typeof value === "object" && value) {
     const output: Record<string, unknown> = {};
 
     for (const [entryKey, entryValue] of Object.entries(value)) {
-      output[entryKey] = sanitizeValue(entryValue, entryKey, depth + 1);
+      const sanitized = sanitizeValue(entryValue, entryKey, depth + 1);
+
+      if (typeof sanitized !== "undefined") {
+        output[entryKey] = sanitized;
+      }
     }
 
     return output;
@@ -318,10 +326,12 @@ export function sanitizeError(error: unknown): SafeError {
 }
 
 function writeLog(entry: LogEntry) {
-  const output = {
-    ...entry,
-    meta: entry.meta ? sanitizeLogPayload(entry.meta) : undefined,
-  };
+  const output = Object.fromEntries(
+    Object.entries({
+      ...entry,
+      meta: entry.meta ? sanitizeLogPayload(entry.meta) : undefined,
+    }).filter(([, value]) => typeof value !== "undefined"),
+  ) as LogEntry;
   const buffer = getRecentLogsBuffer();
   buffer.push(output);
 
@@ -338,15 +348,17 @@ function writeLog(entry: LogEntry) {
 function log(level: LogLevel, module: string, message: string, meta?: unknown) {
   if (!shouldLog(level)) return;
 
+  const requestId =
+    meta && typeof meta === "object" && "requestId" in meta
+      ? (meta as { requestId?: unknown }).requestId
+      : undefined;
+
   writeLog({
     timestamp: new Date().toISOString(),
     level,
     module,
     message,
-    requestId:
-      meta && typeof meta === "object" && "requestId" in meta
-        ? String((meta as { requestId?: unknown }).requestId)
-        : undefined,
+    requestId: typeof requestId === "string" && requestId ? requestId : undefined,
     environment: process.env.NODE_ENV ?? "development",
     meta,
   });
