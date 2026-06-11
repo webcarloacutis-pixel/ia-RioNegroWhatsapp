@@ -17,13 +17,16 @@ import {
 import {
   determineResponseChannel,
   getInputChannel,
+  shouldAttemptTtsForResponseChannel,
   type EvaInputChannel,
   type EvaResponseChannel,
 } from "@/server/eva-channel";
 import {
   closePersistentAssistantMemory,
+  getPendingCitizenReportFromMemory,
   getConversationClosingReply,
   isConversationClosingMessage,
+  persistPendingCitizenReportState,
   resetPersistentAssistantMemory,
 } from "@/server/assistant-memory-service";
 import { ensureCitizenSegmentMembership } from "@/server/citizen-segmentation-service";
@@ -39,6 +42,10 @@ import {
   detectCitizenReportIntent,
   handleCitizenReport,
 } from "@/server/citizen-report-service";
+import {
+  buildPendingCitizenReport,
+  handlePendingCitizenReportFollowup,
+} from "@/server/citizen-report-followup-service";
 import { analyzeUserMessageIntent } from "@/server/intent-classifier";
 
 export const runtime = "nodejs";
@@ -761,16 +768,40 @@ async function sendAssistantReply({
 }) {
   const audioEnabled = process.env.WHATSAPP_AUDIO_REPLIES !== "false";
 
-  console.log(`[eva-channel] input=${inputChannel} response=${responseChannel}`, {
+  console.log(`[eva-channel] incoming=${inputChannel} response=${responseChannel}`, {
     inputChannel,
     responseChannel,
     language,
   });
 
-  if (responseChannel === "audio" && audioEnabled && isElevenLabsConfigured(language)) {
+  if (responseChannel === "text") {
+    console.log("[eva-channel] incoming_text_response_text", {
+      inputChannel,
+      responseChannel,
+      language,
+    });
+    console.log("[eva-channel] skipped_tts_because_input_was_text", {
+      inputChannel,
+      responseChannel,
+      language,
+    });
+  }
+
+  if (
+    shouldAttemptTtsForResponseChannel({
+      responseChannel,
+      audioEnabled,
+    })
+  ) {
     try {
       const voiceId = getElevenLabsVoiceForLanguage(language);
       const voice = language === "en" ? "english" : "spanish";
+      console.log("[eva-channel] incoming_audio_response_audio", {
+        inputChannel,
+        responseChannel,
+        language,
+        voiceId,
+      });
       console.log(`[eva-channel] language=${language} response=audio voice=${voice}`, {
         language,
         voice,
@@ -805,8 +836,11 @@ async function sendAssistantReply({
 
       return { audio: true, text: false, inputChannel, responseChannel };
     } catch (error) {
-      console.warn("[elevenlabs] error generating audio, falling back to text", {
+      console.warn("[eva-channel] tts_failed_text_fallback", {
         error: error instanceof Error ? error.message : "unknown_error",
+        inputChannel,
+        responseChannel,
+        language,
       });
 
       try {
@@ -835,7 +869,7 @@ async function sendAssistantReply({
   }
 
   if (responseChannel === "audio") {
-    console.warn("[eva-channel] audio fallback to text", {
+    console.warn("[eva-channel] tts_failed_text_fallback", {
       inputChannel,
       language,
       audioEnabled,
@@ -987,6 +1021,7 @@ async function processCitizenReportMessage(input: {
   type: string;
   incomingText: string;
   recipient: string;
+  sessionId: string;
   inboundMessageId?: string;
   inputChannel: EvaInputChannel;
   responseChannel: EvaResponseChannel;
@@ -1050,6 +1085,30 @@ async function processCitizenReportMessage(input: {
     responseChannel: input.responseChannel,
   });
 
+  if (result.report && result.needsMoreInfo) {
+    const pendingCitizenReport = buildPendingCitizenReport({
+      report: result.report,
+      intent: reportIntent,
+      description,
+      language,
+      hasImage,
+    });
+
+    await persistPendingCitizenReportState({
+      sessionId: input.sessionId,
+      pendingCitizenReport,
+      userMessage: description,
+      assistantReply: result.reply,
+      language,
+    });
+
+    console.log("[eva-report] pending_report_created", {
+      reportStatus: pendingCitizenReport.status,
+      intent: intentAnalysis.intent,
+      priority: pendingCitizenReport.priority,
+    });
+  }
+
   console.log("[citizen-reports] confirmation sent", {
     type: input.type,
     category: result.report?.category,
@@ -1060,6 +1119,62 @@ async function processCitizenReportMessage(input: {
   return {
     ...replyStatus,
     handledAs: "citizen_report",
+  };
+}
+
+async function processPendingCitizenReportMessage(input: {
+  payload: UltraMsgWebhookPayload;
+  type: string;
+  incomingText: string;
+  recipient: string;
+  sessionId: string;
+  inboundMessageId?: string;
+  inputChannel: EvaInputChannel;
+  responseChannel: EvaResponseChannel;
+}) {
+  const pendingCitizenReport = await getPendingCitizenReportFromMemory(input.sessionId);
+
+  if (!pendingCitizenReport) {
+    return null;
+  }
+
+  const hasImage = isImageMessageType(input.type);
+  const image = hasImage ? getImageAttachment(input.payload) : null;
+  const language = detectUserLanguage({
+    text: input.incomingText || pendingCitizenReport.description,
+  }).language;
+  const result = await handlePendingCitizenReportFollowup({
+    pendingCitizenReport,
+    text: input.incomingText,
+    hasImage,
+    images: image ? [image] : [],
+    language,
+  });
+
+  if (!result.handled) {
+    return null;
+  }
+
+  await persistPendingCitizenReportState({
+    sessionId: input.sessionId,
+    pendingCitizenReport: result.pendingCitizenReport,
+    userMessage: input.incomingText || (hasImage ? "[image]" : ""),
+    assistantReply: result.reply,
+    language: result.language,
+  });
+
+  const replyStatus = await sendAssistantReply({
+    recipient: input.recipient,
+    reply: result.reply,
+    inboundMessageId: input.inboundMessageId,
+    language: result.language,
+    inputChannel: input.inputChannel,
+    responseChannel: input.responseChannel,
+  });
+
+  return {
+    ...replyStatus,
+    handledAs: "pending_citizen_report",
   };
 }
 
@@ -1182,11 +1297,27 @@ async function processAudioMessage(input: {
     });
   }
 
+  const pendingReportReply = await processPendingCitizenReportMessage({
+    payload: input.payload,
+    type: "audio",
+    incomingText: transcription,
+    recipient: input.recipient,
+    sessionId: input.sessionId,
+    inboundMessageId: input.inboundMessageId,
+    inputChannel: input.inputChannel,
+    responseChannel: input.responseChannel,
+  });
+
+  if (pendingReportReply) {
+    return pendingReportReply;
+  }
+
   const citizenReportReply = await processCitizenReportMessage({
     payload: input.payload,
     type: "audio",
     incomingText: transcription,
     recipient: input.recipient,
+    sessionId: input.sessionId,
     inboundMessageId: input.inboundMessageId,
     inputChannel: input.inputChannel,
     responseChannel: input.responseChannel,
@@ -1364,17 +1495,32 @@ export async function POST(request: Request) {
       hasAudio,
       hasImage,
     });
-    const citizenReportReply = isAudioMessageType(type)
+    const pendingReportReply = isAudioMessageType(type)
       ? null
-      : await processCitizenReportMessage({
+      : await processPendingCitizenReportMessage({
           payload,
           type,
           incomingText,
           recipient,
+          sessionId,
           inboundMessageId,
           inputChannel,
           responseChannel,
         });
+    const citizenReportReply =
+      pendingReportReply ??
+      (isAudioMessageType(type)
+        ? null
+        : await processCitizenReportMessage({
+            payload,
+            type,
+            incomingText,
+            recipient,
+            sessionId,
+            inboundMessageId,
+            inputChannel,
+            responseChannel,
+          }));
     const replyStatus =
       citizenReportReply ??
       (isAudioMessageType(type)

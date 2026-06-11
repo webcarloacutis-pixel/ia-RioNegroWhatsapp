@@ -286,6 +286,7 @@ model AssistantConversationMemory {
   lastLanguage           String   @default("es")
   lastCategory           String?
   lastIntent             String?
+  pendingCitizenReport   Json?
   lastUserMessageAt      DateTime?
   lastAssistantMessageAt DateTime?
   lastInteractionAt      DateTime?

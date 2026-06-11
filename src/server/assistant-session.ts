@@ -1,4 +1,9 @@
-import type { AssistantProfile, AssistantTopicValue, KnowledgeEntrySummary } from "@/lib/types";
+import type {
+  AssistantProfile,
+  AssistantTopicValue,
+  KnowledgeEntrySummary,
+  PendingCitizenReportMemory,
+} from "@/lib/types";
 
 const ASSISTANT_SESSION_HISTORY_LIMIT = 10;
 
@@ -17,6 +22,7 @@ export type AssistantConversationContext = {
   lastCategory: string | null;
   lastKnowledgeEntries: KnowledgeEntrySummary[];
   lastSuggestedItems: string[];
+  pendingCitizenReport: PendingCitizenReportMemory | null;
   recentMessages: string[];
 };
 
@@ -49,6 +55,7 @@ function buildDefaultContext(): AssistantConversationContext {
     lastCategory: null,
     lastKnowledgeEntries: [],
     lastSuggestedItems: [],
+    pendingCitizenReport: null,
     recentMessages: [],
   };
 }

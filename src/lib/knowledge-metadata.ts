@@ -1,5 +1,6 @@
 import type { KnowledgeEntrySummary } from "@/lib/types";
 import type { SupportedLanguage } from "@/lib/language";
+import { repairMojibake } from "@/lib/text-encoding";
 
 const STOP_WORDS = new Set([
   "a",
@@ -46,6 +47,16 @@ export const KNOWLEDGE_BILINGUAL_TERMS = {
   contact: ["contact", "email", "phone", "telefono", "correo", "contacto"],
   pqrs: ["complaint", "request", "claim", "petition", "pqrs", "pqrsd", "queja", "reclamo", "solicitud"],
   emergency: ["emergency", "accident", "fire", "flood", "accidente", "incendio", "inundacion"],
+  shoppingCenter: ["shopping center", "mall", "commercial center", "centro comercial", "c.c.", "cc"],
+  sanNicolas: [
+    "san nicolas",
+    "san nicola",
+    "san nicolas shopping center",
+    "san nicolas mall",
+    "centro comercial san nicolas",
+    "c.c. san nicolas",
+    "cc san nicolas",
+  ],
 } as const;
 
 const INTENT_PATTERNS: Array<[string, RegExp]> = [
@@ -175,6 +186,29 @@ export function detectKnowledgeTextLanguage(text: string): SupportedLanguage {
   return englishScore > spanishScore ? "en" : "es";
 }
 
+function buildSanNicolasEnglishAnswer(entry: Pick<KnowledgeEntrySummary, "question" | "answer">) {
+  const text = repairMojibake(`${entry.question}. ${entry.answer}`);
+  const normalized = normalizeKnowledgeQuery(text);
+
+  if (!/\bsan nicolas\b|\bsan nicola\b/.test(normalized)) {
+    return null;
+  }
+
+  const addressMatch = text.match(/\b(Calle\s*\d+\s*#?\s*\d+\s*[- ]\s*\d+)\b/i);
+
+  if (!addressMatch?.[1]) {
+    return null;
+  }
+
+  const address = addressMatch[1].replace(/\s*#\s*/g, " #").replace(/\s*-\s*/g, "-");
+  const sectorMatch = text.match(/\b(?:sector|referencia:\s*sector)\s+(El\s+Porvenir|San\s+Antonio|Llanogrande|Centro)\b/i);
+  const sector = sectorMatch?.[1]?.replace(/\s+/g, " ").trim();
+
+  return sector
+    ? `San Nicol\u00e1s Shopping Center is located at ${address}, in the ${sector} sector of Rionegro.`
+    : `San Nicol\u00e1s Shopping Center is located at ${address}, in Rionegro.`;
+}
+
 export function localizeKnowledgeAnswerForLanguage(
   entry: Pick<
     KnowledgeEntrySummary,
@@ -184,6 +218,14 @@ export function localizeKnowledgeAnswerForLanguage(
 ) {
   if (language === "en" && (entry.shortAnswerEn || entry.answerEn)) {
     return entry.shortAnswerEn || entry.answerEn || "";
+  }
+
+  if (language === "en") {
+    const sanNicolasAnswer = buildSanNicolasEnglishAnswer(entry);
+
+    if (sanNicolasAnswer) {
+      return sanNicolasAnswer;
+    }
   }
 
   const answer = entry.shortAnswer || entry.answer;
@@ -214,6 +256,40 @@ export function localizeKnowledgeAnswerForLanguage(
     .replace(/\bcorreo\b/gi, "email")
     .replace(/\bdireccion\b/gi, "address")
     .replace(/\bhorario\b/gi, "schedule");
+}
+
+export function validateEnglishKnowledgeAnswer(input: {
+  query: string;
+  answer: string;
+  entry?: Pick<KnowledgeEntrySummary, "question" | "answer" | "category"> | null;
+}) {
+  const query = normalizeKnowledgeQuery(input.query);
+  const answer = normalizeKnowledgeQuery(input.answer);
+  const entryText = normalizeKnowledgeQuery(
+    [input.entry?.question, input.entry?.answer, input.entry?.category].filter(Boolean).join(" "),
+  );
+  const asksWhere = /\bwhere\b|\baddress\b|\blocation\b/.test(query);
+  const entryHasAddress = /\b(calle|cra|cr|carrera|avenida|av)\b/.test(entryText);
+  const answerHasAddress = /\b(calle|cra|cr|carrera|avenida|av)\b/.test(answer);
+  const isGeneric =
+    /\bi found these official locations\b|\bofficial locations in rionegro\b/.test(answer);
+  const mixesIrrelevantCards =
+    /\btutucan\b/.test(answer) || /\balcaldia te escucha\b/.test(answer);
+  const wrongLanguage =
+    /\bqueda\b|\bdireccion\b|\btelefono\b|\bhorario\b/.test(answer) &&
+    !/\baddress\b|\blocated\b|\bphone\b|\bschedule\b/.test(answer);
+
+  return {
+    ok:
+      !isGeneric &&
+      !mixesIrrelevantCards &&
+      !wrongLanguage &&
+      (!asksWhere || !entryHasAddress || answerHasAddress),
+    isGeneric,
+    mixesIrrelevantCards,
+    wrongLanguage,
+    missesAddress: asksWhere && entryHasAddress && !answerHasAddress,
+  };
 }
 
 export function getKnowledgeCategoryLabel(category: string | null | undefined) {

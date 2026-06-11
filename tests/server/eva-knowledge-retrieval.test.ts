@@ -5,6 +5,10 @@ import {
   normalizeTextForKnowledge,
   retrieveEvaKnowledge,
 } from "@/server/eva-knowledge-retrieval";
+import {
+  localizeKnowledgeAnswerForLanguage,
+  validateEnglishKnowledgeAnswer,
+} from "@/lib/knowledge-metadata";
 import type { KnowledgeEntrySummary } from "@/lib/types";
 
 const now = new Date("2026-06-01T12:00:00.000Z").toISOString();
@@ -264,4 +268,77 @@ test("retrieveEvaKnowledge no entrega fichas con baja evidencia", async () => {
 
   assert.equal(result.entries.length, 0);
   assert.equal(result.confidence, 0.2);
+});
+
+test("retrieveEvaKnowledge ancla San Nicolas en ingles a la card espanola correcta", async () => {
+  const sanNicolas = knowledgeEntry({
+    id: "san-nicolas",
+    question: "Centro Comercial San Nicolas",
+    answer: "C.C. San Nicolas queda en Calle 43 # 54-139. Referencia: Sector El Porvenir.",
+    category: "Turismo Comercial",
+    tags: ["centro comercial", "san nicolas"],
+  });
+  const tutucan = knowledgeEntry({
+    id: "tutucan",
+    question: "Parque Tutucan",
+    answer: "Tutucan es un parque tematico en Rionegro.",
+    category: "Turismo",
+  });
+  const alcaldiaEscucha = knowledgeEntry({
+    id: "alcaldia-escucha",
+    question: "La Alcaldia te Escucha",
+    answer: "Programa de atencion ciudadana de la Alcaldia de Rionegro.",
+    category: "Programas",
+  });
+
+  const result = await retrieveEvaKnowledge({
+    query: "where is the san nicola shopping center",
+    language: "en",
+    intent: "ubicacion",
+    entriesOverride: [tutucan, alcaldiaEscucha, sanNicolas],
+  });
+  const answer = localizeKnowledgeAnswerForLanguage(result.entries[0], "en");
+  const validation = validateEnglishKnowledgeAnswer({
+    query: "where is the san nicola shopping center",
+    answer,
+    entry: result.entries[0],
+  });
+
+  assert.equal(result.entries[0]?.id, "san-nicolas");
+  assert.match(answer, /Calle 43 #54-139/);
+  assert.match(answer, /El Porvenir/);
+  assert.doesNotMatch(answer, /Tutucan/i);
+  assert.doesNotMatch(answer, /Alcaldia te Escucha/i);
+  assert.equal(validation.ok, true);
+});
+
+test("retrieveEvaKnowledge usa ultima card para follow-up ingles where", async () => {
+  const sanNicolas = knowledgeEntry({
+    id: "san-nicolas-memory",
+    question: "Centro Comercial San Nicolas",
+    answer: "C.C. San Nicolas queda en Calle 43 # 54-139. Referencia: Sector El Porvenir.",
+    category: "Turismo Comercial",
+    tags: ["centro comercial", "san nicolas"],
+  });
+  const general = knowledgeEntry({
+    id: "general-rionegro",
+    question: "Ubicacion general de Rionegro",
+    answer: "Rionegro esta en el Oriente antioqueno.",
+    category: "Ubicacion",
+  });
+
+  const result = await retrieveEvaKnowledge({
+    query: "where....",
+    language: "en",
+    intent: "ubicacion",
+    memory: {
+      lastCategory: "Turismo Comercial",
+      lastKnowledgeEntries: [sanNicolas],
+      recentMessages: ["where is the san nicola shopping center"],
+    },
+    entriesOverride: [general, sanNicolas],
+  });
+
+  assert.equal(result.usedMemory, true);
+  assert.equal(result.entries[0]?.id, "san-nicolas-memory");
 });

@@ -113,6 +113,16 @@ const SYNONYM_GROUPS = [
   ["comercio", "comercios", "negocio", "negocios", "tienda", "local", "business", "shop"],
   ["museo", "museos", "museum", "museums", "historia"],
   ["turismo", "turistico", "tourism", "tourist", "visit", "visitar"],
+  ["shopping center", "mall", "commercial center", "centro comercial", "c c", "cc"],
+  [
+    "san nicolas",
+    "san nicola",
+    "centro comercial san nicolas",
+    "c c san nicolas",
+    "cc san nicolas",
+    "san nicolas shopping center",
+    "san nicolas mall",
+  ],
 ];
 
 const FOLLOW_UP_TOPICS = new Set([
@@ -134,6 +144,18 @@ const FOLLOW_UP_TOPICS = new Set([
   "turismo",
   "ubicacion",
   "veterinarias",
+  "where",
+  "address",
+  "location",
+  "hours",
+]);
+
+const SAN_NICOLAS_CATEGORIES = new Set([
+  "turismo comercial",
+  "turismo",
+  "comercio",
+  "restaurantes",
+  "ubicacion",
 ]);
 
 export function normalizeTextForKnowledge(text: string) {
@@ -177,7 +199,31 @@ function includesEveryImportantToken(corpus: string, tokens: string[]) {
   return tokens.every((token) => corpus.includes(token));
 }
 
+function isSanNicolasQuery(text: string) {
+  const normalized = normalizeTextForKnowledge(text);
+  return /\bsan\s+nicola(?:s)?\b/.test(normalized);
+}
+
+function isSanNicolasEntry(entry: KnowledgeEntrySummary) {
+  const corpus = [
+    entry.question,
+    entry.answer,
+    entry.shortAnswer,
+    entry.category,
+    entry.intent,
+    entry.aliases.join(" "),
+    entry.tags.join(" "),
+    (entry.aliasesEn ?? []).join(" "),
+    (entry.tagsEn ?? []).join(" "),
+  ]
+    .map((value) => normalizeTextForKnowledge(value ?? ""))
+    .join(" ");
+
+  return /\bsan\s+nicolas\b|\bsan\s+nicola\b/.test(corpus);
+}
+
 function detectStrategy(matchedBy: string[]) {
+  if (matchedBy.includes("san_nicolas_alias")) return "san_nicolas_alias_match";
   if (matchedBy.includes("memory_follow_up")) return "memory_context_match";
   if (matchedBy.includes("exact_question")) return "exact_question_match";
   if (matchedBy.includes("exact_alias")) return "alias_exact_match";
@@ -194,7 +240,7 @@ function detectStrategy(matchedBy: string[]) {
 
 function isShortFollowUp(queryNormalized: string) {
   if (
-    /^(y\s+)?(el\s+|la\s+|los\s+|las\s+)?(horario|horarios|direccion|ubicacion|telefono|contacto|como llego|donde queda|donde esta|repiteme|repiteme eso|mandame eso|eso|esa|ese)$/i.test(
+    /^(y\s+)?(el\s+|la\s+|los\s+|las\s+)?(horario|horarios|direccion|ubicacion|telefono|contacto|como llego|donde queda|donde esta|repiteme|repiteme eso|mandame eso|eso|esa|ese|where|where is|and where|address|location|hours|what time|tell me more)$/i.test(
       queryNormalized,
     )
   ) {
@@ -211,11 +257,17 @@ function isShortFollowUp(queryNormalized: string) {
     return true;
   }
 
-  return tokens.length <= 3 && tokens.some((token) => FOLLOW_UP_TOPICS.has(token));
+  return (
+    tokens.length <= 3 &&
+    (tokens.some((token) => FOLLOW_UP_TOPICS.has(token)) ||
+      /^(where|where is|and where|address|location|hours|what time|tell me more)$/.test(
+        queryNormalized,
+      ))
+  );
 }
 
 function shouldBoostMemoryEntries(queryNormalized: string) {
-  return /^(y\s+)?(el\s+|la\s+|los\s+|las\s+)?(horario|horarios|direccion|ubicacion|telefono|contacto|como llego|donde queda|donde esta|repiteme|repiteme eso|mandame eso|eso|esa|ese)$/i.test(
+  return /^(y\s+)?(el\s+|la\s+|los\s+|las\s+)?(horario|horarios|direccion|ubicacion|telefono|contacto|como llego|donde queda|donde esta|repiteme|repiteme eso|mandame eso|eso|esa|ese|where|where is|and where|address|location|hours|what time|tell me more)$/i.test(
     queryNormalized,
   );
 }
@@ -246,6 +298,8 @@ function buildMemoryQuery(query: string, memory?: ConversationMemoryContext) {
             entry.intent,
             entry.aliases.join(" "),
             entry.tags.join(" "),
+            (entry.aliasesEn ?? []).join(" "),
+            (entry.tagsEn ?? []).join(" "),
           ]
             .filter(Boolean)
             .join(" "),
@@ -290,6 +344,8 @@ export function scoreEvaKnowledgeEntry(input: {
   const tags = input.entry.tags.map(normalizeTextForKnowledge);
   const aliasesEn = (input.entry.aliasesEn ?? []).map(normalizeTextForKnowledge);
   const tagsEn = (input.entry.tagsEn ?? []).map(normalizeTextForKnowledge);
+  const sanNicolasQuery = isSanNicolasQuery(input.query);
+  const sanNicolasEntry = isSanNicolasEntry(input.entry);
   const corpus = [
     question,
     answer,
@@ -404,6 +460,16 @@ export function scoreEvaKnowledgeEntry(input: {
     matchedBy.push("short_answer_match");
   }
 
+  if (sanNicolasQuery && sanNicolasEntry) {
+    score += 180;
+    matchedBy.push("san_nicolas_alias");
+
+    if (SAN_NICOLAS_CATEGORIES.has(category)) {
+      score += 40;
+      matchedBy.push("category_match");
+    }
+  }
+
   const languageBonus =
     input.language === "en" && detectKnowledgeTextLanguage(`${input.entry.question} ${input.entry.answer}`) === "es"
       ? 6
@@ -434,6 +500,16 @@ export async function retrieveEvaKnowledge(
   const maxItems = Math.max(1, input.maxItems ?? 4);
   const memoryQuery = buildMemoryQuery(input.query, input.memory);
   const queryNormalized = normalizeTextForKnowledge(input.query);
+
+  if (input.language === "en" || isSanNicolasQuery(input.query)) {
+    logger.info("eva-rag", "bilingual_query_expanded", {
+      requestId: input.requestId,
+      language: input.language,
+      queryLength: input.query.length,
+      queryNormalized,
+      usedMemory: memoryQuery.usedMemory,
+    });
+  }
 
   const sourceResult = input.entriesOverride
     ? {
@@ -469,9 +545,42 @@ export async function retrieveEvaKnowledge(
 
   const topScore = rankedItems[0]?.relevanceScore ?? 0;
   const minimumScore = memoryQuery.usedMemory ? 25 : queryNormalized.split(" ").length <= 2 ? 30 : 35;
-  const selected = rankedItems
+  let selected = rankedItems
     .filter((entry) => entry.relevanceScore >= minimumScore)
     .slice(0, maxItems);
+
+  if (isSanNicolasQuery(input.query)) {
+    const sanNicolasMatches = rankedItems
+      .filter((entry) => isSanNicolasEntry(entry))
+      .filter((entry) => entry.relevanceScore >= 35)
+      .slice(0, 1);
+
+    if (sanNicolasMatches.length) {
+      selected = sanNicolasMatches;
+      logger.info("eva-rag", "selected_san_nicolas_card", {
+        requestId: input.requestId,
+        selectedEntryIds: selected.map((entry) => entry.id),
+        topScore: selected[0]?.relevanceScore ?? topScore,
+      });
+    }
+  }
+
+  if (memoryQuery.boostMemoryEntries && memoryQuery.memoryEntries.length) {
+    const memoryIds = new Set(memoryQuery.memoryEntries.map((entry) => entry.id));
+    const memoryMatches = rankedItems
+      .filter((entry) => memoryIds.has(entry.id))
+      .filter((entry) => entry.relevanceScore >= 20)
+      .slice(0, maxItems);
+
+    if (memoryMatches.length) {
+      selected = memoryMatches;
+      logger.info("eva-memory", "followup_used_last_card", {
+        requestId: input.requestId,
+        selectedEntryIds: selected.map((entry) => entry.id),
+        topScore: selected[0]?.relevanceScore ?? topScore,
+      });
+    }
+  }
   const strategy = detectStrategy(selected[0]?.matchedBy ?? rankedItems[0]?.matchedBy ?? []);
   const confidence = selected.length ? Math.min(0.98, 0.35 + topScore / 140) : 0.2;
 

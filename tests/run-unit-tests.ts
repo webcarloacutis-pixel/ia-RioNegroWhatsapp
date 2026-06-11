@@ -23,6 +23,7 @@ import "./server/conversation-router.test";
 import "./server/whatsapp-reply-style.test";
 import "./server/qa-dashboard-service.test";
 import "./server/citizen-report-service.test";
+import "./server/citizen-report-followup-service.test";
 import "./server/debug-api-routes.test";
 import "./server/diagnostics-service.test";
 import "./server/final-qa-phase9.test";

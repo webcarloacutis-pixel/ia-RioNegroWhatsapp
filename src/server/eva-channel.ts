@@ -32,3 +32,10 @@ export function determineResponseChannel(input: {
   if (inputChannel === "mixed" && input.hasAudio) return "audio";
   return "text";
 }
+
+export function shouldAttemptTtsForResponseChannel(input: {
+  responseChannel: EvaResponseChannel;
+  audioEnabled?: boolean;
+}) {
+  return input.responseChannel === "audio" && input.audioEnabled !== false;
+}

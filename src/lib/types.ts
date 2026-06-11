@@ -22,6 +22,29 @@ export type CitizenReportStatus =
 
 export type CitizenReportPriority = "low" | "normal" | "high" | "urgent";
 
+export type PendingCitizenReportStatus =
+  | "collecting_location"
+  | "collecting_photo"
+  | "waiting_confirmation"
+  | "ready"
+  | "submitted";
+
+export type PendingCitizenReportMemory = {
+  reportId?: string;
+  type: string;
+  category?: string | null;
+  priority: CitizenReportPriority;
+  description: string;
+  location?: string;
+  address?: string;
+  sector?: string;
+  needsLocation: boolean;
+  needsPhoto: boolean;
+  status: PendingCitizenReportStatus;
+  startedAt: string;
+  language?: "es" | "en";
+};
+
 export type CitizenReportImageSummary = {
   id: string;
   url: string;

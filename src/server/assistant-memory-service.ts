@@ -1,3 +1,5 @@
+import { Prisma } from "@prisma/client";
+
 import { prisma } from "@/lib/prisma";
 import { logger, sanitizeError } from "@/lib/logger";
 import type {
@@ -6,11 +8,15 @@ import type {
   AssistantReplyMeta,
   AssistantTopicValue,
   KnowledgeEntrySummary,
+  PendingCitizenReportMemory,
+  PendingCitizenReportStatus,
 } from "@/lib/types";
 import {
+  addAssistantTurn,
   getAssistantSession,
   hydrateAssistantSession,
   resetAssistantSession,
+  updateAssistantContext,
   type AssistantConversationContext,
   type AssistantTurn,
 } from "@/server/assistant-session";
@@ -21,6 +27,13 @@ const SUMMARY_LIMIT = 1000;
 const CARD_LIMIT = 5;
 const FOLLOW_UP_AFTER_MS = 30 * 60 * 1000;
 const CLOSE_AFTER_FOLLOW_UP_MS = 60 * 60 * 1000;
+const PENDING_REPORT_STATUSES = new Set<PendingCitizenReportStatus>([
+  "collecting_location",
+  "collecting_photo",
+  "waiting_confirmation",
+  "ready",
+  "submitted",
+]);
 const FOLLOW_UP_MESSAGE_ES = "¿Necesitas algo más?";
 
 type MemoryStatus = "open" | "closed";
@@ -204,6 +217,54 @@ function coerceCards(value: unknown): KnowledgeEntrySummary[] {
     .slice(0, CARD_LIMIT);
 }
 
+function coercePendingCitizenReport(value: unknown): PendingCitizenReportMemory | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const record = value as Record<string, unknown>;
+  const type = typeof record.type === "string" ? record.type.trim() : "";
+  const description =
+    typeof record.description === "string" ? record.description.trim() : "";
+  const priority =
+    record.priority === "low" ||
+    record.priority === "normal" ||
+    record.priority === "high" ||
+    record.priority === "urgent"
+      ? record.priority
+      : "normal";
+  const status =
+    typeof record.status === "string" &&
+    PENDING_REPORT_STATUSES.has(record.status as PendingCitizenReportStatus)
+      ? (record.status as PendingCitizenReportStatus)
+      : null;
+  const startedAt =
+    typeof record.startedAt === "string" &&
+    !Number.isNaN(new Date(record.startedAt).getTime())
+      ? record.startedAt
+      : new Date().toISOString();
+
+  if (!type || !description || !status) {
+    return null;
+  }
+
+  return {
+    reportId: typeof record.reportId === "string" ? record.reportId : undefined,
+    type,
+    category: typeof record.category === "string" ? record.category : null,
+    priority,
+    description,
+    location: typeof record.location === "string" ? record.location : undefined,
+    address: typeof record.address === "string" ? record.address : undefined,
+    sector: typeof record.sector === "string" ? record.sector : undefined,
+    needsLocation: Boolean(record.needsLocation),
+    needsPhoto: Boolean(record.needsPhoto),
+    status,
+    startedAt,
+    language: record.language === "en" ? "en" : "es",
+  };
+}
+
 function trimToLimit(value: string, limit: number) {
   const normalized = value.replace(/\s+/g, " ").trim();
   return normalized.length <= limit ? normalized : normalized.slice(0, limit).trimEnd();
@@ -310,6 +371,7 @@ export async function hydratePersistentAssistantMemory(sessionId: string) {
         lastCategory: memory.lastCategory,
         lastKnowledgeEntries: cards,
         lastSuggestedItems: cards.map((card) => card.question).slice(0, CARD_LIMIT),
+        pendingCitizenReport: coercePendingCitizenReport(memory.pendingCitizenReport),
         recentMessages: coerceHistory(memory.history)
           .filter((turn) => turn.role === "user")
           .map((turn) => turn.content)
@@ -361,6 +423,7 @@ export async function persistAssistantMemoryFromSession(
         lastLanguage: meta.language,
         lastCategory: session.context.lastCategory,
         lastIntent: meta.institutionalIntent,
+        pendingCitizenReport: session.context.pendingCitizenReport ?? Prisma.JsonNull,
         lastUserMessageAt,
         lastAssistantMessageAt,
         lastInteractionAt,
@@ -377,6 +440,7 @@ export async function persistAssistantMemoryFromSession(
         lastLanguage: meta.language,
         lastCategory: session.context.lastCategory,
         lastIntent: meta.institutionalIntent,
+        pendingCitizenReport: session.context.pendingCitizenReport ?? Prisma.JsonNull,
         lastUserMessageAt,
         lastAssistantMessageAt,
         lastInteractionAt,
@@ -412,6 +476,7 @@ export async function resetPersistentAssistantMemory(sessionId: string) {
         lastLanguage: "es",
         lastCategory: null,
         lastIntent: null,
+        pendingCitizenReport: Prisma.JsonNull,
         lastUserMessageAt: null,
         lastAssistantMessageAt: null,
         lastInteractionAt: new Date(),
@@ -428,6 +493,7 @@ export async function resetPersistentAssistantMemory(sessionId: string) {
         lastLanguage: "es",
         lastCategory: null,
         lastIntent: null,
+        pendingCitizenReport: Prisma.JsonNull,
         lastUserMessageAt: null,
         lastAssistantMessageAt: null,
         lastInteractionAt: new Date(),
@@ -469,6 +535,7 @@ export async function closePersistentAssistantMemory(
         lastLanguage: "es",
         lastCategory: null,
         lastIntent: null,
+        pendingCitizenReport: Prisma.JsonNull,
         lastUserMessageAt: now,
         lastAssistantMessageAt: null,
         lastInteractionAt: now,
@@ -477,6 +544,7 @@ export async function closePersistentAssistantMemory(
       },
       update: {
         status: "closed" satisfies MemoryStatus,
+        pendingCitizenReport: Prisma.JsonNull,
         summary: trimToLimit(`Conversación cerrada: ${reason}.`, SUMMARY_LIMIT),
         followUpPromptedAt: null,
         closedAt: now,
@@ -490,6 +558,41 @@ export async function closePersistentAssistantMemory(
     });
     return null;
   }
+}
+
+export async function getPendingCitizenReportFromMemory(sessionId: string) {
+  await hydratePersistentAssistantMemory(sessionId);
+  return getAssistantSession(sessionId).context.pendingCitizenReport;
+}
+
+export async function persistPendingCitizenReportState(input: {
+  sessionId: string;
+  pendingCitizenReport: PendingCitizenReportMemory | null;
+  userMessage?: string;
+  assistantReply?: string;
+  language?: "es" | "en";
+}) {
+  await hydratePersistentAssistantMemory(input.sessionId);
+
+  if (input.userMessage?.trim()) {
+    addAssistantTurn(input.sessionId, "user", input.userMessage.trim());
+  }
+
+  if (input.assistantReply?.trim()) {
+    addAssistantTurn(input.sessionId, "assistant", input.assistantReply.trim());
+  }
+
+  updateAssistantContext(input.sessionId, {
+    pendingCitizenReport: input.pendingCitizenReport,
+    conversationLanguage: input.language ?? "es",
+    lastTopic: "DENUNCIAS",
+  });
+
+  return persistAssistantMemoryFromSession(input.sessionId, {
+    topic: "DENUNCIAS",
+    institutionalIntent: "reporte_ciudadano",
+    language: input.language ?? "es",
+  });
 }
 
 function appendAssistantPrompt(historyValue: unknown, message: string, now: Date) {

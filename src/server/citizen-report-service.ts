@@ -13,7 +13,7 @@ import type {
 import { isPublicHttpUrl } from "@/lib/url-security";
 import { getEmergencyContactReference } from "@/server/emergency-contacts";
 
-type CitizenReportImageInput = {
+export type CitizenReportImageInput = {
   url: string;
   filename?: string;
   mimeType?: string;
@@ -50,6 +50,12 @@ type ListCitizenReportsFilters = {
 type UpdateCitizenReportInput = {
   status?: CitizenReportStatus;
   adminNotes?: string | null;
+};
+
+type UpdateCitizenReportLocationInput = {
+  location?: string | null;
+  address?: string | null;
+  neighborhood?: string | null;
 };
 
 export type CitizenReportIntent = {
@@ -1702,6 +1708,85 @@ async function updateCitizenReportMock(id: string, input: UpdateCitizenReportInp
   return report;
 }
 
+async function updateCitizenReportLocationDb(
+  id: string,
+  input: UpdateCitizenReportLocationInput,
+) {
+  const report = await prisma.citizenReport.update({
+    where: { id },
+    data: {
+      location:
+        input.location !== undefined ? sanitizeOptionalText(input.location, 120) : undefined,
+      address:
+        input.address !== undefined ? sanitizeOptionalText(input.address, 160) : undefined,
+      neighborhood:
+        input.neighborhood !== undefined
+          ? sanitizeOptionalText(input.neighborhood, 100)
+          : undefined,
+    },
+    include: { images: true },
+  });
+
+  return serializeCitizenReport(report);
+}
+
+async function updateCitizenReportLocationMock(
+  id: string,
+  input: UpdateCitizenReportLocationInput,
+) {
+  const report = await getCitizenReportByIdMock(id);
+
+  if (input.location !== undefined) {
+    report.location = sanitizeOptionalText(input.location, 120);
+  }
+
+  if (input.address !== undefined) {
+    report.address = sanitizeOptionalText(input.address, 160);
+  }
+
+  if (input.neighborhood !== undefined) {
+    report.neighborhood = sanitizeOptionalText(input.neighborhood, 100);
+  }
+
+  report.updatedAt = new Date().toISOString();
+  return report;
+}
+
+async function addCitizenReportImagesDb(id: string, images: CitizenReportImageInput[]) {
+  const sanitizedImages = sanitizeImages(images);
+
+  const report = await prisma.citizenReport.update({
+    where: { id },
+    data: {
+      images: {
+        create: sanitizedImages,
+      },
+    },
+    include: { images: true },
+  });
+
+  return serializeCitizenReport(report);
+}
+
+async function addCitizenReportImagesMock(id: string, images: CitizenReportImageInput[]) {
+  const report = await getCitizenReportByIdMock(id);
+  const now = new Date().toISOString();
+  const sanitizedImages = sanitizeImages(images);
+
+  report.images.push(
+    ...sanitizedImages.map((image) => ({
+      id: createId("image"),
+      url: image.url,
+      filename: image.filename,
+      mimeType: image.mimeType,
+      size: image.size,
+      createdAt: now,
+    })),
+  );
+  report.updatedAt = now;
+  return report;
+}
+
 function buildMassMessageDraft(report: CitizenReportSummary) {
   const isTraffic =
     report.type === "transito" ||
@@ -1874,6 +1959,26 @@ export async function updateCitizenReport(id: string, input: UpdateCitizenReport
   return withMockFallback(
     () => updateCitizenReportDb(id, input),
     () => updateCitizenReportMock(id, input),
+  );
+}
+
+export async function updateCitizenReportLocation(
+  id: string,
+  input: UpdateCitizenReportLocationInput,
+) {
+  return withMockFallback(
+    () => updateCitizenReportLocationDb(id, input),
+    () => updateCitizenReportLocationMock(id, input),
+  );
+}
+
+export async function addCitizenReportImages(
+  id: string,
+  images: CitizenReportImageInput[],
+) {
+  return withMockFallback(
+    () => addCitizenReportImagesDb(id, images),
+    () => addCitizenReportImagesMock(id, images),
   );
 }
 
