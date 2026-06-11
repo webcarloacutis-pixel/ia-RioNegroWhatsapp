@@ -45,6 +45,10 @@ import { getChannelRuntimeStatus } from "@/server/channel-status-service";
 import { classifyIntent } from "@/server/intent-classifier";
 import { invalidateKnowledgeCache } from "@/server/knowledge-cache";
 import { retrieveEvaKnowledge } from "@/server/eva-knowledge-retrieval";
+import {
+  buildEnglishKnowledgeTranslation,
+  hasEnglishKnowledgeTranslation,
+} from "@/server/knowledge-translation-service";
 import * as mockStore from "@/server/mock-store";
 import {
   serializeAnnouncement,
@@ -123,7 +127,7 @@ export type KnowledgeListFilters = {
 
 type KnowledgeBulkActionInput = {
   ids: string[];
-  action: "activate" | "deactivate" | "markReviewed" | "changeCategory";
+  action: "activate" | "deactivate" | "markReviewed" | "changeCategory" | "translateToEnglish";
   category?: string;
 };
 
@@ -1139,6 +1143,9 @@ function buildKnowledgeWhere(
       { question: { contains: q, mode: "insensitive" } },
       { answer: { contains: q, mode: "insensitive" } },
       { shortAnswer: { contains: q, mode: "insensitive" } },
+      { questionEn: { contains: q, mode: "insensitive" } },
+      { answerEn: { contains: q, mode: "insensitive" } },
+      { shortAnswerEn: { contains: q, mode: "insensitive" } },
       { category: { contains: q, mode: "insensitive" } },
       { intent: { contains: q, mode: "insensitive" } },
       { sourceName: { contains: q, mode: "insensitive" } },
@@ -1146,6 +1153,8 @@ function buildKnowledgeWhere(
       { sourceType: { contains: q, mode: "insensitive" } },
       { tags: { has: q } },
       { aliases: { has: q } },
+      { tagsEn: { has: q } },
+      { aliasesEn: { has: q } },
     ];
   }
 
@@ -1489,7 +1498,100 @@ async function markKnowledgeEntryReviewedDb(id: string) {
   return serializeKnowledgeEntry(updated);
 }
 
+async function translateKnowledgeEntryToEnglishDb(id: string) {
+  const entry = await prisma.knowledgeBaseEntry.findUnique({
+    where: { id },
+  });
+
+  if (!entry) {
+    throw new AppError("La entrada no existe.", 404);
+  }
+
+  const summary = serializeKnowledgeEntry(entry);
+
+  if (hasEnglishKnowledgeTranslation(summary)) {
+    return {
+      entry: summary,
+      translated: false,
+      skipped: true,
+    };
+  }
+
+  const translation = await buildEnglishKnowledgeTranslation(summary);
+  const updated = await prisma.knowledgeBaseEntry.update({
+    where: { id },
+    data: {
+      questionEn: translation.questionEn,
+      answerEn: translation.answerEn,
+      shortAnswerEn: translation.shortAnswerEn,
+      aliasesEn: translation.aliasesEn,
+      tagsEn: translation.tagsEn,
+      translatedToEnglishAt: new Date(),
+    },
+  });
+
+  invalidateKnowledgeCache("knowledge_translated_en");
+
+  return {
+    entry: serializeKnowledgeEntry(updated),
+    translated: true,
+    skipped: false,
+  };
+}
+
+async function bulkTranslateKnowledgeEntriesToEnglishDb(ids: string[]) {
+  const entries = await prisma.knowledgeBaseEntry.findMany({
+    where: {
+      id: { in: ids },
+      isActive: true,
+    },
+    orderBy: {
+      updatedAt: "desc",
+    },
+  });
+  let translated = 0;
+  let skipped = ids.length - entries.length;
+
+  for (const entry of entries) {
+    const summary = serializeKnowledgeEntry(entry);
+
+    if (hasEnglishKnowledgeTranslation(summary)) {
+      skipped += 1;
+      continue;
+    }
+
+    const translation = await buildEnglishKnowledgeTranslation(summary);
+
+    await prisma.knowledgeBaseEntry.update({
+      where: { id: entry.id },
+      data: {
+        questionEn: translation.questionEn,
+        answerEn: translation.answerEn,
+        shortAnswerEn: translation.shortAnswerEn,
+        aliasesEn: translation.aliasesEn,
+        tagsEn: translation.tagsEn,
+        translatedToEnglishAt: new Date(),
+      },
+    });
+    translated += 1;
+  }
+
+  if (translated) {
+    invalidateKnowledgeCache("knowledge_bulk_translated_en");
+  }
+
+  return {
+    updated: translated,
+    translated,
+    skipped,
+  };
+}
+
 async function bulkUpdateKnowledgeEntriesDb(input: KnowledgeBulkActionInput) {
+  if (input.action === "translateToEnglish") {
+    return bulkTranslateKnowledgeEntriesToEnglishDb(input.ids);
+  }
+
   const data: Prisma.KnowledgeBaseEntryUpdateManyMutationInput =
     input.action === "activate"
       ? { isActive: true }
@@ -2114,6 +2216,10 @@ export async function toggleKnowledgeEntryActive(id: string) {
 
 export async function markKnowledgeEntryReviewed(id: string) {
   return markKnowledgeEntryReviewedDb(id);
+}
+
+export async function translateKnowledgeEntryToEnglish(id: string) {
+  return translateKnowledgeEntryToEnglishDb(id);
 }
 
 export async function bulkUpdateKnowledgeEntries(input: KnowledgeBulkActionInput) {

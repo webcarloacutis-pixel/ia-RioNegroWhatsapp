@@ -1,12 +1,14 @@
 import type { AssistantProfile, AssistantTopicValue, KnowledgeEntrySummary } from "@/lib/types";
 
+const ASSISTANT_SESSION_HISTORY_LIMIT = 10;
+
 export type AssistantTurn = {
   role: "user" | "assistant";
   content: string;
   createdAt: string;
 };
 
-type AssistantConversationContext = {
+export type AssistantConversationContext = {
   lastTopic: AssistantTopicValue | null;
   lastTimeframe: "today" | "tomorrow" | "recent" | "none";
   conversationLanguage: "es" | "en";
@@ -18,7 +20,7 @@ type AssistantConversationContext = {
   recentMessages: string[];
 };
 
-type AssistantSession = {
+export type AssistantSession = {
   id: string;
   history: AssistantTurn[];
   profile: AssistantProfile;
@@ -37,6 +39,20 @@ function getStore() {
   return globalForAssistant.__rionegroAssistantSessions;
 }
 
+function buildDefaultContext(): AssistantConversationContext {
+  return {
+    lastTopic: null,
+    lastTimeframe: "none",
+    conversationLanguage: "es",
+    lastPlace: null,
+    lastEntityMentioned: null,
+    lastCategory: null,
+    lastKnowledgeEntries: [],
+    lastSuggestedItems: [],
+    recentMessages: [],
+  };
+}
+
 export function getAssistantSession(id: string) {
   const store = getStore();
   const current = store.get(id);
@@ -52,21 +68,46 @@ export function getAssistantSession(id: string) {
       zone: null,
       userType: null,
     },
-    context: {
-      lastTopic: null,
-      lastTimeframe: "none",
-      conversationLanguage: "es",
-      lastPlace: null,
-      lastEntityMentioned: null,
-      lastCategory: null,
-      lastKnowledgeEntries: [],
-      lastSuggestedItems: [],
-      recentMessages: [],
-    },
+    context: buildDefaultContext(),
   };
 
   store.set(id, session);
   return session;
+}
+
+export function hydrateAssistantSession(
+  sessionId: string,
+  snapshot: {
+    history?: AssistantTurn[];
+    context?: Partial<AssistantConversationContext>;
+    profile?: Partial<AssistantProfile>;
+  },
+) {
+  const store = getStore();
+  const current = getAssistantSession(sessionId);
+  const nextSession: AssistantSession = {
+    id: sessionId,
+    history: (snapshot.history ?? current.history).slice(-ASSISTANT_SESSION_HISTORY_LIMIT),
+    profile: {
+      zone: snapshot.profile?.zone?.trim() || current.profile.zone,
+      userType: snapshot.profile?.userType?.trim() || current.profile.userType,
+    },
+    context: {
+      ...buildDefaultContext(),
+      ...current.context,
+      ...snapshot.context,
+      lastKnowledgeEntries:
+        snapshot.context?.lastKnowledgeEntries ?? current.context.lastKnowledgeEntries,
+      lastSuggestedItems:
+        snapshot.context?.lastSuggestedItems ?? current.context.lastSuggestedItems,
+      recentMessages: (
+        snapshot.context?.recentMessages ?? current.context.recentMessages
+      ).slice(-3),
+    },
+  };
+
+  store.set(sessionId, nextSession);
+  return nextSession;
 }
 
 export function addAssistantTurn(
@@ -80,7 +121,7 @@ export function addAssistantTurn(
     content,
     createdAt: new Date().toISOString(),
   });
-  session.history = session.history.slice(-20);
+  session.history = session.history.slice(-ASSISTANT_SESSION_HISTORY_LIMIT);
   return session;
 }
 
@@ -114,16 +155,6 @@ export function resetAssistantSession(sessionId: string) {
       zone: null,
       userType: null,
     },
-    context: {
-      lastTopic: null,
-      lastTimeframe: "none",
-      conversationLanguage: "es",
-      lastPlace: null,
-      lastEntityMentioned: null,
-      lastCategory: null,
-      lastKnowledgeEntries: [],
-      lastSuggestedItems: [],
-      recentMessages: [],
-    },
+    context: buildDefaultContext(),
   });
 }

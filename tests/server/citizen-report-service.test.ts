@@ -65,6 +65,8 @@ test("clasificador de alertas separa servicios privados de reportes reales", () 
   });
   const vet = analyzeCitizenAlertIntent({ text: "Necesito una veterinaria 24 horas." });
   const pharmacy = analyzeCitizenAlertIntent({ text: "Donde hay farmacia abierta?" });
+  const mechanic = analyzeCitizenAlertIntent({ text: "Necesito mecanico." });
+  const brokenCar = analyzeCitizenAlertIntent({ text: "Se me dano el carro." });
 
   assert.equal(cat.intent, "PRIVATE_SERVICE_QUERY");
   assert.equal(cat.shouldCreateAlert, false);
@@ -73,12 +75,40 @@ test("clasificador de alertas separa servicios privados de reportes reales", () 
   assert.equal(vet.shouldCreateAlert, false);
   assert.equal(pharmacy.intent, "PRIVATE_SERVICE_QUERY");
   assert.equal(pharmacy.shouldCreateAlert, false);
+  assert.equal(mechanic.intent, "PRIVATE_SERVICE_QUERY");
+  assert.equal(mechanic.shouldCreateAlert, false);
+  assert.equal(mechanic.shouldSearchKnowledgeBase, true);
+  assert.equal(brokenCar.intent, "PRIVATE_SERVICE_QUERY");
+  assert.equal(brokenCar.shouldCreateAlert, false);
+  assert.equal(brokenCar.shouldSearchKnowledgeBase, true);
 
   const englishVet = analyzeCitizenAlertIntent({
     text: "My cat is sick and I need a 24-hour vet.",
   });
   assert.equal(englishVet.intent, "PRIVATE_SERVICE_QUERY");
   assert.equal(englishVet.shouldCreateAlert, false);
+});
+
+test("clasificador crea reportes para emergencias ciudadanas explicitas", () => {
+  const cases = [
+    { text: "Se cayo una moto.", category: "Accidente", priority: "urgent" },
+    { text: "Hay un incendio.", category: "Incendio", priority: "urgent" },
+    { text: "Quiero reportar un arbol caido.", category: "Arbol caido", priority: "high" },
+    { text: "Hay un accidente.", category: "Accidente", priority: "urgent" },
+    { text: "Hay cables caidos.", category: "Poste o cable caido", priority: "high" },
+    { text: "Hay una emergencia.", category: "Emergencia", priority: "urgent" },
+  ] as const;
+
+  for (const item of cases) {
+    const alert = analyzeCitizenAlertIntent({ text: item.text });
+    const report = detectCitizenReportIntent(item.text);
+
+    assert.equal(alert.shouldCreateAlert, true, item.text);
+    assert.equal(alert.category, item.category, item.text);
+    assert.equal(alert.priority, item.priority, item.text);
+    assert.equal(report.isReport, true, item.text);
+    assert.equal(report.category, item.category, item.text);
+  }
 });
 
 test("clasificador de alertas detecta animales en via sin confundir mascota enferma", () => {
@@ -284,7 +314,7 @@ test("handleCitizenReport conserva via San Antonio como ubicacion parcial", asyn
   if (result.handled) {
     assert.match(result.report?.category ?? "", /rbol ca/i);
     assert.match(result.report?.location ?? "", /via San Antonio/i);
-    assert.match(result.reply, /arbol caido/i);
+    assert.match(result.reply, /[aá]rbol ca[ií]do/i);
     assert.match(result.reply, /San Antonio/i);
     assert.match(result.reply, /foto|referencia/i);
     assert.doesNotMatch(result.reply, /dime por favor.*sector/i);

@@ -289,7 +289,7 @@ export const knowledgeInputSchema = z.object({
 
 export const knowledgeBulkActionSchema = z.object({
   ids: z.array(z.string().trim().min(1)).min(1, "Selecciona al menos una ficha.").max(100),
-  action: z.enum(["activate", "deactivate", "markReviewed", "changeCategory"]),
+  action: z.enum(["activate", "deactivate", "markReviewed", "changeCategory", "translateToEnglish"]),
   category: z
     .string()
     .trim()

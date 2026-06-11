@@ -70,6 +70,23 @@ test("knowledge dashboard acciones puntuales y masivas actualizan fichas", async
 
   const inactive = await toggleKnowledgeEntryActive(entry.id);
   assert.equal(inactive.isActive, false);
+  await toggleKnowledgeEntryActive(entry.id);
+
+  const translated = await bulkUpdateKnowledgeEntries({
+    ids: [entry.id],
+    action: "translateToEnglish",
+  });
+  assert.equal(translated.updated, 1);
+
+  const skipped = await bulkUpdateKnowledgeEntries({
+    ids: [entry.id],
+    action: "translateToEnglish",
+  });
+  assert.equal(skipped.updated, 0);
+  assert.equal(skipped.skipped, 1);
+  const translatedResult = await listKnowledgeDashboard({ q: "Movilidad", page: 1, pageSize: 10 });
+  assert.ok(translatedResult.items[0]?.questionEn);
+  assert.ok(translatedResult.items[0]?.answerEn);
 
   await bulkUpdateKnowledgeEntries({
     ids: [entry.id],

@@ -49,6 +49,8 @@ test("no crea reporte para consultas privadas de mascotas o servicios", () => {
   );
   const pharmacy = analyzeUserMessageIntent("Donde hay farmacia abierta?");
   const hospital = analyzeUserMessageIntent("Mi mama esta enferma, donde hay hospital?");
+  const mechanic = analyzeUserMessageIntent("Necesito mecanico.");
+  const brokenCar = analyzeUserMessageIntent("Se me dano el carro.");
 
   assert.equal(cat.intent, "KNOWLEDGE_BASE_QUERY");
   assert.equal(cat.institutionalIntent, "servicio");
@@ -57,6 +59,13 @@ test("no crea reporte para consultas privadas de mascotas o servicios", () => {
   assert.equal(pharmacy.shouldCreateCitizenReport, false);
   assert.equal(pharmacy.shouldUseKnowledgeBase, true);
   assert.equal(hospital.shouldCreateCitizenReport, false);
+  assert.equal(mechanic.intent, "KNOWLEDGE_BASE_QUERY");
+  assert.equal(mechanic.institutionalIntent, "servicio");
+  assert.equal(mechanic.shouldCreateCitizenReport, false);
+  assert.equal(mechanic.shouldUseKnowledgeBase, true);
+  assert.equal(brokenCar.intent, "KNOWLEDGE_BASE_QUERY");
+  assert.equal(brokenCar.shouldCreateCitizenReport, false);
+  assert.equal(brokenCar.shouldUseKnowledgeBase, true);
 });
 
 test("pide confirmacion para ayudas urgentes ambiguas", () => {
@@ -69,9 +78,15 @@ test("pide confirmacion para ayudas urgentes ambiguas", () => {
 
 test("detecta emergencias graves como reporte urgente", () => {
   const analysis = analyzeUserMessageIntent("Escuche disparos cerca al parque");
+  const fallenMotorcycle = analyzeUserMessageIntent("Se cayo una moto.");
+  const fallenCables = analyzeUserMessageIntent("Hay cables caidos.");
 
   assert.equal(analysis.intent, "EMERGENCY_REPORT");
   assert.equal(analysis.shouldCreateCitizenReport, true);
+  assert.equal(fallenMotorcycle.intent, "EMERGENCY_REPORT");
+  assert.equal(fallenMotorcycle.shouldCreateCitizenReport, true);
+  assert.equal(fallenCables.intent, "CITIZEN_REPORT");
+  assert.equal(fallenCables.shouldCreateCitizenReport, true);
 });
 
 test("no crea reporte cuando el usuario solo pregunta como reportar", () => {
@@ -88,6 +103,7 @@ test("clasifica intenciones institucionales operativas", () => {
   assert.equal(classifyIntent("Necesito pagar el impuesto predial"), "pago");
   assert.equal(classifyIntent("A que hora atienden?"), "horario");
   assert.equal(classifyIntent("Que documentos necesito para el tramite?"), "tramite");
+  assert.equal(classifyIntent("Necesito un mecanico"), "servicio");
   assert.equal(classifyIntent("Crear comunicado para enviar a todos"), "comunicado_admin");
   assert.equal(classifyIntent("Programar comunicado manana a las 8"), "agendamiento");
   assert.equal(classifyIntent("", { messageType: "image", hasImage: true }), "reporte_ciudadano");

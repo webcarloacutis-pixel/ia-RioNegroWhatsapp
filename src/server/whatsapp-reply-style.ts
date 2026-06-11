@@ -1,11 +1,12 @@
 import type { ConversationalIntent } from "@/server/intent-classifier";
 import { detectUserLanguage, type SupportedLanguage } from "@/lib/language";
+import { cleanFinalReplyText } from "@/lib/text-encoding";
 
 export const UNKNOWN_OFFICIAL_REPLY =
-  "No tengo informacion oficial sobre eso en este momento. Si quieres, puedo registrar tu consulta para que el equipo la revise o ayudarte a buscar informacion relacionada.";
+  "No tengo información oficial sobre eso en este momento. Si quieres, puedo registrar tu consulta para que el equipo la revise o ayudarte a buscar información relacionada.";
 
 export const UNKNOWN_OFFICIAL_DATA_REPLY =
-  "No tengo informacion oficial sobre eso en este momento.";
+  "No tengo información oficial sobre eso en este momento.";
 
 export const UNKNOWN_OFFICIAL_REPLY_EN =
   "I don't have official information about that at the moment. If you want, I can help register your question for review or look for related official information.";
@@ -60,6 +61,10 @@ function getUnknownOfficialDataReply(language: SupportedLanguage) {
   return language === "en" ? UNKNOWN_OFFICIAL_DATA_REPLY_EN : UNKNOWN_OFFICIAL_DATA_REPLY;
 }
 
+function formatFinalText(reply: string, userMessage: string) {
+  return cleanFinalReplyText(reply, detectUserLanguage({ text: userMessage }).language);
+}
+
 function buildPrivateServiceUnknownReply(userMessage: string, language: SupportedLanguage) {
   const normalized = normalizeText(userMessage);
 
@@ -79,9 +84,9 @@ function buildPrivateServiceUnknownReply(userMessage: string, language: Supporte
         : "mascota";
 
     return [
-      "No tengo informacion oficial sobre eso en este momento.",
+      UNKNOWN_OFFICIAL_DATA_REPLY,
       "",
-      `Si tu ${animal} esta enfermo, te recomiendo contactar directamente una clinica veterinaria cercana o buscar un servicio veterinario de urgencias.`,
+      `Si tu ${animal} está enfermo, te recomiendo contactar directamente una clínica veterinaria cercana o buscar un servicio veterinario de urgencias.`,
     ].join("\n");
   }
 
@@ -273,12 +278,15 @@ export function formatWhatsAppReply(input: {
 }) {
   if (input.intent === "THANKS") {
     const language = detectUserLanguage({ text: input.userMessage }).language;
-    return language === "en" ? "You're welcome." : "Con mucho gusto.";
+    return cleanFinalReplyText(language === "en" ? "You're welcome." : "Con mucho gusto.", language);
   }
 
   if (input.intent === "GREETING") {
     const language = detectUserLanguage({ text: input.userMessage }).language;
-    return language === "en" ? "Hi! I'm Eva. How can I help you today?" : "Hola! En que te puedo ayudar hoy?";
+    return cleanFinalReplyText(
+      language === "en" ? "Hi! I'm Eva. How can I help you today?" : "Hola! En que te puedo ayudar hoy?",
+      language,
+    );
   }
 
   if (input.intent === "OUT_OF_SCOPE" || input.intent === "ABSURD_OR_UNKNOWN") {
@@ -286,10 +294,10 @@ export function formatWhatsAppReply(input: {
     const cleaned = stripProhibitedPhrases(input.reply).trim();
 
     if (/\b(gustos|taste|musica|music)\b/i.test(normalizeText(cleaned))) {
-      return capParagraphs(cleaned, 2);
+      return formatFinalText(capParagraphs(cleaned, 2), input.userMessage);
     }
 
-    return getUnknownOfficialReply(language);
+    return cleanFinalReplyText(getUnknownOfficialReply(language), language);
   }
 
   let cleaned = stripProhibitedPhrases(input.reply);
@@ -303,7 +311,7 @@ export function formatWhatsAppReply(input: {
   }
 
   if (input.sourceConfidence !== undefined && input.sourceConfidence < 0.45) {
-    return getUnknownOfficialDataReply(detectUserLanguage({ text: input.userMessage }).language);
+    return formatFinalText(getUnknownOfficialDataReply(detectUserLanguage({ text: input.userMessage }).language), input.userMessage);
   }
 
   const validation = validateFinalAnswer({
@@ -313,14 +321,17 @@ export function formatWhatsAppReply(input: {
   });
 
   if (validation.containsUnrequestedDependencies || validation.containsUnsupportedOfficialFacts) {
-    return getUnknownOfficialDataReply(detectUserLanguage({ text: input.userMessage }).language);
+    return formatFinalText(getUnknownOfficialDataReply(detectUserLanguage({ text: input.userMessage }).language), input.userMessage);
   }
 
   if (!validation.answersUserQuestion) {
-    return getUnknownOfficialDataReply(detectUserLanguage({ text: input.userMessage }).language);
+    return formatFinalText(getUnknownOfficialDataReply(detectUserLanguage({ text: input.userMessage }).language), input.userMessage);
   }
 
-  return cleaned || getUnknownOfficialDataReply(detectUserLanguage({ text: input.userMessage }).language);
+  return formatFinalText(
+    cleaned || getUnknownOfficialDataReply(detectUserLanguage({ text: input.userMessage }).language),
+    input.userMessage,
+  );
 }
 
 export function validateAnswerGrounding(input: {
@@ -334,7 +345,7 @@ export function validateAnswerGrounding(input: {
 
   if (input.intent === "OUT_OF_SCOPE" || input.intent === "ABSURD_OR_UNKNOWN") {
     return {
-      answer: getUnknownOfficialReply(language),
+      answer: cleanFinalReplyText(getUnknownOfficialReply(language), language),
       blocked: true,
       reason: "Intent fuera de alcance; se evita fallback municipal.",
     };
@@ -354,7 +365,7 @@ export function validateAnswerGrounding(input: {
     (!hasKnowledgeBaseSource || !sourceMatchesPrivateServiceQuery(input.userMessage, input.retrievedKnowledge))
   ) {
     return {
-      answer: privateServiceReply,
+      answer: cleanFinalReplyText(privateServiceReply, language),
       blocked: true,
       reason: "Consulta privada sin fuente oficial recuperada.",
     };
@@ -362,7 +373,7 @@ export function validateAnswerGrounding(input: {
 
   if (input.officialDataRequested && !hasKnowledge) {
     return {
-      answer: privateServiceReply ?? getUnknownOfficialDataReply(language),
+      answer: cleanFinalReplyText(privateServiceReply ?? getUnknownOfficialDataReply(language), language),
       blocked: true,
       reason: "La pregunta pide dato oficial, pero no hay fuente recuperada.",
     };
@@ -377,7 +388,7 @@ export function validateAnswerGrounding(input: {
 
   if (dependencyDump) {
     return {
-      answer: getUnknownOfficialDataReply(language),
+      answer: cleanFinalReplyText(getUnknownOfficialDataReply(language), language),
       blocked: true,
       reason: "La respuesta agrega dependencias que el usuario no pidio.",
     };
@@ -386,7 +397,7 @@ export function validateAnswerGrounding(input: {
   const cleaned = stripProhibitedPhrases(input.answer);
 
   return {
-    answer: cleaned,
+    answer: cleanFinalReplyText(cleaned, language),
     blocked: cleaned !== input.answer,
     reason: cleaned !== input.answer ? "Se quitaron frases prohibidas." : "Respuesta permitida.",
   };

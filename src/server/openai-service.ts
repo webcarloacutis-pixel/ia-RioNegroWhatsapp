@@ -45,6 +45,7 @@ function getClient() {
 export async function generateOpenAIText(input: {
   systemPrompt: string;
   userPrompt: string;
+  maxOutputTokens?: number;
 }) {
   if (isOpenAIMockMode()) {
     console.log("[openai] mock text generated", {
@@ -62,7 +63,7 @@ export async function generateOpenAIText(input: {
 
   const response = await client.responses.create({
     model: getOpenAIModel(),
-    max_output_tokens: 520,
+    max_output_tokens: input.maxOutputTokens ?? 520,
     input: [
       {
         role: "system",

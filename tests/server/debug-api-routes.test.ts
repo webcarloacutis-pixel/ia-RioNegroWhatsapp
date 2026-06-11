@@ -17,6 +17,14 @@ async function json(response: Response) {
   return (await response.json()) as Record<string, unknown>;
 }
 
+function restoreEnv(key: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[key];
+  } else {
+    process.env[key] = value;
+  }
+}
+
 function makeWebhookRequest(headers: Record<string, string> = {}) {
   return new Request("http://localhost:3030/api/webhook", {
     method: "POST",
@@ -101,39 +109,157 @@ test("webhook acepta POST en dry-run sin enviar mensajes reales", async () => {
   const previousDryRun = process.env.WHATSAPP_DRY_RUN;
   const previousAudio = process.env.WHATSAPP_AUDIO_REPLIES;
   const previousOpenAI = process.env.OPENAI_API_KEY;
+  const previousSegmentationDisabled = process.env.CITIZEN_SEGMENTATION_DISABLED;
 
   process.env.WHATSAPP_DRY_RUN = "true";
   process.env.WHATSAPP_AUDIO_REPLIES = "false";
   process.env.OPENAI_API_KEY = "";
+  process.env.CITIZEN_SEGMENTATION_DISABLED = "true";
 
-  const response = await webhookPost(
-    new Request("http://localhost:3030/api/webhook", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        event_type: "message_received",
-        instanceId: "instance177604",
-        data: {
-          id: `test-reset-${Date.now()}`,
-          from: "573001330213@c.us",
-          body: "reset",
-          type: "chat",
-          fromMe: false,
+  try {
+    const response = await webhookPost(
+      new Request("http://localhost:3030/api/webhook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          event_type: "message_received",
+          instanceId: "instance177604",
+          data: {
+            id: `test-reset-${Date.now()}`,
+            from: "573001330213@c.us",
+            body: "reset",
+            type: "chat",
+            fromMe: false,
+          },
+        }),
       }),
-    }),
-  );
+    );
 
-  const body = await json(response);
+    const body = await json(response);
 
-  assert.equal(response.status, 200);
-  assert.equal(body.ok, true);
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+  } finally {
+    restoreEnv("WHATSAPP_DRY_RUN", previousDryRun);
+    restoreEnv("WHATSAPP_AUDIO_REPLIES", previousAudio);
+    restoreEnv("OPENAI_API_KEY", previousOpenAI);
+    restoreEnv("CITIZEN_SEGMENTATION_DISABLED", previousSegmentationDisabled);
+  }
+});
 
-  process.env.WHATSAPP_DRY_RUN = previousDryRun;
-  process.env.WHATSAPP_AUDIO_REPLIES = previousAudio;
-  process.env.OPENAI_API_KEY = previousOpenAI;
+test("webhook responde texto cuando la entrada es texto aunque audio este activo", async () => {
+  const previousDryRun = process.env.WHATSAPP_DRY_RUN;
+  const previousAudio = process.env.WHATSAPP_AUDIO_REPLIES;
+  const previousElevenMock = process.env.ELEVENLABS_MOCK;
+  const previousOpenAI = process.env.OPENAI_API_KEY;
+  const previousSafeMode = process.env.WHATSAPP_SAFE_MODE;
+  const previousSegmentationDisabled = process.env.CITIZEN_SEGMENTATION_DISABLED;
+
+  process.env.WHATSAPP_DRY_RUN = "true";
+  process.env.WHATSAPP_AUDIO_REPLIES = "true";
+  process.env.ELEVENLABS_MOCK = "true";
+  process.env.OPENAI_API_KEY = "";
+  process.env.WHATSAPP_SAFE_MODE = "false";
+  process.env.CITIZEN_SEGMENTATION_DISABLED = "true";
+
+  try {
+    const response = await webhookPost(
+      new Request("http://localhost:3030/api/webhook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          event_type: "message_received",
+          instanceId: "instance177604",
+          data: {
+            id: `test-text-channel-${Date.now()}`,
+            from: "573009990001@c.us",
+            body: "reset",
+            type: "chat",
+            fromMe: false,
+          },
+        }),
+      }),
+    );
+    const body = await json(response);
+    const reply = body.reply as Record<string, unknown>;
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(reply.audio, false);
+    assert.equal(reply.text, true);
+    assert.equal(reply.inputChannel, "text");
+    assert.equal(reply.responseChannel, "text");
+  } finally {
+    restoreEnv("WHATSAPP_DRY_RUN", previousDryRun);
+    restoreEnv("WHATSAPP_AUDIO_REPLIES", previousAudio);
+    restoreEnv("ELEVENLABS_MOCK", previousElevenMock);
+    restoreEnv("OPENAI_API_KEY", previousOpenAI);
+    restoreEnv("WHATSAPP_SAFE_MODE", previousSafeMode);
+    restoreEnv("CITIZEN_SEGMENTATION_DISABLED", previousSegmentationDisabled);
+  }
+});
+
+test("webhook responde audio cuando la entrada es audio y ElevenLabs esta disponible", async () => {
+  const previousDryRun = process.env.WHATSAPP_DRY_RUN;
+  const previousAudio = process.env.WHATSAPP_AUDIO_REPLIES;
+  const previousElevenMock = process.env.ELEVENLABS_MOCK;
+  const previousOpenAiMock = process.env.OPENAI_MOCK;
+  const previousOpenAI = process.env.OPENAI_API_KEY;
+  const previousSafeMode = process.env.WHATSAPP_SAFE_MODE;
+  const previousSegmentationDisabled = process.env.CITIZEN_SEGMENTATION_DISABLED;
+
+  process.env.WHATSAPP_DRY_RUN = "true";
+  process.env.WHATSAPP_AUDIO_REPLIES = "true";
+  process.env.ELEVENLABS_MOCK = "true";
+  process.env.OPENAI_MOCK = "true";
+  process.env.OPENAI_API_KEY = "";
+  process.env.WHATSAPP_SAFE_MODE = "false";
+  process.env.CITIZEN_SEGMENTATION_DISABLED = "true";
+
+  try {
+    const response = await webhookPost(
+      new Request("http://localhost:3030/api/webhook", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          event_type: "message_received",
+          instanceId: "instance177604",
+          data: {
+            id: `test-audio-channel-${Date.now()}`,
+            from: "573009990002@c.us",
+            body: "data:audio/ogg;base64,bW9jay1hdWRpbw==",
+            type: "ptt",
+            mimetype: "audio/ogg",
+            filename: "nota.ogg",
+            fromMe: false,
+          },
+        }),
+      }),
+    );
+    const body = await json(response);
+    const reply = body.reply as Record<string, unknown>;
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(reply.audio, true);
+    assert.equal(reply.text, false);
+    assert.equal(reply.inputChannel, "audio");
+    assert.equal(reply.responseChannel, "audio");
+  } finally {
+    restoreEnv("WHATSAPP_DRY_RUN", previousDryRun);
+    restoreEnv("WHATSAPP_AUDIO_REPLIES", previousAudio);
+    restoreEnv("ELEVENLABS_MOCK", previousElevenMock);
+    restoreEnv("OPENAI_MOCK", previousOpenAiMock);
+    restoreEnv("OPENAI_API_KEY", previousOpenAI);
+    restoreEnv("WHATSAPP_SAFE_MODE", previousSafeMode);
+    restoreEnv("CITIZEN_SEGMENTATION_DISABLED", previousSegmentationDisabled);
+  }
 });
 
 test("webhook UltraMsg exige secreto solo cuando esta configurado", async () => {

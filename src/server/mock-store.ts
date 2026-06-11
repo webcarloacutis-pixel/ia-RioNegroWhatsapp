@@ -99,7 +99,7 @@ type KnowledgeListFilters = {
 
 type KnowledgeBulkActionInput = {
   ids: string[];
-  action: "activate" | "deactivate" | "markReviewed" | "changeCategory";
+  action: "activate" | "deactivate" | "markReviewed" | "changeCategory" | "translateToEnglish";
   category?: string;
 };
 
@@ -154,6 +154,12 @@ type MockKnowledgeEntry = {
   id: string;
   question: string;
   answer: string;
+  questionEn: string | null;
+  answerEn: string | null;
+  shortAnswerEn: string | null;
+  aliasesEn: string[];
+  tagsEn: string[];
+  translatedToEnglishAt: Date | null;
   category: string;
   intent: string | null;
   shortAnswer: string | null;
@@ -521,6 +527,12 @@ function initializeState(): MockState {
       id: createId("kb"),
       question: entry.question,
       answer: entry.answer,
+      questionEn: null,
+      answerEn: null,
+      shortAnswerEn: null,
+      aliasesEn: [],
+      tagsEn: [],
+      translatedToEnglishAt: null,
       category: entry.category,
       intent: null,
       shortAnswer: entry.answer.length > 220 ? `${entry.answer.slice(0, 220)}...` : entry.answer,
@@ -666,6 +678,12 @@ function serializeKnowledgeEntry(entry: MockKnowledgeEntry): KnowledgeEntrySumma
     id: entry.id,
     question: entry.question,
     answer: entry.answer,
+    questionEn: entry.questionEn,
+    answerEn: entry.answerEn,
+    shortAnswerEn: entry.shortAnswerEn,
+    aliasesEn: entry.aliasesEn,
+    tagsEn: entry.tagsEn,
+    translatedToEnglishAt: entry.translatedToEnglishAt?.toISOString() ?? null,
     category: entry.category,
     intent: entry.intent,
     shortAnswer: entry.shortAnswer,
@@ -1240,6 +1258,12 @@ export async function createKnowledgeEntry(input: KnowledgeInput) {
     id: createId("kb"),
     question: input.question,
     answer: input.answer,
+    questionEn: null,
+    answerEn: null,
+    shortAnswerEn: null,
+    aliasesEn: [],
+    tagsEn: [],
+    translatedToEnglishAt: null,
     category: input.category,
     intent: input.intent,
     shortAnswer: input.shortAnswer,
@@ -1310,6 +1334,33 @@ export async function bulkUpdateKnowledgeEntries(input: KnowledgeBulkActionInput
   const state = getState();
   const selected = state.knowledgeEntries.filter((entry) => input.ids.includes(entry.id));
   const now = new Date();
+
+  if (input.action === "translateToEnglish") {
+    let translated = 0;
+    let skipped = input.ids.length - selected.length;
+
+    for (const entry of selected) {
+      if (!entry.isActive || (entry.questionEn && entry.answerEn)) {
+        skipped += 1;
+        continue;
+      }
+
+      entry.questionEn = entry.question;
+      entry.answerEn = entry.answer;
+      entry.shortAnswerEn = entry.shortAnswer;
+      entry.aliasesEn = [...entry.aliases];
+      entry.tagsEn = [...entry.tags];
+      entry.translatedToEnglishAt = now;
+      entry.updatedAt = now;
+      translated += 1;
+    }
+
+    return {
+      updated: translated,
+      translated,
+      skipped,
+    };
+  }
 
   if (input.action === "changeCategory" && !input.category) {
     throw new AppError("Selecciona la categoria nueva.", 400);

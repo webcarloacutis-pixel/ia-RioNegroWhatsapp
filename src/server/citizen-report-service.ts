@@ -3,6 +3,7 @@ import { addDays } from "date-fns";
 import { AppError } from "@/lib/errors";
 import { detectUserLanguage, type SupportedLanguage } from "@/lib/language";
 import { prisma } from "@/lib/prisma";
+import { cleanFinalReplyText } from "@/lib/text-encoding";
 import type {
   CitizenReportListResult,
   CitizenReportPriority,
@@ -255,8 +256,10 @@ const REPORT_KEYWORDS = [
 
 const REPORT_NATURAL_PATTERNS = [
   /\bhay\s+(?:un|una)\s+accidente\b/,
+  /\bse\s+cayo\s+(?:una\s+)?moto\b/,
   /\bse\s+cayo\s+(?:un\s+)?arbol\b/,
   /\bse\s+cayo\s+(?:un\s+)?poste\b/,
+  /\bhay\s+cables?\s+caidos?\b/,
   /\bhay\s+(?:un|una)\s+(?:carro|moto|vehiculo).*(?:bloqueando|mal\s+parquead|anden)\b/,
   /\bla\s+via\s+esta\s+cerrada\b/,
   /\bel\s+semaforo\s+(?:no\s+sirve|esta\s+danado|danado)\b/,
@@ -428,7 +431,7 @@ function normalizeText(value: string) {
     .toLowerCase()
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[Â¿?Â¡!.,;:()[\]{}"]/g, " ")
+    .replace(/[¿?¡!.,;:()[\]{}"]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
 }
@@ -651,13 +654,16 @@ function isReportInformationRequest(normalizedText: string) {
 }
 
 const PRIVATE_SERVICE_PATTERN =
-  /\b(?:veterinari[ao]s?|farmacias?|taxi|taxis|gruas?|clinicas?|hospital(?:es)?|hoteles?|restaurantes?|droguerias?|comercio|negocio|taller(?:es)?|vet|vets|veterinary|pharmacy|pharmacies|tow\s*truck|clinic|clinics|hotels?|restaurants?|workshops?)\b/;
+  /\b(?:veterinari[ao]s?|farmacias?|taxi|taxis|gruas?|clinicas?|hospital(?:es)?|hoteles?|restaurantes?|droguerias?|comercios?|negocios?|mecanic[oa]s?|mecanica|taller(?:es)?|vet|vets|veterinary|pharmacy|pharmacies|tow\s*truck|clinic|clinics|hotels?|restaurants?|shops?|business(?:es)?|mechanics?|workshops?)\b/;
 
 const PRIVATE_HELP_PATTERN =
   /\b(?:(?:mi|mis)\s+(?:gato|gata|perro|perra|mascota|mama|madre|papa|padre|hijo|hija|familiar)|my\s+(?:cat|dog|pet|mother|mom|father|dad|child|relative))\b.*\b(?:enferm|urgencia|ayuda|atencion|hospital|clinica|veterinari|medico|sick|emergency|help|care|clinic|veterinary|vet|medical)\b/;
 
 const SERVICE_QUERY_PATTERN =
   /\b(?:donde|necesito|busco|buscar|hay|queda|abiert[ao]s?|24\s*horas|urgencias?|llevarlo|llevarla|where|need|looking|search|open|24\s*hours|emergency|take\s+him|take\s+her)\b/;
+
+const PRIVATE_AUTOMOTIVE_SERVICE_PATTERN =
+  /\b(?:(?:se\s+me|mi)\s+(?:dano|fallo|var[ao]do|averio)\s+(?:el\s+)?(?:carro|auto|vehiculo|moto)|(?:carro|auto|vehiculo|moto)\s+(?:danad[oa]|varad[oa]|averiad[oa])|necesito\s+(?:un\s+)?(?:mecanic[oa]|taller)|busco\s+(?:un\s+)?(?:mecanic[oa]|taller)|(?:my\s+)?(?:car|vehicle|motorcycle)\s+(?:broke\s+down|is\s+broken)|need\s+(?:a\s+)?(?:mechanic|workshop))\b/;
 
 const HOW_TO_REPORT_PATTERN =
   /^(?:como|que hago|donde|cual|puedo|debo|necesito saber|quiero saber|me puedes decir|how|where|what|can|could|should|i need to know|please tell me)\b.*\b(?:denuncia|denunciar|reporte|reportar|reporto|hueco|accidente|choque|arbol caido|incendio|complaint|report|reporting|incident|pothole|accident|crash|fallen tree|fire)\b/;
@@ -744,7 +750,7 @@ const ALERT_RULES: Array<{
   },
   {
     pattern:
-      /\b(?:accidente|choque|se chocaron|moto se cayo|moto caida|carro volcado|volcado|persona herida|personas heridas|heridos?|accident|crash|collision|car overturned|injured person|injured people)\b/,
+      /\b(?:accidente|choque|se chocaron|moto se cayo|se cayo (?:una\s+)?moto|moto caida|carro volcado|volcado|persona herida|personas heridas|heridos?|accident|crash|collision|car overturned|injured person|injured people)\b/,
     category: "Accidente",
     priority: "urgent",
     type: "transito",
@@ -759,11 +765,18 @@ const ALERT_RULES: Array<{
     incident: "arbol caido",
   },
   {
-    pattern: /\b(?:poste caido|se cayo.*poste|cable(?:s)? en el suelo|cable(?:s)? caido|cable(?:s)? colgando)\b/,
+    pattern: /\b(?:poste caido|se cayo.*poste|cables? en el suelo|cables? caidos?|cables? colgando)\b/,
     category: "Poste o cable caido",
     priority: "high",
     type: "infraestructura",
     incident: "poste o cable caido",
+  },
+  {
+    pattern: /\bhay\s+(?:una\s+)?emergencia\b|\bemergencia\s+(?:en|por)\b|\bthere\s+is\s+(?:an?\s+)?emergency\b/,
+    category: "Emergencia",
+    priority: "urgent",
+    type: "emergencia",
+    incident: "emergencia",
   },
   {
     pattern: /\b(?:semaforo(?:s)? (?:no sirve|apagado|danado)|semaforo danado)\b/,
@@ -807,6 +820,7 @@ const ALERT_RULES: Array<{
 function isPrivateServiceQuery(normalizedText: string) {
   if (!normalizedText) return false;
   if (PRIVATE_HELP_PATTERN.test(normalizedText)) return true;
+  if (PRIVATE_AUTOMOTIVE_SERVICE_PATTERN.test(normalizedText)) return true;
   return PRIVATE_SERVICE_PATTERN.test(normalizedText) && SERVICE_QUERY_PATTERN.test(normalizedText);
 }
 
@@ -1225,6 +1239,10 @@ function buildCitizenReportReply(
   ].join("\n");
 }
 
+function formatCitizenReportReply(reply: string, language: SupportedLanguage) {
+  return cleanFinalReplyText(reply, language);
+}
+
 export async function handleCitizenReport(
   input: HandleCitizenReportInput,
 ): Promise<HandleCitizenReportResult> {
@@ -1245,9 +1263,12 @@ export async function handleCitizenReport(
     return {
       handled: true,
       reply:
-        language === "en"
-          ? "We received the image. Please tell us what happened and where, so we can register the report properly."
-          : "Recibimos la imagen. Cuentanos por favor que ocurrio y en que lugar para poder registrar el reporte correctamente.",
+        formatCitizenReportReply(
+          language === "en"
+            ? "We received the image. Please tell us what happened and where, so we can register the report properly."
+            : "Recibimos la imagen. Cuentanos por favor que ocurrio y en que lugar para poder registrar el reporte correctamente.",
+          language,
+        ),
       needsMoreInfo: true,
     };
   }
@@ -1260,9 +1281,12 @@ export async function handleCitizenReport(
     return {
       handled: true,
       reply:
-        language === "en"
-          ? "We received the image. Please tell us what happened and where, so we can register the report properly."
-          : "Recibimos la imagen. Cuentanos por favor que ocurrio y en que lugar para poder registrar el reporte correctamente.",
+        formatCitizenReportReply(
+          language === "en"
+            ? "We received the image. Please tell us what happened and where, so we can register the report properly."
+            : "Recibimos la imagen. Cuentanos por favor que ocurrio y en que lugar para poder registrar el reporte correctamente.",
+          language,
+        ),
       needsMoreInfo: true,
     };
   }
@@ -1310,7 +1334,7 @@ export async function handleCitizenReport(
 
   return {
     handled: true,
-    reply: buildCitizenReportReply(intent, hasImage, language),
+    reply: formatCitizenReportReply(buildCitizenReportReply(intent, hasImage, language), language),
     report,
     needsMoreInfo: intent.needsLocation || !hasImage,
   };

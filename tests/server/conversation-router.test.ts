@@ -131,7 +131,7 @@ test("generateGroundedAnswer no inventa si falta knowledge", () => {
     retrievedKnowledge: [],
   });
 
-  assert.equal(answer, "No tengo informacion oficial sobre eso en este momento.");
+  assert.equal(answer, "No tengo información oficial sobre eso en este momento.");
 
   const english = generateGroundedAnswer({
     userMessage: "What is the phone number of the invented office?",

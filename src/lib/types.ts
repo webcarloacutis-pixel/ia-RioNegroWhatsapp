@@ -113,6 +113,12 @@ export type KnowledgeEntrySummary = {
   id: string;
   question: string;
   answer: string;
+  questionEn?: string | null;
+  answerEn?: string | null;
+  shortAnswerEn?: string | null;
+  aliasesEn?: string[];
+  tagsEn?: string[];
+  translatedToEnglishAt?: string | null;
   category: string;
   intent: string | null;
   shortAnswer: string | null;

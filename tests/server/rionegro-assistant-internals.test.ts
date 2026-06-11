@@ -137,14 +137,14 @@ test("input multiline predial conserva tema al pedir documentos", async () => {
   assert.equal(result.meta.usedOpenAI, false);
   assert.match(result.reply, /impuesto predial/i);
   assert.match(result.reply, /documentos necesarios/i);
-  assert.doesNotMatch(result.reply, /No tengo informacion oficial sobre eso/i);
+  assert.doesNotMatch(result.reply, /No tengo informaci[oó]n oficial sobre eso/i);
 });
 
 test("responde ubicacion de Alcaldia de forma breve y sin bullets", async () => {
   resetConversation("unit-location-alcaldia");
   const result = await chatWithAssistant("unit-location-alcaldia", "Donde queda la Alcaldia?");
 
-  assert.match(result.reply, /Alcaldia de Rionegro/i);
+  assert.match(result.reply, /Alcald[ií]a de Rionegro/i);
   assert.match(result.reply, /Carrera 50 # 49 - 05/i);
   assert.equal(result.meta.institutionalIntent, "ubicacion");
   assert.doesNotMatch(result.reply, /^\s*(?:[-*]|\d+[.)])\s+/m);
@@ -159,7 +159,7 @@ test("responde ubicacion de Alcaldia de forma breve y sin bullets", async () => 
   assert.equal(english.meta.language, "en");
   assert.match(english.reply, /Rionegro City Hall/i);
   assert.match(english.reply, /Carrera 50 # 49 - 05/i);
-  assert.doesNotMatch(english.reply, /Alcaldia queda|No tengo informacion oficial/i);
+  assert.doesNotMatch(english.reply, /Alcaldia queda|No tengo informaci[oó]n oficial/i);
 });
 
 test("responde agradecimientos y saludos de forma corta", async () => {
@@ -180,7 +180,7 @@ test("rechaza preguntas absurdas sin devolver dependencias", async () => {
     "La Alcaldia vende empanadas interdimensionales?",
   );
 
-  assert.match(empanadas.reply, /No tengo informacion oficial sobre eso/i);
+  assert.match(empanadas.reply, /No tengo informaci[oó]n oficial sobre eso/i);
   assert.doesNotMatch(empanadas.reply, /dependencias|Secretaria|tramites relacionados/i);
 
   resetConversation("unit-absurd-batman");
@@ -189,7 +189,7 @@ test("rechaza preguntas absurdas sin devolver dependencias", async () => {
     "Quien gana una pelea entre Batman y Goku?",
   );
 
-  assert.match(pelea.reply, /No tengo informacion oficial sobre eso/i);
+  assert.match(pelea.reply, /No tengo informaci[oó]n oficial sobre eso/i);
   assert.doesNotMatch(pelea.reply, /dependencias|Secretaria|tramites relacionados/i);
 
   resetConversation("unit-absurd-dragons");
@@ -199,7 +199,7 @@ test("rechaza preguntas absurdas sin devolver dependencias", async () => {
   );
 
   assert.equal(dragones.meta.usedOpenAI, false);
-  assert.match(dragones.reply, /No tengo informacion oficial sobre eso/i);
+  assert.match(dragones.reply, /No tengo informaci[oó]n oficial sobre eso/i);
   assert.doesNotMatch(dragones.reply, /dragones registrados|Secretaria de Dragones/i);
 });
 
@@ -212,7 +212,7 @@ test("lista dependencias solicitadas sin usar OpenAI ni bullets", async () => {
 
   assert.equal(result.meta.usedOpenAI, false);
   assert.match(result.reply, /Dependencias/i);
-  assert.match(result.reply, /Alcaldia de Rionegro/i);
+  assert.match(result.reply, /Alcald[ií]a de Rionegro/i);
   assert.match(result.reply, /Atencion al ciudadano|Hacienda|Movilidad/i);
   assert.doesNotMatch(result.reply, /^\s*(?:[-*]|\d+[.)])\s+/m);
 });
@@ -221,7 +221,7 @@ test("pregunta fuera de alcance responde que no tiene informacion oficial", asyn
   resetConversation("unit-out-of-scope");
   const result = await chatWithAssistant("unit-out-of-scope", "Quien es Taylor Swift?");
 
-  assert.match(result.reply, /No tengo informacion oficial sobre eso/i);
+  assert.match(result.reply, /No tengo informaci[oó]n oficial sobre eso/i);
   assert.doesNotMatch(result.reply, /dependencias|Secretaria|tramites relacionados/i);
 
   resetConversation("unit-weather-en");
@@ -241,7 +241,7 @@ test("responde conversacion general inocua sin sonar bloqueada", async () => {
   assert.equal(result.meta.usedOpenAI, false);
   assert.equal(result.meta.institutionalIntent, "desconocido");
   assert.match(result.reply, /gustos/i);
-  assert.doesNotMatch(result.reply, /No tengo informacion oficial/i);
+  assert.doesNotMatch(result.reply, /No tengo informaci[oó]n oficial/i);
 });
 
 test("consulta de veterinaria por mascota enferma no crea reporte ni inventa negocios", async () => {

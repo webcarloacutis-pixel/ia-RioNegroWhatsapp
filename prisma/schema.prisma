@@ -81,6 +81,25 @@ model Segment {
   updatedAt      DateTime      @updatedAt
 }
 
+model CitizenContact {
+  id              String   @id @default(cuid())
+  phoneNumber     String   @unique
+  displayName     String?
+  source          String   @default("whatsapp")
+  messageCount    Int      @default(0)
+  lastLanguage    String?
+  lastMessageType String?
+  metadata        Json     @default("{}")
+  firstSeenAt     DateTime @default(now())
+  lastSeenAt      DateTime @default(now())
+  lastInboundAt   DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([lastSeenAt])
+  @@index([source])
+}
+
 model Announcement {
   id           String             @id @default(cuid())
   title        String
@@ -160,6 +179,12 @@ model KnowledgeBaseEntry {
   id             String    @id @default(cuid())
   question       String
   answer         String    @db.Text
+  questionEn     String?
+  answerEn       String?   @db.Text
+  shortAnswerEn  String?   @db.Text
+  aliasesEn      String[]  @default([])
+  tagsEn         String[]  @default([])
+  translatedToEnglishAt DateTime?
   category       String
   intent         String?
   shortAnswer    String?   @db.Text
@@ -247,4 +272,28 @@ model AssistantQueryLog {
 
   @@index([createdAt])
   @@index([detectedTopic, createdAt])
+}
+
+model AssistantConversationMemory {
+  id                     String   @id @default(cuid())
+  phoneNumber            String   @unique
+  sessionId              String   @unique
+  status                 String   @default("open")
+  history                Json     @default("[]")
+  summary                String   @default("") @db.VarChar(1000)
+  lastCards              Json     @default("[]")
+  lastTopic              String?
+  lastLanguage           String   @default("es")
+  lastCategory           String?
+  lastIntent             String?
+  lastUserMessageAt      DateTime?
+  lastAssistantMessageAt DateTime?
+  lastInteractionAt      DateTime?
+  followUpPromptedAt     DateTime?
+  closedAt               DateTime?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([status, lastInteractionAt])
+  @@index([lastAssistantMessageAt])
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { withApiLogging } from "@/lib/api";
 import { logger } from "@/lib/logger";
+import { processAssistantMemoryTimeouts } from "@/server/assistant-memory-service";
 import { processScheduledAnnouncements } from "@/server/panel-service";
 
 export const runtime = "nodejs";
@@ -33,6 +34,7 @@ export async function GET(request: Request) {
 
     logger.info("cron", "scheduled announcements processing started", { requestId });
     const result = await processScheduledAnnouncements({ source: "cron" });
+    const assistantMemory = await processAssistantMemoryTimeouts();
 
     return NextResponse.json({
       ok: true,
@@ -45,6 +47,7 @@ export async function GET(request: Request) {
       due: result.dueCount,
       locked: result.lockedCount,
       skipped: result.skippedCount,
+      assistantMemory,
       startedAt: result.startedAt,
       completedAt: result.completedAt,
     });

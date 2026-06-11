@@ -45,7 +45,7 @@ test("validateAnswerGrounding bloquea datos oficiales sin fuente recuperada", ()
   });
 
   assert.equal(result.blocked, true);
-  assert.equal(result.answer, "No tengo informacion oficial sobre eso en este momento.");
+  assert.equal(result.answer, "No tengo información oficial sobre eso en este momento.");
 });
 
 test("validateFinalAnswer detecta relleno, dependencias no pedidas y frases prohibidas", () => {

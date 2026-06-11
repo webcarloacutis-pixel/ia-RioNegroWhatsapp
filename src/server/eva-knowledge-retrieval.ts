@@ -107,8 +107,34 @@ const SYNONYM_GROUPS = [
   ["tramite", "tramites", "requisitos", "documentos", "procedure", "requirements", "paperwork", "documents"],
   ["telefono", "contacto", "linea", "phone", "contact"],
   ["restaurante", "restaurantes", "restaurant", "food", "comida"],
+  ["veterinaria", "veterinarias", "veterinario", "vet", "veterinary", "mascota", "pet"],
+  ["mecanico", "mecanicos", "mecanica", "taller", "talleres", "automotriz", "mechanic", "workshop", "car repair"],
+  ["hotel", "hoteles", "hospedaje", "alojamiento", "hotel", "lodging"],
+  ["comercio", "comercios", "negocio", "negocios", "tienda", "local", "business", "shop"],
+  ["museo", "museos", "museum", "museums", "historia"],
   ["turismo", "turistico", "tourism", "tourist", "visit", "visitar"],
 ];
+
+const FOLLOW_UP_TOPICS = new Set([
+  "alcaldia",
+  "comercios",
+  "contacto",
+  "direccion",
+  "emergencias",
+  "eventos",
+  "hoteles",
+  "horario",
+  "horarios",
+  "mecanicos",
+  "museo",
+  "museos",
+  "restaurante",
+  "restaurantes",
+  "telefono",
+  "turismo",
+  "ubicacion",
+  "veterinarias",
+]);
 
 export function normalizeTextForKnowledge(text: string) {
   let normalized = normalizeKnowledgeQuery(text)
@@ -157,6 +183,9 @@ function detectStrategy(matchedBy: string[]) {
   if (matchedBy.includes("exact_alias")) return "alias_exact_match";
   if (matchedBy.includes("strong_alias")) return "alias_strong_match";
   if (matchedBy.includes("strong_question")) return "question_strong_match";
+  if (matchedBy.includes("short_answer_match")) return "short_answer_match";
+  if (matchedBy.includes("category_match")) return "category_match";
+  if (matchedBy.includes("intent_match")) return "intent_match";
   if (matchedBy.includes("intent_category")) return "intent_category_match";
   if (matchedBy.includes("tag_match")) return "tag_match";
   if (matchedBy.includes("answer_match")) return "answer_text_match";
@@ -164,7 +193,29 @@ function detectStrategy(matchedBy: string[]) {
 }
 
 function isShortFollowUp(queryNormalized: string) {
-  return /^(y\s+)?(el\s+|la\s+|los\s+|las\s+)?(horario|horarios|direccion|ubicacion|telefono|contacto|como llego|donde queda|donde esta|repiteme|mandame eso|eso|esa|ese)$/i.test(
+  if (
+    /^(y\s+)?(el\s+|la\s+|los\s+|las\s+)?(horario|horarios|direccion|ubicacion|telefono|contacto|como llego|donde queda|donde esta|repiteme|repiteme eso|mandame eso|eso|esa|ese)$/i.test(
+      queryNormalized,
+    )
+  ) {
+    return true;
+  }
+
+  const tokens = queryNormalized
+    .replace(/^y\s+/, "")
+    .split(" ")
+    .filter(Boolean)
+    .filter((token) => !IMPORTANT_STOP_WORDS.has(token));
+
+  if (queryNormalized.startsWith("y ") && tokens.length <= 4) {
+    return true;
+  }
+
+  return tokens.length <= 3 && tokens.some((token) => FOLLOW_UP_TOPICS.has(token));
+}
+
+function shouldBoostMemoryEntries(queryNormalized: string) {
+  return /^(y\s+)?(el\s+|la\s+|los\s+|las\s+)?(horario|horarios|direccion|ubicacion|telefono|contacto|como llego|donde queda|donde esta|repiteme|repiteme eso|mandame eso|eso|esa|ese)$/i.test(
     queryNormalized,
   );
 }
@@ -172,34 +223,46 @@ function isShortFollowUp(queryNormalized: string) {
 function buildMemoryQuery(query: string, memory?: ConversationMemoryContext) {
   const memoryEntries = memory?.lastKnowledgeEntries ?? [];
   const queryNormalized = normalizeTextForKnowledge(query);
+  const boostMemoryEntries = shouldBoostMemoryEntries(queryNormalized);
 
   if (!memoryEntries.length || !isShortFollowUp(queryNormalized)) {
     return {
       query,
       usedMemory: false,
       memoryEntries,
+      boostMemoryEntries: false,
     };
   }
 
-  const memoryText = memoryEntries
-    .slice(0, 2)
-    .map((entry) =>
-      [
-        entry.question,
-        entry.category,
-        entry.intent,
-        entry.aliases.join(" "),
-        entry.tags.join(" "),
-      ]
-        .filter(Boolean)
-        .join(" "),
-    )
-    .join(" ");
+  const memoryText = boostMemoryEntries
+    ? memoryEntries
+        .slice(0, 2)
+        .map((entry) =>
+          [
+            entry.question,
+            entry.answer,
+            entry.shortAnswer,
+            entry.category,
+            entry.intent,
+            entry.aliases.join(" "),
+            entry.tags.join(" "),
+          ]
+            .filter(Boolean)
+            .join(" "),
+        )
+        .join(" ")
+    : "";
+  const contextParts = boostMemoryEntries
+    ? [memoryText, memory?.lastCategory, memory?.lastPlace, memory?.recentMessages?.join(" ")]
+    : [];
 
   return {
-    query: `${query} ${memoryText}`,
+    query: [query, ...contextParts]
+      .filter(Boolean)
+      .join(" "),
     usedMemory: true,
     memoryEntries,
+    boostMemoryEntries,
   };
 }
 
@@ -210,6 +273,7 @@ export function scoreEvaKnowledgeEntry(input: {
   intent: InstitutionalConversationIntent;
   category?: string | null;
   memoryEntries?: KnowledgeEntrySummary[];
+  boostMemoryEntries?: boolean;
 }) {
   const queryNormalized = normalizeTextForKnowledge(input.query);
   const expandedQuery = expandQueryWithSynonyms(input.query);
@@ -217,11 +281,29 @@ export function scoreEvaKnowledgeEntry(input: {
   const question = normalizeTextForKnowledge(input.entry.question);
   const answer = normalizeTextForKnowledge(input.entry.answer);
   const shortAnswer = normalizeTextForKnowledge(input.entry.shortAnswer ?? "");
+  const questionEn = normalizeTextForKnowledge(input.entry.questionEn ?? "");
+  const answerEn = normalizeTextForKnowledge(input.entry.answerEn ?? "");
+  const shortAnswerEn = normalizeTextForKnowledge(input.entry.shortAnswerEn ?? "");
   const category = normalizeTextForKnowledge(input.entry.category);
   const intent = normalizeTextForKnowledge(input.entry.intent ?? "");
   const aliases = input.entry.aliases.map(normalizeTextForKnowledge);
   const tags = input.entry.tags.map(normalizeTextForKnowledge);
-  const corpus = [question, answer, shortAnswer, category, intent, ...aliases, ...tags].join(" ");
+  const aliasesEn = (input.entry.aliasesEn ?? []).map(normalizeTextForKnowledge);
+  const tagsEn = (input.entry.tagsEn ?? []).map(normalizeTextForKnowledge);
+  const corpus = [
+    question,
+    answer,
+    shortAnswer,
+    questionEn,
+    answerEn,
+    shortAnswerEn,
+    category,
+    intent,
+    ...aliases,
+    ...aliasesEn,
+    ...tags,
+    ...tagsEn,
+  ].join(" ");
   const matchedBy: string[] = [];
 
   let score = Math.max(
@@ -234,7 +316,15 @@ export function scoreEvaKnowledgeEntry(input: {
     matchedBy.push("exact_question");
   }
 
-  if (aliases.some((alias) => alias === queryNormalized)) {
+  if (questionEn && questionEn === queryNormalized) {
+    score += 100;
+    matchedBy.push("exact_question");
+  }
+
+  if (
+    aliases.some((alias) => alias === queryNormalized) ||
+    aliasesEn.some((alias) => alias === queryNormalized)
+  ) {
     score += 90;
     matchedBy.push("exact_alias");
   }
@@ -244,24 +334,51 @@ export function scoreEvaKnowledgeEntry(input: {
     matchedBy.push("strong_question");
   }
 
+  if (
+    queryNormalized &&
+    questionEn &&
+    (questionEn.includes(queryNormalized) || queryNormalized.includes(questionEn))
+  ) {
+    score += 65;
+    matchedBy.push("strong_question");
+  }
+
   if (aliases.some((alias) => alias && (alias.includes(queryNormalized) || queryNormalized.includes(alias)))) {
     score += 70;
     matchedBy.push("strong_alias");
   }
 
-  if (tags.some((tag) => tag && queryNormalized.includes(tag))) {
-    score += 25;
+  if (aliasesEn.some((alias) => alias && (alias.includes(queryNormalized) || queryNormalized.includes(alias)))) {
+    score += 70;
+    matchedBy.push("strong_alias");
+  }
+
+  if (
+    tags.some((tag) => tag && queryNormalized.includes(tag)) ||
+    tagsEn.some((tag) => tag && queryNormalized.includes(tag))
+  ) {
+    score += 30;
     matchedBy.push("tag_match");
   }
 
   if (input.category && category.includes(normalizeTextForKnowledge(input.category))) {
-    score += 30;
+    score += 35;
     matchedBy.push("intent_category");
   }
 
   if (intent && intent.includes(normalizeTextForKnowledge(input.intent))) {
-    score += 30;
+    score += 35;
     matchedBy.push("intent_category");
+  }
+
+  if (category && (category.includes(queryNormalized) || queryNormalized.includes(category))) {
+    score += 45;
+    matchedBy.push("category_match");
+  }
+
+  if (intent && (intent.includes(queryNormalized) || queryNormalized.includes(intent))) {
+    score += 35;
+    matchedBy.push("intent_match");
   }
 
   if (includesEveryImportantToken(corpus, importantTokens)) {
@@ -269,12 +386,22 @@ export function scoreEvaKnowledgeEntry(input: {
     matchedBy.push("important_tokens");
   }
 
+  if (queryNormalized && answer.includes(queryNormalized)) {
+    score += 25;
+    matchedBy.push("answer_match");
+  }
+
+  if (queryNormalized && answerEn.includes(queryNormalized)) {
+    score += 25;
+    matchedBy.push("answer_match");
+  }
+
   if (
     queryNormalized &&
-    (answer.includes(queryNormalized) || shortAnswer.includes(queryNormalized))
+    (shortAnswer.includes(queryNormalized) || shortAnswerEn.includes(queryNormalized))
   ) {
-    score += 15;
-    matchedBy.push("answer_match");
+    score += 45;
+    matchedBy.push("short_answer_match");
   }
 
   const languageBonus =
@@ -283,7 +410,10 @@ export function scoreEvaKnowledgeEntry(input: {
       : 0;
   score += languageBonus;
 
-  if (input.memoryEntries?.some((entry) => entry.id === input.entry.id)) {
+  if (
+    input.boostMemoryEntries &&
+    input.memoryEntries?.some((entry) => entry.id === input.entry.id)
+  ) {
     score += 45;
     matchedBy.push("memory_follow_up");
   }
@@ -325,6 +455,7 @@ export async function retrieveEvaKnowledge(
         intent: input.intent,
         category: input.category,
         memoryEntries: memoryQuery.usedMemory ? memoryQuery.memoryEntries : [],
+        boostMemoryEntries: memoryQuery.boostMemoryEntries,
       });
 
       return {

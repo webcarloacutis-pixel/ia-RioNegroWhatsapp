@@ -42,7 +42,7 @@ test("updateAssistantProfile y updateAssistantContext persisten datos en sesion"
   ]);
 });
 
-test("addAssistantTurn conserva solo los ultimos 20 mensajes", () => {
+test("addAssistantTurn conserva solo los ultimos 10 mensajes", () => {
   const sessionId = "unit-session-history";
   resetAssistantSession(sessionId);
 
@@ -51,7 +51,7 @@ test("addAssistantTurn conserva solo los ultimos 20 mensajes", () => {
   }
 
   const session = getAssistantSession(sessionId);
-  assert.equal(session.history.length, 20);
-  assert.equal(session.history[0]?.content, "mensaje 5");
+  assert.equal(session.history.length, 10);
+  assert.equal(session.history[0]?.content, "mensaje 15");
   assert.equal(session.history.at(-1)?.content, "mensaje 24");
 });

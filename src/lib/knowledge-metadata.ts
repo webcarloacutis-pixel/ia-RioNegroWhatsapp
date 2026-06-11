@@ -176,9 +176,16 @@ export function detectKnowledgeTextLanguage(text: string): SupportedLanguage {
 }
 
 export function localizeKnowledgeAnswerForLanguage(
-  entry: Pick<KnowledgeEntrySummary, "question" | "answer" | "shortAnswer">,
+  entry: Pick<
+    KnowledgeEntrySummary,
+    "question" | "answer" | "shortAnswer" | "questionEn" | "answerEn" | "shortAnswerEn"
+  >,
   language: SupportedLanguage,
 ) {
+  if (language === "en" && (entry.shortAnswerEn || entry.answerEn)) {
+    return entry.shortAnswerEn || entry.answerEn || "";
+  }
+
   const answer = entry.shortAnswer || entry.answer;
 
   if (language !== "en" || detectKnowledgeTextLanguage(`${entry.question} ${answer}`) === "en") {
@@ -345,19 +352,35 @@ export function scoreKnowledgeEntry(entry: KnowledgeEntrySummary, query: string)
   if (!normalizedQuery || !entry.isActive) return 0;
 
   const normalizedQuestion = normalizeKnowledgeQuery(entry.question);
+  const normalizedQuestionEn = normalizeKnowledgeQuery(entry.questionEn ?? "");
   const normalizedAliases = entry.aliases.map(normalizeKnowledgeQuery);
+  const normalizedAliasesEn = (entry.aliasesEn ?? []).map(normalizeKnowledgeQuery);
   const normalizedTags = entry.tags.map(normalizeKnowledgeQuery);
+  const normalizedTagsEn = (entry.tagsEn ?? []).map(normalizeKnowledgeQuery);
   let score = entry.confidence * 20;
 
   if (normalizedQuestion === normalizedQuery) score += 130;
-  if (normalizedAliases.some((alias) => alias === normalizedQuery)) score += 125;
+  if (normalizedQuestionEn && normalizedQuestionEn === normalizedQuery) score += 130;
+  if (
+    normalizedAliases.some((alias) => alias === normalizedQuery) ||
+    normalizedAliasesEn.some((alias) => alias === normalizedQuery)
+  ) {
+    score += 125;
+  }
 
   if (normalizedQuestion.includes(normalizedQuery) || normalizedQuery.includes(normalizedQuestion)) {
     score += 80;
   }
 
   if (
-    normalizedAliases.some(
+    normalizedQuestionEn &&
+    (normalizedQuestionEn.includes(normalizedQuery) || normalizedQuery.includes(normalizedQuestionEn))
+  ) {
+    score += 80;
+  }
+
+  if (
+    [...normalizedAliases, ...normalizedAliasesEn].some(
       (alias) => alias.includes(normalizedQuery) || normalizedQuery.includes(alias),
     )
   ) {
@@ -365,14 +388,19 @@ export function scoreKnowledgeEntry(entry: KnowledgeEntrySummary, query: string)
   }
 
   score += tokenOverlapScore(queryTokens, entry.question, 18);
+  score += tokenOverlapScore(queryTokens, entry.questionEn ?? "", 18);
   score += tokenOverlapScore(queryTokens, entry.aliases.join(" "), 20);
+  score += tokenOverlapScore(queryTokens, (entry.aliasesEn ?? []).join(" "), 20);
   score += tokenOverlapScore(queryTokens, entry.tags.join(" "), 16);
+  score += tokenOverlapScore(queryTokens, (entry.tagsEn ?? []).join(" "), 16);
   score += tokenOverlapScore(queryTokens, entry.category, 10);
   score += tokenOverlapScore(queryTokens, entry.intent ?? "", 8);
   score += tokenOverlapScore(queryTokens, entry.shortAnswer ?? "", 6);
+  score += tokenOverlapScore(queryTokens, entry.shortAnswerEn ?? "", 6);
   score += tokenOverlapScore(queryTokens, entry.answer, 4);
+  score += tokenOverlapScore(queryTokens, entry.answerEn ?? "", 4);
 
-  if (normalizedTags.some((tag) => normalizedQuery.includes(tag))) {
+  if ([...normalizedTags, ...normalizedTagsEn].some((tag) => normalizedQuery.includes(tag))) {
     score += 16;
   }
 

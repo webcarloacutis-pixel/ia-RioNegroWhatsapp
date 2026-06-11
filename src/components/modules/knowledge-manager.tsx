@@ -9,6 +9,7 @@ import {
   Filter,
   FlaskConical,
   Layers3,
+  Languages,
   Loader2,
   Plus,
   Power,
@@ -177,6 +178,10 @@ function toPayload(form: KnowledgeFormState) {
   };
 }
 
+function hasEnglishTranslation(entry: KnowledgeEntrySummary) {
+  return Boolean(entry.questionEn?.trim() && entry.answerEn?.trim());
+}
+
 function sourceTypeLabel(value: string) {
   return value.replace(/_/g, " ");
 }
@@ -211,6 +216,10 @@ function toCsv(items: KnowledgeEntrySummary[]) {
     "category",
     "intent",
     "shortAnswer",
+    "questionEn",
+    "answerEn",
+    "shortAnswerEn",
+    "translatedToEnglishAt",
     "sourceName",
     "sourceUrl",
     "sourceType",
@@ -228,6 +237,10 @@ function toCsv(items: KnowledgeEntrySummary[]) {
       item.category,
       item.intent,
       item.shortAnswer,
+      item.questionEn,
+      item.answerEn,
+      item.shortAnswerEn,
+      item.translatedToEnglishAt,
       item.sourceName,
       item.sourceUrl,
       item.sourceType,
@@ -430,6 +443,26 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
     }
   }
 
+  async function handleTranslateToEnglish(entry: KnowledgeEntrySummary) {
+    try {
+      const result = await apiRequest<{
+        entry: KnowledgeEntrySummary;
+        translated: boolean;
+        skipped: boolean;
+      }>(`/api/knowledge/${entry.id}/translate-en`, {
+        method: "POST",
+      });
+
+      toast.success(
+        result.translated ? "Ficha traducida al ingles." : "La ficha ya tenia ingles.",
+      );
+      setDetailEntry((current) => (current?.id === entry.id ? result.entry : current));
+      await reload();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "No se pudo traducir.");
+    }
+  }
+
   async function handleDelete(entry: KnowledgeEntrySummary) {
     try {
       await apiRequest<{ id: string }>(`/api/knowledge/${entry.id}`, {
@@ -449,11 +482,13 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
     }
   }
 
-  async function handleBulk(action: "activate" | "deactivate" | "markReviewed" | "changeCategory") {
+  async function handleBulk(
+    action: "activate" | "deactivate" | "markReviewed" | "changeCategory" | "translateToEnglish",
+  ) {
     if (!selectedIds.size) return;
 
     try {
-      const result = await apiRequest<{ updated: number }>("/api/knowledge/bulk", {
+      const result = await apiRequest<{ updated: number; translated?: number; skipped?: number }>("/api/knowledge/bulk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -463,7 +498,11 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
         }),
       });
 
-      toast.success(`${result.updated} fichas actualizadas.`);
+      toast.success(
+        action === "translateToEnglish"
+          ? `${result.translated ?? result.updated} fichas traducidas. ${result.skipped ?? 0} omitidas.`
+          : `${result.updated} fichas actualizadas.`,
+      );
       setSelectedIds(new Set());
       await reload();
     } catch (error) {
@@ -713,6 +752,10 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
             <Button variant="secondary" onClick={() => handleBulk("markReviewed")}>
               Marcar revisadas
             </Button>
+            <Button variant="secondary" className="gap-2" onClick={() => handleBulk("translateToEnglish")}>
+              <Languages className="size-4" />
+              Traducir activas
+            </Button>
             <Select
               className="w-[210px]"
               value={bulkCategory}
@@ -764,6 +807,7 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
                   onTest={() => handleTestAnswer(entry.id, entry.question)}
                   onToggleActive={() => handleToggleActive(entry)}
                   onMarkReviewed={() => handleMarkReviewed(entry)}
+                  onTranslate={() => handleTranslateToEnglish(entry)}
                   onDelete={() => setDeletingEntry(entry)}
                 />
               ))}
@@ -914,6 +958,7 @@ export function KnowledgeManager({ initialData }: KnowledgeManagerProps) {
           onClose={() => setDetailEntry(null)}
           onEdit={() => openEdit(detailEntry)}
           onTest={() => handleTestAnswer(detailEntry.id)}
+          onTranslate={() => handleTranslateToEnglish(detailEntry)}
         />
       ) : null}
 
@@ -951,6 +996,7 @@ type KnowledgeCardProps = {
   onTest: () => void;
   onToggleActive: () => void;
   onMarkReviewed: () => void;
+  onTranslate: () => void;
   onDelete: () => void;
 };
 
@@ -963,8 +1009,11 @@ function KnowledgeCard({
   onTest,
   onToggleActive,
   onMarkReviewed,
+  onTranslate,
   onDelete,
 }: KnowledgeCardProps) {
+  const translated = hasEnglishTranslation(entry);
+
   return (
     <article className="rounded-[24px] border border-border bg-white p-5 shadow-sm">
       <div className="flex items-start gap-3">
@@ -983,6 +1032,7 @@ function KnowledgeCard({
             </Badge>
             {entry.isOfficial ? <Badge tone="success">Oficial</Badge> : null}
             {entry.needsReview ? <Badge tone="warning">Requiere revision</Badge> : null}
+            {translated ? <Badge tone="success">Ingles</Badge> : null}
           </div>
           <h3 className="mt-4 text-xl font-semibold leading-7 text-foreground">{entry.question}</h3>
           <p className="mt-3 line-clamp-3 text-sm leading-6 text-muted">
@@ -1007,6 +1057,15 @@ function KnowledgeCard({
         <Button variant="secondary" className="gap-2" onClick={onTest}>
           <FlaskConical className="size-4" />
           Probar
+        </Button>
+        <Button
+          variant="secondary"
+          className="gap-2"
+          onClick={onTranslate}
+          disabled={translated}
+        >
+          <Languages className="size-4" />
+          Traducir al ingles
         </Button>
         <Button variant="secondary" className="gap-2" onClick={onToggleActive}>
           <Power className="size-4" />
@@ -1034,6 +1093,7 @@ type DetailPanelProps = {
   onClose: () => void;
   onEdit: () => void;
   onTest: () => void;
+  onTranslate: () => void;
 };
 
 function DetailPanel({
@@ -1043,7 +1103,10 @@ function DetailPanel({
   onClose,
   onEdit,
   onTest,
+  onTranslate,
 }: DetailPanelProps) {
+  const translated = hasEnglishTranslation(entry);
+
   return (
     <div className="fixed inset-0 z-40 bg-[#0f1d2c66] backdrop-blur-sm">
       <aside className="ml-auto flex h-full w-full max-w-2xl flex-col overflow-y-auto bg-white p-6 shadow-2xl">
@@ -1054,6 +1117,7 @@ function DetailPanel({
               {entry.intent ? <Badge>{getKnowledgeIntentLabel(entry.intent)}</Badge> : null}
               {entry.isOfficial ? <Badge tone="success">Oficial</Badge> : null}
               {entry.needsReview ? <Badge tone="warning">Requiere revision</Badge> : null}
+              {translated ? <Badge tone="success">Ingles</Badge> : null}
             </div>
             <h2 className="mt-4 text-3xl font-semibold text-foreground">{entry.question}</h2>
           </div>
@@ -1068,6 +1132,33 @@ function DetailPanel({
         <div className="mt-6 space-y-5">
           <DetailBlock label="Respuesta corta" value={entry.shortAnswer || "Sin respuesta corta"} />
           <DetailBlock label="Contenido completo" value={entry.answer} />
+          {translated ? (
+            <div className="rounded-[22px] border border-primary/20 bg-primary-soft p-4">
+              <p className="text-sm font-semibold text-primary">Version en ingles</p>
+              <p className="mt-3 text-xs font-semibold uppercase tracking-[0.18em] text-primary/70">
+                Pregunta en ingles
+              </p>
+              <p className="mt-1 break-words text-sm leading-6 text-foreground">
+                {entry.questionEn}
+              </p>
+              <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-primary/70">
+                Respuesta en ingles
+              </p>
+              <p className="mt-1 whitespace-pre-wrap break-words text-sm leading-6 text-foreground">
+                {entry.answerEn}
+              </p>
+              {entry.shortAnswerEn ? (
+                <>
+                  <p className="mt-4 text-xs font-semibold uppercase tracking-[0.18em] text-primary/70">
+                    Respuesta corta en ingles
+                  </p>
+                  <p className="mt-1 break-words text-sm leading-6 text-foreground">
+                    {entry.shortAnswerEn}
+                  </p>
+                </>
+              ) : null}
+            </div>
+          ) : null}
           <div className="grid gap-3 sm:grid-cols-2">
             <DetailBlock label="Fuente" value={entry.sourceName ?? "Sin fuente"} />
             <DetailBlock label="Tipo de fuente" value={sourceTypeLabel(entry.sourceType)} />
@@ -1118,6 +1209,15 @@ function DetailPanel({
               <Button variant="secondary" className="gap-2" onClick={onEdit}>
                 <Edit3 className="size-4" />
                 Editar
+              </Button>
+              <Button
+                variant="secondary"
+                className="gap-2"
+                onClick={onTranslate}
+                disabled={translated}
+              >
+                <Languages className="size-4" />
+                Traducir al ingles
               </Button>
             </div>
           </div>

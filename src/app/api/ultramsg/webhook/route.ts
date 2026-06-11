@@ -14,6 +14,19 @@ import {
   getElevenLabsVoiceForLanguage,
   isElevenLabsConfigured,
 } from "@/server/elevenlabs-service";
+import {
+  determineResponseChannel,
+  getInputChannel,
+  type EvaInputChannel,
+  type EvaResponseChannel,
+} from "@/server/eva-channel";
+import {
+  closePersistentAssistantMemory,
+  getConversationClosingReply,
+  isConversationClosingMessage,
+  resetPersistentAssistantMemory,
+} from "@/server/assistant-memory-service";
+import { ensureCitizenSegmentMembership } from "@/server/citizen-segmentation-service";
 import { detectUserLanguage, type SupportedLanguage } from "@/lib/language";
 import {
   sendWhatsAppAudio,
@@ -104,7 +117,7 @@ const ALLOWED_REPORT_IMAGE_MIME_TYPES = new Set([
   "image/webp",
 ]);
 const ASSISTANT_FALLBACK_REPLY =
-  "Recibi tu mensaje, pero en este momento no pude consultar toda la informacion. Por favor intenta de nuevo en unos minutos o escribenos por los canales oficiales de la Alcaldia de Rionegro.";
+  "Recibí tu mensaje, pero en este momento no pude consultar toda la información. Por favor intenta de nuevo en unos minutos o escríbenos por los canales oficiales de la Alcaldía de Rionegro.";
 
 const globalForWebhook = globalThis as unknown as {
   __rionegroWhatsAppInboundIds?: Set<string>;
@@ -736,17 +749,33 @@ async function sendAssistantReply({
   reply,
   inboundMessageId,
   language = "es",
+  inputChannel = "text",
+  responseChannel = "text",
 }: {
   recipient: string;
   reply: string;
   inboundMessageId?: string;
   language?: SupportedLanguage;
+  inputChannel?: EvaInputChannel;
+  responseChannel?: EvaResponseChannel;
 }) {
   const audioEnabled = process.env.WHATSAPP_AUDIO_REPLIES !== "false";
 
-  if (audioEnabled && isElevenLabsConfigured(language)) {
+  console.log(`[eva-channel] input=${inputChannel} response=${responseChannel}`, {
+    inputChannel,
+    responseChannel,
+    language,
+  });
+
+  if (responseChannel === "audio" && audioEnabled && isElevenLabsConfigured(language)) {
     try {
       const voiceId = getElevenLabsVoiceForLanguage(language);
+      const voice = language === "en" ? "english" : "spanish";
+      console.log(`[eva-channel] language=${language} response=audio voice=${voice}`, {
+        language,
+        voice,
+        voiceId,
+      });
       console.log("[eva] elevenlabs voice selected", {
         language,
         voiceId,
@@ -774,7 +803,7 @@ async function sendAssistantReply({
         });
       }
 
-      return { audio: true, text: false };
+      return { audio: true, text: false, inputChannel, responseChannel };
     } catch (error) {
       console.warn("[elevenlabs] error generating audio, falling back to text", {
         error: error instanceof Error ? error.message : "unknown_error",
@@ -788,15 +817,30 @@ async function sendAssistantReply({
           inboundMessageId,
         });
 
-        return { audio: false, text: true, fallback: "audio_failed" };
+        return {
+          audio: false,
+          text: true,
+          fallback: "audio_failed",
+          inputChannel,
+          responseChannel: "text" as const,
+        };
       } catch (textError) {
         console.error("[ultramsg] text fallback failed", {
           error: textError instanceof Error ? textError.message : "unknown_error",
         });
 
-        return { audio: false, text: false, error: "send_failed" };
+        return { audio: false, text: false, error: "send_failed", inputChannel, responseChannel };
       }
     }
+  }
+
+  if (responseChannel === "audio") {
+    console.warn("[eva-channel] audio fallback to text", {
+      inputChannel,
+      language,
+      audioEnabled,
+      elevenLabsConfigured: isElevenLabsConfigured(language),
+    });
   }
 
   try {
@@ -811,10 +855,10 @@ async function sendAssistantReply({
       error: error instanceof Error ? error.message : "unknown_error",
     });
 
-    return { audio: false, text: false, error: "send_failed" };
+    return { audio: false, text: false, error: "send_failed", inputChannel, responseChannel };
   }
 
-  return { audio: false, text: true };
+  return { audio: false, text: true, inputChannel, responseChannel: "text" as const };
 }
 
 async function getAssistantReplySafely(sessionId: string, message: string) {
@@ -848,9 +892,12 @@ async function processTextMessage(input: {
   recipient: string;
   sessionId: string;
   inboundMessageId?: string;
+  inputChannel: EvaInputChannel;
+  responseChannel: EvaResponseChannel;
 }) {
   if (isResetCommand(input.incomingText)) {
     resetConversation(input.sessionId);
+    await resetPersistentAssistantMemory(input.sessionId);
 
     return sendAssistantReply({
       recipient: input.recipient,
@@ -858,6 +905,22 @@ async function processTextMessage(input: {
         "Conversacion reiniciada. Puedes hacer una nueva consulta sobre Rionegro cuando quieras.",
       inboundMessageId: input.inboundMessageId,
       language: "es",
+      inputChannel: input.inputChannel,
+      responseChannel: input.responseChannel,
+    });
+  }
+
+  if (isConversationClosingMessage(input.incomingText)) {
+    const language = detectUserLanguage({ text: input.incomingText }).language;
+    await closePersistentAssistantMemory(input.sessionId, "user_closed");
+
+    return sendAssistantReply({
+      recipient: input.recipient,
+      reply: getConversationClosingReply(language),
+      inboundMessageId: input.inboundMessageId,
+      language,
+      inputChannel: input.inputChannel,
+      responseChannel: input.responseChannel,
     });
   }
 
@@ -868,6 +931,8 @@ async function processTextMessage(input: {
     reply: assistantReply.reply,
     inboundMessageId: input.inboundMessageId,
     language: assistantReply.language,
+    inputChannel: input.inputChannel,
+    responseChannel: input.responseChannel,
   });
 }
 
@@ -923,6 +988,8 @@ async function processCitizenReportMessage(input: {
   incomingText: string;
   recipient: string;
   inboundMessageId?: string;
+  inputChannel: EvaInputChannel;
+  responseChannel: EvaResponseChannel;
 }) {
   const hasImage = isImageMessageType(input.type);
   const image = hasImage ? getImageAttachment(input.payload) : null;
@@ -979,6 +1046,8 @@ async function processCitizenReportMessage(input: {
     reply: result.reply,
     inboundMessageId: input.inboundMessageId,
     language,
+    inputChannel: input.inputChannel,
+    responseChannel: input.responseChannel,
   });
 
   console.log("[citizen-reports] confirmation sent", {
@@ -999,6 +1068,8 @@ async function processAudioMessage(input: {
   recipient: string;
   sessionId: string;
   inboundMessageId?: string;
+  inputChannel: EvaInputChannel;
+  responseChannel: EvaResponseChannel;
 }) {
   console.log("[whatsapp] inbound audio", {
     from: maskRecipient(input.recipient),
@@ -1011,9 +1082,11 @@ async function processAudioMessage(input: {
     return sendAssistantReply({
       recipient: input.recipient,
       reply:
-        "No pude descargar la nota de voz. Por favor enviame el mensaje escrito o revisa que UltraMsg tenga activo Webhook Download Media.",
+        "No pude descargar la nota de voz. Por favor envíame el mensaje escrito o revisa que UltraMsg tenga activo Webhook Download Media.",
       inboundMessageId: input.inboundMessageId,
       language: "es",
+      inputChannel: input.inputChannel,
+      responseChannel: "text",
     });
   }
 
@@ -1021,9 +1094,11 @@ async function processAudioMessage(input: {
     return sendAssistantReply({
       recipient: input.recipient,
       reply:
-        "No pude transcribir la nota de voz en este momento. Por favor enviame el mensaje escrito.",
+        "No pude transcribir la nota de voz en este momento. Por favor envíame el mensaje escrito.",
       inboundMessageId: input.inboundMessageId,
       language: "es",
+      inputChannel: input.inputChannel,
+      responseChannel: "text",
     });
   }
 
@@ -1039,9 +1114,11 @@ async function processAudioMessage(input: {
     return sendAssistantReply({
       recipient: input.recipient,
       reply:
-        "No pude descargar la nota de voz. Por favor enviame el mensaje escrito o revisa que UltraMsg tenga activo Webhook Download Media.",
+        "No pude descargar la nota de voz. Por favor envíame el mensaje escrito o revisa que UltraMsg tenga activo Webhook Download Media.",
       inboundMessageId: input.inboundMessageId,
       language: "es",
+      inputChannel: input.inputChannel,
+      responseChannel: "text",
     });
   }
 
@@ -1057,7 +1134,7 @@ async function processAudioMessage(input: {
       audio: media.bytes,
       filename: media.filename,
       mimeType: media.mimeType,
-      language: process.env.WHATSAPP_LANGUAGE || "es",
+      language: process.env.WHATSAPP_TRANSCRIPTION_LANGUAGE?.trim() || undefined,
     });
   } catch (error) {
     console.error("[transcription] error", {
@@ -1067,9 +1144,11 @@ async function processAudioMessage(input: {
     return sendAssistantReply({
       recipient: input.recipient,
       reply:
-        "Recibi tu nota de voz, pero no pude transcribirla en este momento. Por favor enviame el mensaje escrito.",
+        "Recibí tu nota de voz, pero no pude transcribirla en este momento. Por favor envíame el mensaje escrito.",
       inboundMessageId: input.inboundMessageId,
       language: "es",
+      inputChannel: input.inputChannel,
+      responseChannel: "text",
     });
   }
 
@@ -1081,9 +1160,25 @@ async function processAudioMessage(input: {
     return sendAssistantReply({
       recipient: input.recipient,
       reply:
-        "No pude entender la nota de voz. Por favor intenta enviarla de nuevo o escribeme el mensaje.",
+        "No pude entender la nota de voz. Por favor intenta enviarla de nuevo o escríbeme el mensaje.",
       inboundMessageId: input.inboundMessageId,
       language: "es",
+      inputChannel: input.inputChannel,
+      responseChannel: "text",
+    });
+  }
+
+  if (isConversationClosingMessage(transcription)) {
+    const language = detectUserLanguage({ text: transcription }).language;
+    await closePersistentAssistantMemory(input.sessionId, "user_closed");
+
+    return sendAssistantReply({
+      recipient: input.recipient,
+      reply: getConversationClosingReply(language),
+      inboundMessageId: input.inboundMessageId,
+      language,
+      inputChannel: input.inputChannel,
+      responseChannel: input.responseChannel,
     });
   }
 
@@ -1093,6 +1188,8 @@ async function processAudioMessage(input: {
     incomingText: transcription,
     recipient: input.recipient,
     inboundMessageId: input.inboundMessageId,
+    inputChannel: input.inputChannel,
+    responseChannel: input.responseChannel,
   });
 
   if (citizenReportReply) {
@@ -1106,6 +1203,8 @@ async function processAudioMessage(input: {
     reply: assistantReply.reply,
     inboundMessageId: input.inboundMessageId,
     language: assistantReply.language,
+    inputChannel: input.inputChannel,
+    responseChannel: input.responseChannel,
   });
 }
 
@@ -1196,6 +1295,21 @@ export async function POST(request: Request) {
       });
     }
 
+    const incomingText = getIncomingText(payload);
+    const segmentationLanguage = incomingText.trim()
+      ? detectUserLanguage({ text: incomingText }).language
+      : null;
+    await ensureCitizenSegmentMembership({
+      phoneNumber: recipient,
+      source: "whatsapp",
+      messageType: type,
+      language: segmentationLanguage,
+      metadata: {
+        provider: "ultramsg",
+        inboundMessageId,
+      },
+    });
+
     if (!isRateLimitAllowed(recipient)) {
       return NextResponse.json({
         ok: true,
@@ -1229,7 +1343,27 @@ export async function POST(request: Request) {
       });
     }
 
-    const incomingText = getIncomingText(payload);
+    const hasAudio = isAudioMessageType(type);
+    const hasImage = isImageMessageType(type);
+    const hasText = Boolean(incomingText.trim());
+    const inputChannel = getInputChannel({
+      incomingMessageType: type,
+      hasAudio,
+      hasImage,
+      hasText,
+    });
+    const responseChannel = determineResponseChannel({
+      incomingMessageType: type,
+      hasAudio,
+      hasImage,
+      hasText,
+    });
+    console.log(`[eva-channel] input=${inputChannel} response=${responseChannel}`, {
+      type,
+      hasText,
+      hasAudio,
+      hasImage,
+    });
     const citizenReportReply = isAudioMessageType(type)
       ? null
       : await processCitizenReportMessage({
@@ -1238,6 +1372,8 @@ export async function POST(request: Request) {
           incomingText,
           recipient,
           inboundMessageId,
+          inputChannel,
+          responseChannel,
         });
     const replyStatus =
       citizenReportReply ??
@@ -1247,12 +1383,16 @@ export async function POST(request: Request) {
             recipient,
             sessionId,
             inboundMessageId,
+            inputChannel,
+            responseChannel,
           })
         : await processTextMessage({
             incomingText,
             recipient,
             sessionId,
             inboundMessageId,
+            inputChannel,
+            responseChannel,
           }));
 
     return NextResponse.json({

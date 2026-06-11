@@ -18,6 +18,7 @@ import {
   type UserLanguageDetection,
 } from "@/lib/language";
 import { logger } from "@/lib/logger";
+import { cleanFinalReplyText } from "@/lib/text-encoding";
 import type {
   AnnouncementSummary,
   AssistantChatResult,
@@ -30,6 +31,10 @@ import type {
   KnowledgeEntrySummary,
 } from "@/lib/types";
 import { recordAssistantQuery } from "@/server/assistant-analytics-service";
+import {
+  hydratePersistentAssistantMemory,
+  persistAssistantMemoryFromSession,
+} from "@/server/assistant-memory-service";
 import {
   addAssistantTurn,
   getAssistantSession,
@@ -198,13 +203,13 @@ const PROMPT_INJECTION_HINTS = [
 ];
 
 const PROMPT_INJECTION_REPLY =
-  "No puedo revelar instrucciones internas ni cambiar mis reglas por solicitud del chat. Puedo ayudarte con informacion oficial de Rionegro.";
+  "No puedo revelar instrucciones internas ni cambiar mis reglas por solicitud del chat. Puedo ayudarte con información oficial de Rionegro.";
 
 const PRIVATE_CITIZEN_DATA_REPLY =
-  "No puedo entregar datos privados de ciudadanos. Puedo ayudarte con tramites, servicios o reportes ciudadanos de Rionegro.";
+  "No puedo entregar datos privados de ciudadanos. Puedo ayudarte con trámites, servicios o reportes ciudadanos de Rionegro.";
 
 const PREDIAL_DOCUMENTS_CONTEXT_REPLY =
-  "Sobre el impuesto predial, no tengo informacion oficial confirmada sobre los documentos necesarios en este momento.\n\nSi quieres, puedo orientarte con la informacion oficial disponible sobre pagos o atencion de predial.";
+  "Sobre el impuesto predial, no tengo información oficial confirmada sobre los documentos necesarios en este momento.\n\nSi quieres, puedo orientarte con la información oficial disponible sobre pagos o atención de predial.";
 
 function getPromptInjectionReply(language: AssistantLanguage) {
   return language === "en"
@@ -216,6 +221,10 @@ function getPrivateCitizenDataReply(language: AssistantLanguage) {
   return language === "en"
     ? "I can't provide private citizen data. I can help you with procedures, services, or citizen reports in Rionegro."
     : PRIVATE_CITIZEN_DATA_REPLY;
+}
+
+function cleanAssistantReply(reply: string, language: AssistantLanguage) {
+  return cleanFinalReplyText(reply, language);
 }
 
 function normalizeText(value: string) {
@@ -1360,8 +1369,20 @@ function sourceMatchesPrivateService(message: string, sourceText: string) {
     return /(farmacia|drogueria)/.test(normalizedSource);
   }
 
-  if (/(taxi|grua|hotel|restaurante|clinica|hospital|tow truck|restaurant|clinic)/.test(normalizedMessage)) {
-    return /(taxi|grua|hotel|restaurante|clinica|hospital)/.test(normalizedSource);
+  if (/(mecanico|mecanica|taller|carro|vehiculo|auto|mechanic|workshop|car|vehicle)/.test(normalizedMessage)) {
+    return /(mecanico|mecanica|taller|carro|vehiculo|auto|automotriz|reparacion|mechanic|workshop|vehicle|car repair)/.test(
+      normalizedSource,
+    );
+  }
+
+  if (/(comercio|comercios|negocio|tienda|local|business|shop)/.test(normalizedMessage)) {
+    return /(comercio|negocio|tienda|local|business|shop)/.test(normalizedSource);
+  }
+
+  if (/(taxi|grua|hotel|restaurante|clinica|hospital|tow truck|restaurant|clinic|hotel)/.test(normalizedMessage)) {
+    return /(taxi|grua|hotel|restaurante|clinica|hospital|tow truck|restaurant|clinic)/.test(
+      normalizedSource,
+    );
   }
 
   return false;
@@ -1394,6 +1415,12 @@ function buildPrivateServiceFallback(message: string, language: AssistantLanguag
     ].join("\n");
   }
 
+  if (/(mecanico|mecanica|taller|carro|vehiculo|auto|mechanic|workshop|car|vehicle)/.test(normalized)) {
+    return language === "en"
+      ? "I don't have official information about that automotive service at the moment."
+      : "No tengo informacion oficial sobre ese servicio automotriz en este momento.";
+  }
+
   return language === "en"
     ? "I don't have official information about that private service at the moment."
     : "No tengo informacion oficial sobre eso en este momento.";
@@ -1405,7 +1432,25 @@ function buildPrivateServiceReply(
   language: AssistantLanguage,
 ) {
   const relevantEntries = knowledgeEntries.filter((entry) =>
-    sourceMatchesPrivateService(message, `${entry.question} ${entry.answer} ${entry.category}`),
+    sourceMatchesPrivateService(
+      message,
+      [
+        entry.question,
+        entry.answer,
+        entry.questionEn,
+        entry.answerEn,
+        entry.shortAnswer,
+        entry.shortAnswerEn,
+        entry.category,
+        entry.intent,
+        ...(entry.tags ?? []),
+        ...(entry.aliases ?? []),
+        ...(entry.tagsEn ?? []),
+        ...(entry.aliasesEn ?? []),
+      ]
+        .filter(Boolean)
+        .join(" "),
+    ),
   );
   const options = relevantEntries
     .map((entry) =>
@@ -1442,9 +1487,11 @@ function localizeFullKnowledgeAnswerForLanguage(
 ) {
   return localizeKnowledgeAnswerForLanguage(
     {
+      ...entry,
       question: entry.question,
       answer: entry.answer,
       shortAnswer: null,
+      shortAnswerEn: null,
     },
     language,
   );
@@ -2336,13 +2383,6 @@ function validateEvaFinalAnswer(input: {
     );
   }
 
-  if (
-    input.retrieval.knowledgeContext.topScore > 0 &&
-    input.retrieval.knowledgeContext.topScore < 45
-  ) {
-    return input.answer;
-  }
-
   logger.warn("eva-response", "regenerated_because_false_no_info", {
     userLanguage: input.language,
     intent: input.intent.institutionalIntent,
@@ -2673,6 +2713,8 @@ export async function chatWithAssistant(
   message: string,
   profile?: Partial<AssistantProfile>,
 ): Promise<AssistantChatResult> {
+  await hydratePersistentAssistantMemory(sessionId);
+
   const session = getAssistantSession(sessionId);
 
   if (profile) {
@@ -2702,7 +2744,7 @@ export async function chatWithAssistant(
   addAssistantTurn(session.id, "user", message);
 
   if (hasPrivateCitizenDataRequest(message)) {
-    const finalReply = getPrivateCitizenDataReply(language);
+    const finalReply = cleanAssistantReply(getPrivateCitizenDataReply(language), language);
     const updated = addAssistantTurn(session.id, "assistant", finalReply);
     const meta = buildMeta({
       topic: "OUT_OF_SCOPE",
@@ -2729,6 +2771,7 @@ export async function chatWithAssistant(
       usedOpenAI: false,
       profile: currentSession.profile,
     });
+    await persistAssistantMemoryFromSession(sessionId, meta);
 
     return {
       reply: finalReply,
@@ -2738,7 +2781,7 @@ export async function chatWithAssistant(
   }
 
   if (hasPromptInjectionAttempt(message)) {
-    const finalReply = getPromptInjectionReply(language);
+    const finalReply = cleanAssistantReply(getPromptInjectionReply(language), language);
     const updated = addAssistantTurn(session.id, "assistant", finalReply);
     const meta = buildMeta({
       topic: "OUT_OF_SCOPE",
@@ -2765,6 +2808,7 @@ export async function chatWithAssistant(
       usedOpenAI: false,
       profile: currentSession.profile,
     });
+    await persistAssistantMemoryFromSession(sessionId, meta);
 
     return {
       reply: finalReply,
@@ -2776,7 +2820,7 @@ export async function chatWithAssistant(
   const conversationContextReply = buildConversationContextReply(message);
 
   if (conversationContextReply) {
-    const finalReply = conversationContextReply.reply;
+    const finalReply = cleanAssistantReply(conversationContextReply.reply, language);
     const updated = addAssistantTurn(session.id, "assistant", finalReply);
     const meta = buildMeta({
       topic: conversationContextReply.topic,
@@ -2803,6 +2847,7 @@ export async function chatWithAssistant(
       usedOpenAI: false,
       profile: currentSession.profile,
     });
+    await persistAssistantMemoryFromSession(sessionId, meta);
 
     return {
       reply: finalReply,
@@ -2854,6 +2899,7 @@ export async function chatWithAssistant(
       usedOpenAI: false,
       profile: currentSession.profile,
     });
+    await persistAssistantMemoryFromSession(sessionId, meta);
 
     return {
       reply: finalReply,
@@ -2946,7 +2992,7 @@ export async function chatWithAssistant(
     userMessage: message,
     sourceConfidence: preAssistantRoute.analysis.confidence,
   });
-  const finalReply =
+  const finalReply = cleanAssistantReply(
     lastResolution?.knowledgeEntries.length && saysNoOfficialInformation(formattedReply)
       ? validateEvaFinalAnswer({
           userMessage: message,
@@ -2961,7 +3007,9 @@ export async function chatWithAssistant(
           intent: finalIntent,
           language,
         })
-      : formattedReply;
+      : formattedReply,
+    language,
+  );
   const updated = addAssistantTurn(session.id, "assistant", finalReply);
 
   updateAssistantContext(
@@ -3004,6 +3052,7 @@ export async function chatWithAssistant(
     usedOpenAI: meta.usedOpenAI,
     profile: currentSession.profile,
   });
+  await persistAssistantMemoryFromSession(sessionId, meta);
 
   return {
     reply: finalReply,
