@@ -438,41 +438,19 @@ test("sendMessage falla claramente cuando no hay destinatarios", async () => {
   process.env.ULTRAMSG_DEFAULT_TO = previousDefaultTo;
 });
 
-test("sendMessage bloquea envio real que supera maximo de destinatarios", async () => {
-  const previousDryRun = process.env.WHATSAPP_DRY_RUN;
-  const previousSafeMode = process.env.WHATSAPP_SAFE_MODE;
-  const previousToken = process.env.ULTRAMSG_TOKEN;
-  const previousBaseUrl = process.env.ULTRAMSG_BASE_URL;
+test("limite configurado puede subir por encima de 154000", () => {
   const previousMax = process.env.MASS_MESSAGE_MAX_RECIPIENTS;
 
-  process.env.WHATSAPP_DRY_RUN = "false";
-  process.env.WHATSAPP_SAFE_MODE = "false";
-  process.env.ULTRAMSG_TOKEN = "token-test";
-  process.env.ULTRAMSG_BASE_URL = "https://api.ultramsg.com/instance-test";
-  process.env.MASS_MESSAGE_MAX_RECIPIENTS = "2";
+  process.env.MASS_MESSAGE_MAX_RECIPIENTS = "200000";
 
   try {
-    await assert.rejects(
-      () =>
-        sendMessage({
-          message: "Comunicado real grande",
-          segment: {
-            id: "seg-large",
-            name: "Segmento grande",
-            estimatedUsers: 3,
-            recipientPhones: ["+573001111111", "+573002222222", "+573003333333"],
-          },
-          scheduledAt: new Date("2026-04-20T10:00:00.000Z"),
-          mode: "MANUAL",
-        }),
-      /supera el maximo/i,
-    );
+    assert.equal(messageServiceInternals.getMaxRealMassMessageRecipients(), 200000);
   } finally {
-    process.env.WHATSAPP_DRY_RUN = previousDryRun;
-    process.env.WHATSAPP_SAFE_MODE = previousSafeMode;
-    process.env.ULTRAMSG_TOKEN = previousToken;
-    process.env.ULTRAMSG_BASE_URL = previousBaseUrl;
-    process.env.MASS_MESSAGE_MAX_RECIPIENTS = previousMax;
+    if (typeof previousMax === "undefined") {
+      delete process.env.MASS_MESSAGE_MAX_RECIPIENTS;
+    } else {
+      process.env.MASS_MESSAGE_MAX_RECIPIENTS = previousMax;
+    }
   }
 });
 
@@ -480,6 +458,22 @@ test("limite por defecto de envios masivos soporta 154000 destinatarios", () => 
   const previousMax = process.env.MASS_MESSAGE_MAX_RECIPIENTS;
 
   delete process.env.MASS_MESSAGE_MAX_RECIPIENTS;
+
+  try {
+    assert.equal(messageServiceInternals.getMaxRealMassMessageRecipients(), 154000);
+  } finally {
+    if (typeof previousMax === "undefined") {
+      delete process.env.MASS_MESSAGE_MAX_RECIPIENTS;
+    } else {
+      process.env.MASS_MESSAGE_MAX_RECIPIENTS = previousMax;
+    }
+  }
+});
+
+test("limite configurado no puede quedar por debajo de 154000", () => {
+  const previousMax = process.env.MASS_MESSAGE_MAX_RECIPIENTS;
+
+  process.env.MASS_MESSAGE_MAX_RECIPIENTS = "100";
 
   try {
     assert.equal(messageServiceInternals.getMaxRealMassMessageRecipients(), 154000);

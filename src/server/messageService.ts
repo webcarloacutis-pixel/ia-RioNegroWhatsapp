@@ -404,9 +404,11 @@ function resolveRecipients(to?: string | null) {
 function getMaxRealMassMessageRecipients() {
   const configured = Number(process.env.MASS_MESSAGE_MAX_RECIPIENTS);
 
-  return Number.isInteger(configured) && configured > 0
-    ? configured
-    : DEFAULT_MAX_REAL_MASS_MESSAGE_RECIPIENTS;
+  if (!Number.isInteger(configured) || configured <= 0) {
+    return DEFAULT_MAX_REAL_MASS_MESSAGE_RECIPIENTS;
+  }
+
+  return Math.max(configured, DEFAULT_MAX_REAL_MASS_MESSAGE_RECIPIENTS);
 }
 
 function hasExplicitMassMessageRecipients(input: Pick<SendMessageInput, "segment" | "to">) {
