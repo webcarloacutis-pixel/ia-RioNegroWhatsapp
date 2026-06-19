@@ -78,8 +78,14 @@ const globalForWhatsAppMessages = globalThis as unknown as {
 };
 
 const DEFAULT_AUDIENCE = 1250;
-const DEFAULT_MAX_REAL_MASS_MESSAGE_RECIPIENTS = 100;
+const DEFAULT_MAX_REAL_MASS_MESSAGE_RECIPIENTS = 154000;
+const MAX_LOGGED_RECIPIENTS = 10;
 const MAX_ULTRAMSG_IMAGE_CAPTION_LENGTH = 900;
+
+type RecipientTracker = {
+  count: number;
+  samples: string[];
+};
 function getUltraMsgDefaultTo() {
   return process.env.ULTRAMSG_DEFAULT_TO?.trim() ?? "";
 }
@@ -157,6 +163,45 @@ function getUltraMsgToken() {
 
 function maskRecipient(value: string) {
   return maskPhone(value);
+}
+
+function createRecipientTracker(): RecipientTracker {
+  return {
+    count: 0,
+    samples: [],
+  };
+}
+
+function trackRecipient(tracker: RecipientTracker, recipient: string) {
+  tracker.count += 1;
+
+  if (tracker.samples.length < MAX_LOGGED_RECIPIENTS) {
+    tracker.samples.push(maskRecipient(recipient));
+  }
+}
+
+function formatRecipientTracker(tracker: RecipientTracker) {
+  if (!tracker.count) {
+    return "";
+  }
+
+  const suffix =
+    tracker.count > tracker.samples.length
+      ? ` y ${tracker.count - tracker.samples.length} mas`
+      : "";
+
+  return `${tracker.samples.join(", ")}${suffix}`;
+}
+
+function formatSuccessfulRecipientsLog(recipients: string[], mediaSuffix: string) {
+  if (recipients.length <= MAX_LOGGED_RECIPIENTS) {
+    return `Enviado por UltraMsg a ${recipients.map(maskRecipient).join(", ")}${mediaSuffix}`;
+  }
+
+  return `Enviado por UltraMsg a ${recipients.length} destinatario(s)${mediaSuffix}. Muestra: ${recipients
+    .slice(0, MAX_LOGGED_RECIPIENTS)
+    .map(maskRecipient)
+    .join(", ")} y ${recipients.length - MAX_LOGGED_RECIPIENTS} mas.`;
 }
 
 function redactUltraMsgDetail(value: string) {
@@ -799,9 +844,9 @@ async function sendMessageUltraMsg({
     throw new Error("Sin destinatarios: configura telefonos en el segmento o ULTRAMSG_DEFAULT_TO.");
   }
 
-  const responses: unknown[] = [];
-  const failures: string[] = [];
-  const imageFallbacks: string[] = [];
+  let responseCount = 0;
+  const failures = createRecipientTracker();
+  const imageFallbacks = createRecipientTracker();
   const dryRun = isWhatsAppDryRunMode();
   const hasImage = Boolean(imageUrl?.trim());
   const hasAudio = Boolean(audioUrl?.trim());
@@ -834,17 +879,15 @@ async function sendMessageUltraMsg({
       }
 
       if (hasAudio) {
-        const parsedIntroBody = await sendWhatsAppText({
+        await sendWhatsAppText({
           to: recipient,
           message: audioIntro,
           inboundReply: false,
         });
         sentAudioIntro = true;
 
-        let parsedImageBody: unknown = null;
-
         if (hasImage) {
-          parsedImageBody = await sendWhatsAppImage({
+          await sendWhatsAppImage({
             to: recipient,
             imageUrl,
             caption: imageCaption.caption,
@@ -852,27 +895,19 @@ async function sendMessageUltraMsg({
           });
         }
 
-        const parsedAudioBody = await sendWhatsAppAudio({
+        await sendWhatsAppAudio({
           to: recipient,
           audioUrl,
           inboundReply: false,
         });
 
-        responses.push({
-          to: recipient,
-          type: resolveMessageType({ hasImage, hasAudio }),
-          body: {
-            text: parsedIntroBody,
-            image: parsedImageBody,
-            audio: parsedAudioBody,
-          },
-        });
+        responseCount += 1;
 
         continue;
       }
 
       if (hasImage) {
-        const parsedImageBody = await sendWhatsAppImage({
+        await sendWhatsAppImage({
           to: recipient,
           imageUrl,
           caption: imageCaption.caption,
@@ -897,26 +932,18 @@ async function sendMessageUltraMsg({
           }
         }
 
-        responses.push({
-          to: recipient,
-          type: "image",
-          body: parsedImageBody,
-        });
+        responseCount += 1;
 
         continue;
       }
 
-      const parsedBody = await sendWhatsAppText({
+      await sendWhatsAppText({
         to: recipient,
         message,
         inboundReply: false,
       });
 
-      responses.push({
-        to: recipient,
-        type: "text",
-        body: parsedBody,
-      });
+      responseCount += 1;
     } catch (error) {
       if (hasAudio) {
         logger.error("announcements", "audio announcement failed", {
@@ -929,17 +956,13 @@ async function sendMessageUltraMsg({
 
         if (!sentAudioIntro) {
           try {
-            const fallbackBody = await sendWhatsAppText({
+            await sendWhatsAppText({
               to: recipient,
               message,
               inboundReply: false,
             });
 
-            responses.push({
-              to: recipient,
-              type: "text_fallback",
-              body: fallbackBody,
-            });
+            responseCount += 1;
 
             continue;
           } catch (fallbackError) {
@@ -953,7 +976,7 @@ async function sendMessageUltraMsg({
           }
         }
 
-        failures.push(recipient);
+        trackRecipient(failures, recipient);
         continue;
       }
 
@@ -967,18 +990,14 @@ async function sendMessageUltraMsg({
         });
 
         try {
-          const fallbackBody = await sendWhatsAppText({
+          await sendWhatsAppText({
             to: recipient,
             message,
             inboundReply: false,
           });
 
-          imageFallbacks.push(recipient);
-          responses.push({
-            to: recipient,
-            type: "text_fallback",
-            body: fallbackBody,
-          });
+          trackRecipient(imageFallbacks, recipient);
+          responseCount += 1;
 
           continue;
         } catch (fallbackError) {
@@ -1000,14 +1019,14 @@ async function sendMessageUltraMsg({
         error: sanitizeError(error),
       });
 
-      failures.push(recipient);
+      trackRecipient(failures, recipient);
     }
   }
 
-  if (!responses.length) {
+  if (!responseCount) {
     throw new Error(
-      failures.length
-        ? `UltraMsg no pudo enviar a ningun destinatario: ${failures.map(maskRecipient).join(", ")}.`
+      failures.count
+        ? `UltraMsg no pudo enviar a ningun destinatario: ${formatRecipientTracker(failures)}.`
         : "UltraMsg no pudo enviar el mensaje.",
     );
   }
@@ -1017,8 +1036,9 @@ async function sendMessageUltraMsg({
     scheduledAt: scheduledAt.toISOString(),
     segment: targetName,
     recipientCount: recipients.length,
-    responseCount: responses.length,
-    failures: failures.map(maskRecipient),
+    responseCount,
+    failureCount: failures.count,
+    failures: failures.samples,
   });
 
   return {
@@ -1026,19 +1046,19 @@ async function sendMessageUltraMsg({
     simulated: dryRun,
     provider: "ultramsg",
     type:
-      imageFallbacks.length === responses.length && !hasAudio
+      imageFallbacks.count === responseCount && !hasAudio
         ? "text_fallback"
         : resolveMessageType({ hasImage, hasAudio }),
     message: dryRun ? "dry-run ok" : "sent real",
-    deliveredCount: responses.length,
+    deliveredCount: responseCount,
     log:
-      failures.length > 0
-        ? `Enviado por UltraMsg a ${responses.length} destinatario(s)${mediaSuffix}. Fallaron: ${failures.map(maskRecipient).join(", ")}`
-        : imageFallbacks.length > 0
-          ? `Imagen no enviada a ${imageFallbacks.length} destinatario(s); se envio texto de respaldo.`
+      failures.count > 0
+        ? `Enviado por UltraMsg a ${responseCount} destinatario(s)${mediaSuffix}. Fallaron ${failures.count}: ${formatRecipientTracker(failures)}`
+        : imageFallbacks.count > 0
+          ? `Imagen no enviada a ${imageFallbacks.count} destinatario(s); se envio texto de respaldo.`
         : dryRun
-          ? `Dry-run UltraMsg OK para ${responses.length} destinatario(s)${mediaSuffix}.`
-          : `Enviado por UltraMsg a ${recipients.map(maskRecipient).join(", ")}${mediaSuffix}`,
+          ? `Dry-run UltraMsg OK para ${responseCount} destinatario(s)${mediaSuffix}.`
+          : formatSuccessfulRecipientsLog(recipients, mediaSuffix),
   };
 }
 
@@ -1086,6 +1106,7 @@ export async function sendMessage(input: SendMessageInput): Promise<SendMessageR
 export const messageServiceInternals = {
   buildImageCaption,
   canResolveUltraMsgBaseUrl,
+  getMaxRealMassMessageRecipients,
   getUltraMsgBaseUrl,
   getUltraMsgDefaultTo,
   hasExplicitMassMessageRecipients,

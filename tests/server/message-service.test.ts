@@ -476,6 +476,22 @@ test("sendMessage bloquea envio real que supera maximo de destinatarios", async 
   }
 });
 
+test("limite por defecto de envios masivos soporta 154000 destinatarios", () => {
+  const previousMax = process.env.MASS_MESSAGE_MAX_RECIPIENTS;
+
+  delete process.env.MASS_MESSAGE_MAX_RECIPIENTS;
+
+  try {
+    assert.equal(messageServiceInternals.getMaxRealMassMessageRecipients(), 154000);
+  } finally {
+    if (typeof previousMax === "undefined") {
+      delete process.env.MASS_MESSAGE_MAX_RECIPIENTS;
+    } else {
+      process.env.MASS_MESSAGE_MAX_RECIPIENTS = previousMax;
+    }
+  }
+});
+
 test("ULTRAMSG_DEFAULT_TO cuenta como destinatario explicito para envio real", () => {
   const previousDefaultTo = process.env.ULTRAMSG_DEFAULT_TO;
 

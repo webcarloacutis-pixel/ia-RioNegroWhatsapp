@@ -75,6 +75,8 @@ services:
         value: "false"
       - key: WHATSAPP_LANGUAGE
         value: es
+      - key: MASS_MESSAGE_MAX_RECIPIENTS
+        value: "154000"
 
   - type: worker
     name: rionegro-panel-scheduler
@@ -150,6 +152,8 @@ services:
         value: "false"
       - key: WHATSAPP_LANGUAGE
         value: es
+      - key: MASS_MESSAGE_MAX_RECIPIENTS
+        value: "154000"
 
 databases:
   - name: rionegro-panel-db
