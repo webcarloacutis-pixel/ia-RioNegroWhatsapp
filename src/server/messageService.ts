@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import axios from "axios";
 import qs from "qs";
 
@@ -37,6 +39,10 @@ type SendMessageResult = {
   message?: string;
   error?: string;
   deliveredCount: number;
+  attemptedCount?: number;
+  failedCount?: number;
+  durationMs?: number;
+  runId?: string;
   log: string;
 };
 
@@ -81,11 +87,13 @@ const DEFAULT_AUDIENCE = 1250;
 const DEFAULT_MAX_REAL_MASS_MESSAGE_RECIPIENTS = 154000;
 const MAX_LOGGED_RECIPIENTS = 10;
 const MAX_ULTRAMSG_IMAGE_CAPTION_LENGTH = 900;
+const DEFAULT_MASS_MESSAGE_PROGRESS_LOG_EVERY = 50;
 
 type RecipientTracker = {
   count: number;
   samples: string[];
 };
+
 function getUltraMsgDefaultTo() {
   return process.env.ULTRAMSG_DEFAULT_TO?.trim() ?? "";
 }
@@ -210,6 +218,14 @@ function redactUltraMsgDetail(value: string) {
     .replace(/\b\d{8,}\b/g, (match) => maskRecipient(match));
 }
 
+function getMassMessageProgressLogEvery() {
+  const configured = Number(process.env.MASS_MESSAGE_PROGRESS_LOG_EVERY);
+
+  return Number.isInteger(configured) && configured > 0
+    ? configured
+    : DEFAULT_MASS_MESSAGE_PROGRESS_LOG_EVERY;
+}
+
 function getRecord(value: unknown) {
   return value && typeof value === "object" && !Array.isArray(value)
     ? (value as Record<string, unknown>)
@@ -251,6 +267,53 @@ function getStringField(record: Record<string, unknown>, keys: string[]) {
   }
 
   return null;
+}
+
+function summarizeUltraMsgResponse(data: unknown) {
+  const record = getRecord(data);
+
+  if (!record) {
+    return {
+      shape: Array.isArray(data) ? "array" : typeof data,
+    };
+  }
+
+  const status = getStringField(record, ["status", "state", "valid"]);
+  const providerMessage = getStringField(record, ["message", "result", "description"]);
+  const providerId = getStringField(record, [
+    "id",
+    "messageId",
+    "message_id",
+    "referenceId",
+    "reference_id",
+  ]);
+  const queued = Boolean(
+    providerMessage?.toLowerCase().includes("queued") ||
+      status?.toLowerCase().includes("queued") ||
+      getStringField(record, ["queue", "queued"]),
+  );
+
+  return {
+    status,
+    providerMessage,
+    hasProviderId: Boolean(providerId),
+    queued,
+    keys: Object.keys(record).slice(0, 12),
+  };
+}
+
+function summarizeProviderError(error: unknown) {
+  if (!axios.isAxiosError(error)) {
+    return undefined;
+  }
+
+  return {
+    code: error.code,
+    httpStatus: error.response?.status,
+    response: typeof error.response?.data === "undefined"
+      ? undefined
+      : summarizeUltraMsgResponse(error.response.data),
+  };
 }
 
 function hasPositiveUltraMsgSignal(record: Record<string, unknown>) {
@@ -392,13 +455,16 @@ function normalizeRecipient(value: string) {
   return digits.startsWith("57") ? `+${digits}` : `+57${digits}`;
 }
 
-function resolveRecipients(to?: string | null) {
-  const rawRecipients = (to?.trim() || getUltraMsgDefaultTo())
-    .split(/[,\n;]/)
+function normalizeRecipients(values: string[]) {
+  const rawRecipients = values
     .map((value) => normalizeRecipient(value.trim()))
     .filter((value): value is string => Boolean(value));
 
   return Array.from(new Set(rawRecipients));
+}
+
+function resolveRecipients(to?: string | null) {
+  return normalizeRecipients((to?.trim() || getUltraMsgDefaultTo()).split(/[,\n;]/));
 }
 
 function getMaxRealMassMessageRecipients() {
@@ -506,6 +572,7 @@ export async function sendWhatsAppText({
     to: maskRecipient(to),
     type: "text",
     httpStatus: response.status,
+    providerResponse: summarizeUltraMsgResponse(responseData),
   });
 
   return responseData;
@@ -595,6 +662,7 @@ export async function sendWhatsAppAudio({
     to: maskRecipient(to),
     type: "audio",
     httpStatus: response.status,
+    providerResponse: summarizeUltraMsgResponse(responseData),
   });
 
   return responseData;
@@ -683,6 +751,7 @@ export async function sendWhatsAppImage({
     to: maskRecipient(to),
     type: "image",
     httpStatus: response.status,
+    providerResponse: summarizeUltraMsgResponse(responseData),
   });
 
   return responseData;
@@ -749,6 +818,7 @@ export async function sendWhatsAppTextAfterAudioFailure({
     type: "text",
     fallback: "audio_failed",
     httpStatus: response.status,
+    providerResponse: summarizeUltraMsgResponse(responseData),
   });
 
   return responseData;
@@ -835,8 +905,14 @@ async function sendMessageUltraMsg({
   imageUrl,
   audioUrl,
 }: SendMessageInput): Promise<SendMessageResult> {
+  const runId = randomUUID();
+  const startedAtMs = Date.now();
   const targetName = segment?.name ?? "Cobertura general";
-  const recipients = resolveRecipients(to || segment?.recipientPhones?.join(",") || null);
+  const recipients = to?.trim()
+    ? resolveRecipients(to)
+    : segment?.recipientPhones?.length
+      ? normalizeRecipients(segment.recipientPhones)
+      : resolveRecipients(null);
 
   if (!recipients.length) {
     logger.warn("announcements", "no recipients", {
@@ -846,6 +922,7 @@ async function sendMessageUltraMsg({
     throw new Error("Sin destinatarios: configura telefonos en el segmento o ULTRAMSG_DEFAULT_TO.");
   }
 
+  let attemptedCount = 0;
   let responseCount = 0;
   const failures = createRecipientTracker();
   const imageFallbacks = createRecipientTracker();
@@ -855,13 +932,43 @@ async function sendMessageUltraMsg({
   const imageCaption = buildImageCaption(message);
   const audioIntro = buildAudioIntroMessage({ title });
   const mediaSuffix = formatMediaLogSuffix({ hasImage, hasAudio });
+  const progressLogEvery = getMassMessageProgressLogEvery();
+
+  const logProgress = () => {
+    logger.info("messageService", "mass send progress", {
+      runId,
+      mode,
+      segment: targetName,
+      recipientCount: recipients.length,
+      attemptedCount,
+      acceptedCount: responseCount,
+      failureCount: failures.count,
+      imageFallbackCount: imageFallbacks.count,
+      progressPercent: Math.round((attemptedCount / recipients.length) * 1000) / 10,
+      durationMs: Date.now() - startedAtMs,
+    });
+  };
 
   if (!dryRun) {
     assertRealMassMessagePolicy({ segment, to, recipients });
   }
 
+  logger.info("messageService", "mass send started", {
+    runId,
+    mode,
+    segment: targetName,
+    recipientCount: recipients.length,
+    dryRun,
+    safeMode: isWhatsAppSafeMode(),
+    maxRealRecipients: getMaxRealMassMessageRecipients(),
+    progressLogEvery,
+    hasImage,
+    hasAudio,
+  });
+
   if (dryRun) {
     logger.info("announcements", "dry-run simulated", {
+      runId,
       mode,
       recipients: recipients.length,
       segment: targetName,
@@ -869,12 +976,16 @@ async function sendMessageUltraMsg({
   }
 
   for (const recipient of recipients) {
+    attemptedCount += 1;
     let sentAudioIntro = false;
 
     try {
       if (!dryRun) {
         logger.info("announcements", "ultramsg send started", {
+          runId,
           mode,
+          recipientIndex: attemptedCount,
+          recipientCount: recipients.length,
           to: maskRecipient(recipient),
           segment: targetName,
         });
@@ -925,11 +1036,13 @@ async function sendMessageUltraMsg({
             });
           } catch (error) {
             logger.error("announcements", "ultramsg long caption fallback failed", {
+              runId,
               mode,
               scheduledAt: scheduledAt.toISOString(),
               segment: targetName,
               to: maskRecipient(recipient),
               error: sanitizeError(error),
+              providerError: summarizeProviderError(error),
             });
           }
         }
@@ -949,11 +1062,13 @@ async function sendMessageUltraMsg({
     } catch (error) {
       if (hasAudio) {
         logger.error("announcements", "audio announcement failed", {
+          runId,
           mode,
           scheduledAt: scheduledAt.toISOString(),
           segment: targetName,
           to: maskRecipient(recipient),
           error: sanitizeError(error),
+          providerError: summarizeProviderError(error),
         });
 
         if (!sentAudioIntro) {
@@ -969,11 +1084,13 @@ async function sendMessageUltraMsg({
             continue;
           } catch (fallbackError) {
             logger.error("announcements", "audio text fallback failed", {
+              runId,
               mode,
               scheduledAt: scheduledAt.toISOString(),
               segment: targetName,
               to: maskRecipient(recipient),
               error: sanitizeError(fallbackError),
+              providerError: summarizeProviderError(fallbackError),
             });
           }
         }
@@ -984,11 +1101,13 @@ async function sendMessageUltraMsg({
 
       if (hasImage) {
         logger.error("announcements", "ultramsg image failed", {
+          runId,
           mode,
           scheduledAt: scheduledAt.toISOString(),
           segment: targetName,
           to: maskRecipient(recipient),
           error: sanitizeError(error),
+          providerError: summarizeProviderError(error),
         });
 
         try {
@@ -1004,28 +1123,49 @@ async function sendMessageUltraMsg({
           continue;
         } catch (fallbackError) {
           logger.error("announcements", "ultramsg image fallback failed", {
+            runId,
             mode,
             scheduledAt: scheduledAt.toISOString(),
             segment: targetName,
             to: maskRecipient(recipient),
             error: sanitizeError(fallbackError),
+            providerError: summarizeProviderError(fallbackError),
           });
         }
       }
 
       logger.error("messageService", "ultramsg send failed", {
+        runId,
         mode,
         scheduledAt: scheduledAt.toISOString(),
         segment: targetName,
         to: maskRecipient(recipient),
         error: sanitizeError(error),
+        providerError: summarizeProviderError(error),
       });
 
       trackRecipient(failures, recipient);
+    } finally {
+      if (attemptedCount % progressLogEvery === 0 || attemptedCount === recipients.length) {
+        logProgress();
+      }
     }
   }
 
   if (!responseCount) {
+    logger.error("messageService", "mass send failed", {
+      runId,
+      mode,
+      scheduledAt: scheduledAt.toISOString(),
+      segment: targetName,
+      recipientCount: recipients.length,
+      attemptedCount,
+      acceptedCount: responseCount,
+      failureCount: failures.count,
+      durationMs: Date.now() - startedAtMs,
+      failures: failures.samples,
+    });
+
     throw new Error(
       failures.count
         ? `UltraMsg no pudo enviar a ningun destinatario: ${formatRecipientTracker(failures)}.`
@@ -1033,20 +1173,27 @@ async function sendMessageUltraMsg({
     );
   }
 
-  logger.info("messageService", "ultramsg send completed", {
+  logger.info("messageService", "mass send completed", {
     mode,
     scheduledAt: scheduledAt.toISOString(),
     segment: targetName,
+    runId,
     recipientCount: recipients.length,
+    attemptedCount,
     responseCount,
     failureCount: failures.count,
     failures: failures.samples,
+    durationMs: Date.now() - startedAtMs,
   });
 
   return {
     sent: !dryRun,
     simulated: dryRun,
     provider: "ultramsg",
+    runId,
+    attemptedCount,
+    failedCount: failures.count,
+    durationMs: Date.now() - startedAtMs,
     type:
       imageFallbacks.count === responseCount && !hasAudio
         ? "text_fallback"
@@ -1116,5 +1263,6 @@ export const messageServiceInternals = {
   isWhatsAppDryRunMode,
   isWhatsAppSafeMode,
   normalizeRecipient,
+  normalizeRecipients,
   resolveRecipients,
 };

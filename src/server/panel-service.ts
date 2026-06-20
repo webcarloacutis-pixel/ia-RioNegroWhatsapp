@@ -439,6 +439,18 @@ function buildAnnouncementMediaPrefix(input: {
   return parts.length ? `${parts.join("")} ` : "";
 }
 
+function buildDeliveryTelemetryPrefix(result: Awaited<ReturnType<typeof sendMessage>>) {
+  const parts = [
+    result.runId ? `RUN_ID=${result.runId}` : "",
+    typeof result.attemptedCount === "number" ? `ATTEMPTED=${result.attemptedCount}` : "",
+    `ACCEPTED=${result.deliveredCount}`,
+    typeof result.failedCount === "number" ? `FAILED=${result.failedCount}` : "",
+    typeof result.durationMs === "number" ? `DURATION_MS=${result.durationMs}` : "",
+  ].filter(Boolean);
+
+  return parts.length ? `[${parts.join(" ")}] ` : "";
+}
+
 function isDatabaseUnavailable(error: unknown) {
   if (!(error instanceof Error)) {
     return false;
@@ -819,27 +831,34 @@ async function sendAnnouncementNowDb(
   id: string,
   mode: DeliveryMode = DeliveryMode.MANUAL,
 ) {
+  const startedAt = Date.now();
   const announcement = await getAnnouncementOrThrow(id);
 
-  console.log("[announcements] send requested", {
+  logger.info("announcements", "send requested", {
     id,
     mode,
+    status: announcement.status,
+    hasImage: Boolean(announcement.imageUrl),
+    hasAudio: Boolean(announcement.audioUrl),
   });
 
   const audience = await resolveAudience(announcement.segmentId);
 
-  console.log("[announcements] recipients loaded", {
+  logger.info("announcements", "recipients loaded", {
     id,
+    mode,
     segment: audience.name,
     estimatedUsers: audience.estimatedUsers,
     recipientPhones: audience.recipientPhones.length,
+    hasDefaultRecipient: hasDefaultRecipient(),
   });
 
   if (!audience.recipientPhones.length && !hasDefaultRecipient()) {
     const message = buildNoRecipientsMessage();
 
-    console.warn("[announcements] no recipients", {
+    logger.warn("announcements", "no recipients", {
       id,
+      mode,
       segment: audience.name,
     });
 
@@ -854,13 +873,26 @@ async function sendAnnouncementNowDb(
     throw loggedError;
   }
 
+  await prisma.announcement.update({
+    where: { id: announcement.id },
+    data: {
+      status: AnnouncementStatus.SENDING,
+    },
+  });
+
+  logger.info("announcements", "send marked sending", {
+    id,
+    mode,
+    segment: audience.name,
+    recipientPhones: audience.recipientPhones.length,
+  });
+
   const result = await sendMessage({
     title: announcement.title,
     message: announcement.message,
     segment: audience,
     scheduledAt: announcement.scheduledAt,
     mode,
-    to: audience.recipientPhones.join(","),
     imageUrl: announcement.imageUrl,
     imageFilename: announcement.imageFilename,
     imageMimeType: announcement.imageMimeType,
@@ -877,10 +909,13 @@ async function sendAnnouncementNowDb(
       /sin destinatarios/i.test(message) ? buildNoRecipientsMessage() : message
     }`;
 
-    console.error("[announcements] failed", {
+    logger.error("announcements", "send failed", {
       id,
       mode,
-      error: message,
+      segment: audience.name,
+      recipientPhones: audience.recipientPhones.length,
+      durationMs: Date.now() - startedAt,
+      error: sanitizeError(error),
     });
 
     const log = await markAnnouncementFailedWithLogDb({
@@ -898,12 +933,13 @@ async function sendAnnouncementNowDb(
   const deliveryStatus = getDeliveryStatusForResult(result);
   const isRealSend = nextStatus === AnnouncementStatus.SENT_REAL;
   const mediaPrefix = buildAnnouncementMediaPrefix(announcement);
+  const deliveryTelemetryPrefix = buildDeliveryTelemetryPrefix(result);
   const details =
     result.blockedBySafeMode
-      ? `[BLOCKED_BY_SAFE_MODE] ${mediaPrefix}${result.log}`
+      ? `[BLOCKED_BY_SAFE_MODE] ${deliveryTelemetryPrefix}${mediaPrefix}${result.log}`
       : result.simulated
-        ? `[SENT_SIMULATED] ${mediaPrefix}${result.log}`
-        : `[SENT_REAL] ${mediaPrefix}${result.log}`;
+        ? `[SENT_SIMULATED] ${deliveryTelemetryPrefix}${mediaPrefix}${result.log}`
+        : `[SENT_REAL] ${deliveryTelemetryPrefix}${mediaPrefix}${result.log}`;
 
   const [updatedAnnouncement, log] = await prisma.$transaction([
     prisma.announcement.update({
@@ -947,18 +983,26 @@ async function sendAnnouncementNowDb(
     }),
   ]);
 
-  console.log("[announcements] sent", {
+  logger.info("announcements", "send completed", {
     id,
     mode,
     status: nextStatus,
+    segment: audience.name,
+    recipientPhones: audience.recipientPhones.length,
+    runId: result.runId,
+    attemptedCount: result.attemptedCount,
     deliveredCount: result.deliveredCount,
+    failedCount: result.failedCount,
+    durationMs: Date.now() - startedAt,
   });
 
   if (nextStatus === AnnouncementStatus.SENT_REAL) {
-    console.log("[announcements] sent real", {
+    logger.info("announcements", "sent real", {
       id,
       mode,
+      runId: result.runId,
       deliveredCount: result.deliveredCount,
+      durationMs: Date.now() - startedAt,
     });
   }
 
